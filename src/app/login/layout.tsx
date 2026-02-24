@@ -9,7 +9,7 @@ export default function LoginLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center py-[clamp(1rem,3vh,3rem)] px-[clamp(0.5rem,2vw,2rem)] relative md:overflow-hidden">
+    <div className="flex h-screen w-screen flex-col items-center justify-center py-[clamp(1rem,3vh,3rem)] px-[clamp(0.5rem,2vw,2rem)] relative md:overflow-hidden scrollbar-hide">
       <div className="absolute inset-0 -z-10">
         <Image
           src="/assets/imgs/login/authbg.png"
