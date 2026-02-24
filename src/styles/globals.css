@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafafa;
+  --foreground: #171717;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+
+  --color-primary: #ffffff;
+  --color-secondary: #000000;
+  --color-gray: #999999;
+  --color-red: #ff0909;
+  --color-dull-white: #e0e9f2;
+  --color-dull-red: #ffcece;
+  --color-yellow: #faab00;
+  --color-dull-yellow: #fff7e6;
+  --color-green: #00b448;
+  --color-dull-green: #f2fff7;
+  --color-pink: #e7366b;
+  --color-auth-start: #8e4444;
+  --color-auth-middle: #2e3552;
+  --color-auth-end: #0f1527;
+  --color-dull-gray: #262626;
+  --color-light-gray: #f6f8fb;
+  --color-light-gray-2: #e9e9e9;
+
+  --animate-spin-slow: spin 3s linear infinite;
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-public-sans), ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .form-group-container {
+    @apply mt-4 space-y-3;
+  }
+
+  .form-field-wrapper {
+    @apply space-y-1;
+  }
+
+  .form-label {
+    @apply block text-xs font-semibold text-secondary sm:text-sm;
+  }
+
+  .form-input {
+    @apply w-full rounded-xl border border-light-gray-2 bg-primary px-3 py-2.5 text-sm outline-none transition-all placeholder:text-gray/50 focus:border-secondary;
+  }
+
+  .form-input-error {
+    @apply border-red;
+  }
+
+  .form-error-message {
+    @apply mt-1 text-xs font-medium text-red;
+  }
+
+  .form-dropdown-trigger {
+    @apply flex h-10 w-full items-center justify-between rounded-xl border border-light-gray-2 bg-primary px-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-secondary/10;
+  }
+
+  .form-dropdown-trigger-error {
+    @apply border-red;
+  }
+
+  .form-toggle-box {
+    @apply space-y-0.5 rounded-xl bg-[#f7f7f7] px-3 py-2.5;
+  }
+
+  .form-select-search {
+    @apply w-full rounded-lg border border-light-gray-2 bg-primary px-2.5 py-1.5 text-xs text-secondary placeholder:text-gray/60 focus:outline-none focus:ring-1 focus:ring-secondary/20;
+  }
+
+  .form-dropdown-item {
+    @apply flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors sm:text-sm;
+  }
+
+  .form-dropdown-item-active {
+    @apply bg-light-gray font-semibold text-secondary;
+  }
+
+  .form-dropdown-item-inactive {
+    @apply text-dull-gray hover:bg-light-gray;
+  }
+}
