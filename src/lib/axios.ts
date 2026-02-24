@@ -3,7 +3,7 @@ import { handleApiError } from './api-error';
 import { decryptPayloadToJson, encryptJsonToPayload } from './payload-crypto';
 
 export const axiosInstance: AxiosInstance = axios.create({
-  baseURL: 'https://aces-test.vercel.app/api',
+  baseURL: 'https://new-aces.vercel.app/api',
   timeout: 10000,
 });
 
