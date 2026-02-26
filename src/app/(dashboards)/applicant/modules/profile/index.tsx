@@ -12,6 +12,9 @@ import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
 import { persistOrganizationId } from "@/lib/auth-utils";
 import { LoadingScreen } from "../../common/loading-screen";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   Country as CSC,
   State as CSS,
@@ -106,6 +109,44 @@ export function ProfilePage() {
     description: "",
     legal_document_url: "",
   });
+
+  const router = useRouter();
+  const [profileData, setProfileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const {
+    isEmployee: isEmployeeRole,
+    hasAccess,
+    hasWrite,
+  } = useEmployeePermissions(profileData);
+  const canAccess = !isEmployeeRole || hasAccess("profile");
+  const canUpdate = !isEmployeeRole || hasWrite("profile");
+
+  useEffect(() => {
+    const loadProfile = () => {
+      const stored = localStorage.getItem("organization_profile");
+      if (stored) {
+        try {
+          setProfileData(JSON.parse(stored));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("storage", loadProfile);
+    window.addEventListener("profile-updated", loadProfile);
+    return () => {
+      window.removeEventListener("storage", loadProfile);
+      window.removeEventListener("profile-updated", loadProfile);
+    };
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -293,8 +334,7 @@ export function ProfilePage() {
     }
   };
 
-  useEffect(() => {
-  }, []);
+  useEffect(() => {}, []);
 
   const selectedLegalCountry = useMemo(() => {
     if (!formik.values.legal_country) return null;
@@ -784,6 +824,33 @@ export function ProfilePage() {
     return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
   };
 
+  if (!canAccess) {
+    const base = isEmployee ? "/employee" : "/applicant";
+    return (
+      <div className="p-6 lg:p-10 bg-dull-white/10 min-h-[80vh] flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm border border-zinc-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-secondary mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray text-sm mb-6">
+            You do not have permission to view this page. Please contact your
+            administrator to request access.
+          </p>
+          <Button
+            variant="secondary"
+            className="w-full h-12 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl"
+            onClick={() => router.push(base)}
+          >
+            Go Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoadingProfile) {
     return (
       <div className="flex items-center justify-center py-20 min-h-[200px]">
@@ -811,7 +878,7 @@ export function ProfilePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="overflow-visible rounded-3xl border border-dull-white/50 bg-primary shadow-sm"
+          className="overflow-visible rounded-3xl border border-dull-white/50 bg-zinc-50 shadow-sm"
         >
           <form onSubmit={formik.handleSubmit}>
             <div className="flex flex-col gap-8 border-b border-dull-white/40 p-6 md:flex-row md:items-start lg:p-10">
@@ -1122,7 +1189,7 @@ export function ProfilePage() {
                       name="description"
                       rows={4}
                       placeholder="Brief description of your organisation..."
-                      className="w-full rounded-2xl border border-dull-white/50 bg-primary px-4 py-3 text-sm text-secondary outline-none transition-all placeholder:text-gray/50 focus:border-secondary/50 focus:ring-2 focus:ring-secondary/5"
+                      className="w-full rounded-2xl border border-dull-white/50 bg-zinc-50 px-4 py-3 text-sm text-secondary outline-none transition-all placeholder:text-gray/50 focus:border-secondary/50 focus:ring-2 focus:ring-secondary/5"
                       value={formik.values.description}
                       onChange={formik.handleChange}
                       onBlur={formik.handleBlur}

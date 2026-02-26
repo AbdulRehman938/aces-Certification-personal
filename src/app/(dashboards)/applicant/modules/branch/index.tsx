@@ -5,12 +5,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { Button } from "@/components/ui";
+import { Tooltip } from "@/components/ui/tooltip";
 import { axiosInstance } from "@/lib/axios";
 import { LoadingScreen } from "../../common/loading-screen";
 import { FaStar, FaExclamation } from "react-icons/fa";
 import { RxCross2 } from "react-icons/rx";
 import { MdKeyboardArrowDown } from "react-icons/md";
 import { FiSearch } from "react-icons/fi";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   Country as CSC,
   State as CSS,
@@ -117,30 +121,40 @@ export function BranchPage() {
 
   const [isBranchesLoading, setIsBranchesLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const router = useRouter();
 
-  const canWriteBranch = useMemo(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const raw = localStorage.getItem("organization_profile");
-      if (!raw) return true;
-      const profile = JSON.parse(raw);
-      if (profile?._type !== "employee") return true;
-      const perms: { resource: string; action: string[] | string }[] =
-        profile?.permissions ?? [];
-      return perms.some((p) => {
-        const actions = Array.isArray(p.action)
-          ? p.action
-          : typeof p.action === "string"
-            ? [p.action]
-            : [];
-        return (
-          p.resource === "branch" &&
-          actions.some((a) => a.toLowerCase() === "write")
-        );
-      });
-    } catch {
-      return true;
+  const [profileData, setProfileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
     }
+    return null;
+  });
+
+  const { isEmployee, hasAccess, hasWrite } =
+    useEmployeePermissions(profileData);
+  const canAccess = !isEmployee || hasAccess("branches");
+  const canWriteBranch = !isEmployee || hasWrite("branches");
+
+  useEffect(() => {
+    const loadProfile = () => {
+      const stored = localStorage.getItem("organization_profile");
+      if (stored) {
+        try {
+          setProfileData(JSON.parse(stored));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("storage", loadProfile);
+    window.addEventListener("profile-updated", loadProfile);
+    return () => {
+      window.removeEventListener("storage", loadProfile);
+      window.removeEventListener("profile-updated", loadProfile);
+    };
   }, []);
 
   const [countries, setCountries] = useState<
@@ -970,6 +984,37 @@ export function BranchPage() {
     isCitiesLoading ||
     cities.length === 0;
 
+  if (!canAccess) {
+    const basePath =
+      typeof window !== "undefined" &&
+      window.location.pathname.startsWith("/employee")
+        ? "/employee"
+        : "/applicant";
+    return (
+      <div className="p-6 lg:p-10 bg-dull-white/10 min-h-[80vh] flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm border border-zinc-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-secondary mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray text-sm mb-6">
+            You do not have permission to view this page. Please contact your
+            administrator to request access.
+          </p>
+          <Button
+            variant="secondary"
+            className="w-full h-12 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl"
+            onClick={() => router.push(basePath)}
+          >
+            Go Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 py-8 lg:pt-3 w-full bg-zinc-50 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -993,7 +1038,7 @@ export function BranchPage() {
               {hasAnyBranches && (
                 <>
                   <div className="w-full md:hidden">
-                    <div className="relative h-10 flex w-full items-center rounded-lg border border-light-gray-2 bg-primary shadow-sm">
+                    <div className="relative h-10 flex w-full items-center rounded-lg border border-light-gray-2 bg-zinc-50 shadow-sm">
                       <FiSearch className="ml-2 h-4 w-4 text-gray" />
                       <input
                         type="text"
@@ -1025,7 +1070,7 @@ export function BranchPage() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 6 }}
                             transition={{ duration: 0.16, ease: "easeOut" }}
-                            className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.14)]"
+                            className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.14)]"
                           >
                             {liveSearchResults.map((branch) => (
                               <button
@@ -1059,7 +1104,7 @@ export function BranchPage() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -4 }}
                           transition={{ duration: 0.18, ease: "easeInOut" }}
-                          className="relative h-10 flex w-full max-w-xs items-center rounded-lg border border-light-gray-2 bg-primary shadow-sm"
+                          className="relative h-10 flex w-full max-w-xs items-center rounded-lg border border-light-gray-2 bg-zinc-50 shadow-sm"
                         >
                           <FiSearch className="ml-2 h-4 w-4 text-gray" />
                           <input
@@ -1095,7 +1140,7 @@ export function BranchPage() {
                                     duration: 0.16,
                                     ease: "easeOut",
                                   }}
-                                  className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.14)]"
+                                  className="absolute left-0 right-0 top-full mt-1 z-20 max-h-64 overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.14)]"
                                 >
                                   {liveSearchResults.map((branch) => (
                                     <button
@@ -1130,7 +1175,7 @@ export function BranchPage() {
                           type="button"
                           aria-label="Open search"
                           onClick={() => setIsSearchOpen(true)}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-light-gray-2 bg-primary text-gray hover:bg-light-gray cursor-pointer"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-light-gray-2 bg-zinc-50 text-gray hover:bg-light-gray cursor-pointer"
                         >
                           <FiSearch className="h-5 w-5" />
                         </motion.button>
@@ -1140,19 +1185,25 @@ export function BranchPage() {
                 </>
               )}
 
-              {canWriteBranch && (
-                <Button
-                  variant="secondary"
-                  className="h-12 px-7 rounded-xl text-base font-semibold whitespace-nowrap md:self-auto"
-                  onClick={openCreateModal}
+              {canAccess && (
+                <Tooltip
+                  content="Read-only access. You do not have permission to add branches."
+                  disabled={canWriteBranch}
                 >
-                  Add New Branch
-                </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={!canWriteBranch}
+                    className="h-12 px-7 rounded-xl text-base font-semibold whitespace-nowrap md:self-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={canWriteBranch ? openCreateModal : undefined}
+                  >
+                    Add New Branch
+                  </Button>
+                </Tooltip>
               )}
             </div>
           </div>
 
-          <div className="mt-2 bg-primary rounded-3xl border border-light-gray-2 shadow-sm overflow-hidden">
+          <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm overflow-hidden">
             <div className="hidden md:block relative min-h-auto">
               {isBranchesLoading ? (
                 <div className="flex items-center justify-center py-20">
@@ -1178,7 +1229,7 @@ export function BranchPage() {
                 </div>
               ) : (
                 <table className="w-full">
-                  <thead className="bg-primary border-b border-light-gray-2">
+                  <thead className="bg-zinc-50 border-b border-light-gray-2">
                     <tr>
                       <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
                         Branch Name
@@ -1417,7 +1468,7 @@ export function BranchPage() {
                     type="button"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
+                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
                   >
                     Prev
                   </button>
@@ -1433,7 +1484,7 @@ export function BranchPage() {
                           className={`h-8 w-8 rounded-lg text-xs font-semibold transition-colors ${
                             isActive
                               ? "bg-secondary text-primary"
-                              : "bg-primary text-dull-gray border border-light-gray-2 hover:bg-light-gray"
+                              : "bg-zinc-50 text-dull-gray border border-light-gray-2 hover:bg-light-gray"
                           }`}
                         >
                           {page}
@@ -1447,7 +1498,7 @@ export function BranchPage() {
                       setCurrentPage((p) => Math.min(totalPages, p + 1))
                     }
                     disabled={currentPage === totalPages}
-                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
+                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
                   >
                     Next
                   </button>
@@ -1469,7 +1520,7 @@ export function BranchPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 24 }}
                   transition={{ type: "spring", stiffness: 260, damping: 22 }}
-                  className="relative w-full max-w-xl rounded-3xl bg-primary px-5 py-5 sm:px-6 sm:py-6 shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
+                  className="relative w-full max-w-xl rounded-3xl bg-zinc-50 px-5 py-5 sm:px-6 sm:py-6 shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -1571,7 +1622,7 @@ export function BranchPage() {
                             }`}
                           >
                             <span
-                              className={`inline-block h-3 w-3 rounded-full bg-primary shadow-sm transform transition-transform ${
+                              className={`inline-block h-3 w-3 rounded-full bg-zinc-50 shadow-sm transform transition-transform ${
                                 formik.values.isMain
                                   ? "translate-x-4"
                                   : "translate-x-0.5"
@@ -1641,9 +1692,9 @@ export function BranchPage() {
                                   animate={{ opacity: 1, y: 0 }}
                                   exit={{ opacity: 0, y: 8 }}
                                   transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
                                 >
-                                  <div className="sticky top-0 z-10 bg-primary px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+                                  <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
                                     <input
                                       type="text"
                                       value={countrySearch}
@@ -1762,9 +1813,9 @@ export function BranchPage() {
                                   animate={{ opacity: 1, y: 0 }}
                                   exit={{ opacity: 0, y: 8 }}
                                   transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
                                 >
-                                  <div className="sticky top-0 z-10 bg-primary px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+                                  <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
                                     <input
                                       type="text"
                                       value={stateSearch}
@@ -1880,9 +1931,9 @@ export function BranchPage() {
                                   animate={{ opacity: 1, y: 0 }}
                                   exit={{ opacity: 0, y: 8 }}
                                   transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
                                 >
-                                  <div className="sticky top-0 z-10 bg-primary px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+                                  <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
                                     <input
                                       type="text"
                                       value={citySearch}
@@ -2043,7 +2094,7 @@ export function BranchPage() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 8 }}
                                 transition={{ duration: 0.15 }}
-                                className="absolute bottom-full mb-1 z-20 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                                className="absolute bottom-full mb-1 z-20 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
                               >
                                 {[
                                   "1-10 employees",
@@ -2126,7 +2177,7 @@ export function BranchPage() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="relative w-full max-w-md rounded-3xl bg-primary px-6 py-6 shadow-2xl"
+                  className="relative w-full max-w-md rounded-3xl bg-zinc-50 px-6 py-6 shadow-2xl"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-start gap-4">
@@ -2152,7 +2203,7 @@ export function BranchPage() {
                   <div className="mt-6 flex items-center gap-3">
                     <button
                       type="button"
-                      className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-primary hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                      className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-zinc-50 hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                       onClick={() => {
                         setIsDeleteOpen(false);
                         setBranchToDelete(null);
@@ -2187,7 +2238,7 @@ export function BranchPage() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="relative w-full max-w-md rounded-3xl bg-primary px-6 py-6 shadow-2xl"
+                  className="relative w-full max-w-md rounded-3xl bg-zinc-50 px-6 py-6 shadow-2xl"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-start gap-4">
@@ -2218,7 +2269,7 @@ export function BranchPage() {
                   <div className="mt-6 flex items-center gap-3">
                     <button
                       type="button"
-                      className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-primary hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                      className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-zinc-50 hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                       onClick={() => setIsMainBranchConfirmOpen(false)}
                     >
                       Cancel

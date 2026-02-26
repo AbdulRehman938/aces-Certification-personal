@@ -24,7 +24,7 @@ export default function PolicyPage() {
               className={`px-6 py-2 rounded-md text-sm sm:text-base font-medium transition-colors ${
                 activeTab === "terms"
                   ? "bg-black text-white shadow-lg"
-                  : "bg-white text-secondary hover:bg-zinc-50"
+                  : "bg-white text-secondary hover:bg-primary"
               }`}
               style={
                 activeTab === "terms"
@@ -43,7 +43,7 @@ export default function PolicyPage() {
               className={`px-6 py-2 rounded-md text-sm sm:text-base font-medium transition-colors ${
                 activeTab === "privacy"
                   ? "bg-black text-white shadow-lg"
-                  : "bg-white text-secondary hover:bg-zinc-50"
+                  : "bg-white text-secondary hover:bg-primary"
               }`}
               style={
                 activeTab === "privacy"

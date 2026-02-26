@@ -370,7 +370,7 @@ export default function OrganisationInfoPage() {
                         onClick={() =>
                           setShowPhoneCountryList(!showPhoneCountryList)
                         }
-                        className="h-full w-full flex items-center justify-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50/30 cursor-pointer hover:border-zinc-300 transition-all shadow-sm"
+                        className="h-full w-full flex items-center justify-center gap-2 rounded-lg border border-zinc-100 bg-primary/30 cursor-pointer hover:border-zinc-300 transition-all shadow-sm"
                       >
                         {phoneCountry && (
                           <div className="relative w-8 h-5 overflow-hidden rounded-sm shadow-sm ring-1 ring-zinc-100">
@@ -447,7 +447,7 @@ export default function OrganisationInfoPage() {
                       </AnimatePresence>
                     </div>
                     <div
-                      className={`flex-1 h-full relative overflow-hidden flex items-center rounded-xl border ${formik.touched.phoneNumber && formik.errors.phoneNumber ? "border-red" : "border-zinc-100"} bg-zinc-50/30 shadow-sm focus-within:border-secondary transition-all`}
+                      className={`flex-1 h-full relative overflow-hidden flex items-center rounded-xl border ${formik.touched.phoneNumber && formik.errors.phoneNumber ? "border-red" : "border-zinc-100"} bg-primary/30 shadow-sm focus-within:border-secondary transition-all`}
                     >
                       <div className="pl-4 pr-1 flex items-center pointer-events-none select-none">
                         <span className="text-base short-laptop:text-base font-semibold text-secondary">
@@ -523,3 +523,4 @@ export default function OrganisationInfoPage() {
     </div>
   );
 }
+

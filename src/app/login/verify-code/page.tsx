@@ -45,16 +45,16 @@ function VerifyCodeContent() {
       if (date !== today) {
         localStorage.setItem(
           "resend_data",
-          JSON.stringify({ count: 0, date: today })
+          JSON.stringify({ count: 0, date: today }),
         );
       }
     } else {
       localStorage.setItem(
         "resend_data",
-        JSON.stringify({ count: 0, date: today })
+        JSON.stringify({ count: 0, date: today }),
       );
     }
-    
+
     return () => clearTimeout(timeout);
   }, []);
 
@@ -70,7 +70,7 @@ function VerifyCodeContent() {
 
   const handleKeyDown = (
     index: number,
-    e: React.KeyboardEvent<HTMLInputElement>
+    e: React.KeyboardEvent<HTMLInputElement>,
   ) => {
     if (e.key === "Backspace" && !code[index] && index > 0)
       inputRefs.current[index - 1]?.focus();
@@ -84,7 +84,10 @@ function VerifyCodeContent() {
     const pastedData = e.clipboardData.getData("text").trim();
     if (!pastedData) return;
 
-    const chars = pastedData.replace(/[^a-zA-Z0-9]/g, "").split("").slice(0, 6);
+    const chars = pastedData
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .split("")
+      .slice(0, 6);
 
     if (chars.length === 0) return;
 
@@ -111,7 +114,7 @@ function VerifyCodeContent() {
     setResendCount(newCount);
     localStorage.setItem(
       "resend_data",
-      JSON.stringify({ count: newCount, date: new Date().toDateString() })
+      JSON.stringify({ count: newCount, date: new Date().toDateString() }),
     );
     setError("");
   };
@@ -132,23 +135,25 @@ function VerifyCodeContent() {
     setError("");
 
     try {
-
       document.cookie = `reset_auth_token=verified; path=/; max-age=300; samesite=strict`;
       document.cookie =
         "reset_session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
       router.replace(
-        `/login/reset-password?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`
+        `/login/reset-password?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`,
       );
     } catch (err: unknown) {
       console.error("OTP verification error:", err);
-      const errorMessage = getApiErrorMessage(err, "Invalid code. Please try again.");
+      const errorMessage = getApiErrorMessage(
+        err,
+        "Invalid code. Please try again.",
+      );
       setError(errorMessage);
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(36rem,50vw)] mx-auto bg-primary rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center">
+    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(36rem,50vw)] mx-auto bg-zinc-50 rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center">
       <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mb-[clamp(1rem,3vh,1.5rem)] shadow-lg">
         <img src="/assets/imgs/icons/key.svg" alt="key" className="w-8 h-8" />
       </div>
@@ -221,3 +226,4 @@ export default function VerifyCodePage() {
     </Suspense>
   );
 }
+

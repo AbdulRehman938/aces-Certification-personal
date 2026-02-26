@@ -745,7 +745,7 @@ export default function PersonalInformationPage() {
                   disabled={isAddDisabled || isAddingSite}
                   className={`w-full flex items-center justify-center gap-2 px-4 py-3 border rounded-xl text-base font-semibold transition-colors ${
                     isAddDisabled || isAddingSite
-                      ? "border-zinc-200 text-zinc-300 cursor-not-allowed bg-zinc-50"
+                      ? "border-zinc-200 text-zinc-300 cursor-not-allowed bg-primary"
                       : "border-zinc-400 text-secondary hover:bg-zinc-50 cursor-pointer"
                   }`}
                 >
@@ -918,7 +918,7 @@ export default function PersonalInformationPage() {
                                   !site.showCountryList,
                                 );
                               }}
-                              className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border ${site.errors?.country ? "border-red" : "border-zinc-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm transition-all`}
+                              className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border ${site.errors?.country ? "border-red" : "border-zinc-100"} bg-primary/30 font-medium text-secondary shadow-sm transition-all`}
                             >
                               <span
                                 className={`text-base short-laptop:text-xs truncate ${!site.country ? "text-zinc-300" : ""}`}
@@ -1042,7 +1042,7 @@ export default function PersonalInformationPage() {
                                     !site.showStateList,
                                   );
                               }}
-                              className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border ${site.errors?.state ? "border-red" : "border-zinc-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm transition-all ${
+                              className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border ${site.errors?.state ? "border-red" : "border-zinc-100"} bg-primary/30 font-medium text-secondary shadow-sm transition-all ${
                                 !site.country ||
                                 CSS.getStatesOfCountry(
                                   countries.find(
@@ -1179,7 +1179,7 @@ export default function PersonalInformationPage() {
                                     !site.showCityList,
                                   );
                               }}
-                              className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border ${site.errors?.city ? "border-red" : "border-zinc-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm transition-all ${
+                              className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border ${site.errors?.city ? "border-red" : "border-zinc-100"} bg-primary/30 font-medium text-secondary shadow-sm transition-all ${
                                 !site.state ||
                                 CSCity.getCitiesOfState(
                                   countries.find(
@@ -1344,3 +1344,4 @@ export default function PersonalInformationPage() {
     </div>
   );
 }
+

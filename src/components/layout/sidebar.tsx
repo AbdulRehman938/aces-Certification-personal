@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function Sidebar() {
   return (
-    <aside className="w-64 border-r bg-zinc-50/50 p-6 dark:bg-zinc-900/50">
+    <aside className="w-64 border-r bg-primary/50 p-6 dark:bg-zinc-900/50">
       <div className="flex flex-col gap-4">
         <div className="text-sm font-semibold text-zinc-500  tracking-wider">
           Dashboard

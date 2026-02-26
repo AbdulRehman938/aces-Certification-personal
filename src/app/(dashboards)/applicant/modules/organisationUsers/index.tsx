@@ -8,6 +8,9 @@ import { Button } from "@/components/ui";
 import { axiosInstance } from "@/lib/axios";
 import type { ApiError } from "@/lib/api-error";
 import { LoadingScreen } from "../../common/loading-screen";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { Lock } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
 import { IoIosAlert } from "react-icons/io";
 import { MdFilterListAlt } from "react-icons/md";
 import { FiRefreshCw } from "react-icons/fi";
@@ -173,6 +176,45 @@ export function OrganisationUsersPage() {
 
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const [profileData, setProfileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const {
+    isEmployee: isEmployeeRole,
+    hasAccess,
+    hasWrite,
+  } = useEmployeePermissions(profileData);
+  const canAccess = !isEmployeeRole || hasAccess("organization_users");
+  const canInvite = !isEmployeeRole || hasWrite("organization_users");
+
+  useEffect(() => {
+    const loadProfile = () => {
+      const stored = localStorage.getItem("organization_profile");
+      if (stored) {
+        try {
+          setProfileData(JSON.parse(stored));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("storage", loadProfile);
+    window.addEventListener("profile-updated", loadProfile);
+    return () => {
+      window.removeEventListener("storage", loadProfile);
+      window.removeEventListener("profile-updated", loadProfile);
+    };
+  }, []);
 
   const branchFieldRef = useRef<HTMLDivElement | null>(null);
 
@@ -563,6 +605,34 @@ export function OrganisationUsersPage() {
       console.error("Failed to load employees", apiError);
     }
   };
+  if (!canAccess) {
+    const isEmployee = pathname.startsWith("/employee");
+    const base = isEmployee ? "/employee" : "/applicant";
+    return (
+      <div className="p-6 lg:p-10 bg-dull-white/10 min-h-[80vh] flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm border border-zinc-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-secondary mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray text-sm mb-6">
+            You do not have permission to view this page. Please contact your
+            administrator to request access.
+          </p>
+          <Button
+            variant="secondary"
+            className="w-full h-12 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl"
+            onClick={() => router.push(base)}
+          >
+            Go Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -712,6 +782,9 @@ export function OrganisationUsersPage() {
       setEditingUserIndex(null);
       setOriginalEmail("");
       setApiErrorMessage(null);
+      setOtpError(null);
+      setEmailOtp("");
+      setVerifiedEmailOtp("");
     }
   };
 
@@ -801,7 +874,7 @@ export function OrganisationUsersPage() {
             ? [p.action]
             : [];
         return (
-          p.resource === "organisation-users" &&
+          p.resource === "organization_users" &&
           actions.some((a) => a.toLowerCase() === "write")
         );
       });
@@ -811,7 +884,7 @@ export function OrganisationUsersPage() {
   }, []);
 
   return (
-    <div className="bg-primary h-full min-h-screen px-4 py-6 md:pt-3 md:px-8 md:py-8">
+    <div className="bg-zinc-50 px-4 py-6 md:pt-3 md:px-8 md:py-8">
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
           <div className="space-y-1">
@@ -830,6 +903,10 @@ export function OrganisationUsersPage() {
               onClick={() => {
                 setEditingUserIndex(null);
                 setOriginalEmail("");
+                setApiErrorMessage(null);
+                setOtpError(null);
+                setEmailOtp("");
+                setVerifiedEmailOtp("");
                 formik.resetForm({ values: emptyInviteValues });
                 setIsInviteOpen(true);
               }}
@@ -876,7 +953,7 @@ export function OrganisationUsersPage() {
                     className="fixed inset-0 z-10"
                     onClick={() => setIsFilterOpen(false)}
                   />
-                  <div className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)] py-2">
+                  <div className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] py-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -939,7 +1016,7 @@ export function OrganisationUsersPage() {
         )}
 
         {isInitialLoading || users.length === 0 ? (
-          <div className="mt-2 bg-primary rounded-3xl border border-light-gray-2 shadow-sm flex flex-col items-center justify-center px-4 py-12 sm:px-8 sm:py-16 text-center min-h-100">
+          <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm flex flex-col items-center justify-center px-4 py-12 sm:px-8 sm:py-16 text-center min-h-100">
             {isInitialLoading ? (
               <LoadingScreen
                 isLoading={true}
@@ -959,7 +1036,7 @@ export function OrganisationUsersPage() {
             )}
           </div>
         ) : (
-          <div className="mt-2 bg-primary rounded-3xl border border-light-gray-2 shadow-sm">
+          <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm">
             <div className="hidden md:block">
               <table className="w-full">
                 <thead className="bg-transparent border-b border-light-gray-2">
@@ -1054,28 +1131,7 @@ export function OrganisationUsersPage() {
                         </td>
                         <td className="px-4 py-4 pr-4 md:px-6 md:py-5 md:pr-8 align-middle">
                           <div className="flex items-center justify-start gap-2 md:gap-3">
-                            {user.status === "Pending" && (
-                              <button
-                                type="button"
-                                disabled={isCoolingDown}
-                                className={`h-9 md:h-10 px-3 md:px-4 rounded-lg text-[11px] md:text-xs font-semibold cursor-pointer transition-colors ${
-                                  isCoolingDown
-                                    ? "border-light-gray-2 bg-light-gray text-dull-gray cursor-not-allowed"
-                                    : "border-yellow bg-dull-yellow/30 text-yellow hover:bg-dull-yellow"
-                                }`}
-                                onClick={() => {
-                                  if (isCoolingDown) return;
-                                  setResendCooldowns((prev) => ({
-                                    ...prev,
-                                    [user.email]: 10,
-                                  }));
-                                }}
-                              >
-                                {isCoolingDown
-                                  ? `${cooldown}s`
-                                  : "Resend Invite"}
-                              </button>
-                            )}
+                            
                             {canWriteOrgUsers ? (
                               <>
                                 <Button
@@ -1102,6 +1158,28 @@ export function OrganisationUsersPage() {
                                 Read only
                               </span>
                             )}
+                            {user.status === "Pending" && (
+                              <button
+                                type="button"
+                                disabled={isCoolingDown}
+                                className={`h-9 md:h-10 px-3 md:px-4 rounded-lg text-[11px] md:text-xs font-semibold cursor-pointer transition-colors ${
+                                  isCoolingDown
+                                    ? "border-light-gray-2 bg-light-gray text-dull-gray cursor-not-allowed"
+                                    : "border-yellow-400 border-2 bg-dull-yellow/30 text-yellow hover:bg-dull-yellow"
+                                }`}
+                                onClick={() => {
+                                  if (isCoolingDown) return;
+                                  setResendCooldowns((prev) => ({
+                                    ...prev,
+                                    [user.email]: 10,
+                                  }));
+                                }}
+                              >
+                                {isCoolingDown
+                                  ? `${cooldown}s`
+                                  : "Resend Invite"}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1118,7 +1196,7 @@ export function OrganisationUsersPage() {
                 return (
                   <div
                     key={`${user.email}-${index}-card`}
-                    className="rounded-2xl border border-light-gray-2 bg-primary px-4 py-3 space-y-3"
+                    className="rounded-2xl border border-light-gray-2 bg-zinc-50 px-4 py-3 space-y-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -1193,7 +1271,7 @@ export function OrganisationUsersPage() {
                           className={`flex-1 h-9 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
                             isCoolingDown
                               ? "border-light-gray-2 bg-light-gray text-dull-gray cursor-not-allowed"
-                              : "border-yellow bg-dull-yellow/30 text-yellow hover:bg-dull-yellow"
+                              : "border-yellow-700 border-2 bg-dull-yellow/30 text-yellow hover:bg-dull-yellow"
                           }`}
                           onClick={() => {
                             if (isCoolingDown) return;
@@ -1253,7 +1331,7 @@ export function OrganisationUsersPage() {
                     type="button"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
+                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
                   >
                     Prev
                   </button>
@@ -1269,7 +1347,7 @@ export function OrganisationUsersPage() {
                           className={`h-8 w-8 rounded-lg text-xs font-semibold transition-colors ${
                             isActive
                               ? "bg-secondary text-primary"
-                              : "bg-primary text-dull-gray border border-light-gray-2 hover:bg-light-gray"
+                              : "bg-zinc-50 text-dull-gray border border-light-gray-2 hover:bg-light-gray"
                           }`}
                         >
                           {page}
@@ -1283,7 +1361,7 @@ export function OrganisationUsersPage() {
                       setCurrentPage((p) => Math.min(totalPages, p + 1))
                     }
                     disabled={currentPage === totalPages}
-                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
+                    className="h-8 px-3 rounded-lg border border-light-gray-2 text-xs font-semibold text-dull-gray bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-light-gray transition-colors"
                   >
                     Next
                   </button>
@@ -1316,7 +1394,7 @@ export function OrganisationUsersPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 12 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-3xl bg-primary border border-light-gray-2 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] overflow-hidden"
+              className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-3xl bg-zinc-50 border border-light-gray-2 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] overflow-hidden"
             >
               <form
                 onSubmit={formik.handleSubmit}
@@ -1589,8 +1667,8 @@ export function OrganisationUsersPage() {
                               <span
                                 className={
                                   formik.values.branch
-                                    ? "text-secondary font-medium"
-                                    : "text-gray/50"
+                                    ? "text-secondary font-medium whitespace-nowrap"
+                                    : "text-gray/50 whitespace-nowrap"
                                 }
                               >
                                 {formik.values.branch ||
@@ -1616,7 +1694,7 @@ export function OrganisationUsersPage() {
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 8 }}
                                     transition={{ duration: 0.15 }}
-                                    className="absolute z-20 mt-1 w-full rounded-xl bg-primary border border-light-gray-2 shadow-[0_10px_40px_rgba(0,0,0,0.15)] max-h-56 overflow-y-auto"
+                                    className="absolute z-20 mt-1 w-full rounded-xl bg-zinc-50 border border-light-gray-2 shadow-[0_10px_40px_rgba(0,0,0,0.15)] max-h-56 overflow-y-auto"
                                   >
                                     <div className="p-2 border-b border-light-gray-2 bg-primary/95 sticky top-0 backdrop-blur-sm z-30">
                                       <input
@@ -1824,7 +1902,7 @@ export function OrganisationUsersPage() {
                               className={`flex items-start gap-3 rounded-xl border p-3 transition-all hover:shadow-sm ${
                                 enabled
                                   ? "border-secondary bg-secondary/5"
-                                  : "border-light-gray-2 bg-primary hover:border-gray/30"
+                                  : "border-light-gray-2 bg-zinc-50 hover:border-gray/30"
                               }`}
                             >
                               <div className="flex items-center justify-between w-full gap-3">
@@ -1936,7 +2014,7 @@ export function OrganisationUsersPage() {
                                           ? writeChecked
                                             ? "border-secondary/40 bg-secondary/5 text-secondary/60"
                                             : "border-secondary/70 bg-secondary/10 text-secondary"
-                                          : "border-gray/40 bg-primary text-transparent"
+                                          : "border-gray/40 bg-zinc-50 text-transparent"
                                       }`}
                                     >
                                       {readChecked && (
@@ -1994,7 +2072,7 @@ export function OrganisationUsersPage() {
                                       className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[8px] transition-colors ${
                                         writeChecked
                                           ? "border-secondary/70 bg-secondary/10 text-secondary"
-                                          : "border-gray/40 bg-primary text-transparent"
+                                          : "border-gray/40 bg-zinc-50 text-transparent"
                                       }`}
                                     >
                                       {writeChecked && (
@@ -2027,7 +2105,7 @@ export function OrganisationUsersPage() {
                   </div>
                 </div>
 
-                <div className="px-6 pb-6 pt-4 flex flex-col gap-3 shrink-0 bg-primary border-t border-light-gray-2">
+                <div className="px-6 pb-6 pt-4 flex flex-col gap-3 shrink-0 bg-zinc-50 border-t border-light-gray-2">
                   {apiErrorMessage && (
                     <div className="rounded-xl border border-red/30 bg-red/5 px-4 py-2 text-xs font-medium text-red">
                       {apiErrorMessage}
@@ -2038,7 +2116,7 @@ export function OrganisationUsersPage() {
                       type="button"
                       disabled={formik.isSubmitting || isUploadingAvatar}
                       onClick={handleRequestCloseInvite}
-                      className="h-10 px-6 cursor-pointer rounded-xl border border-light-gray-2 bg-primary text-xs font-semibold text-dull-gray hover:bg-light-gray transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-10 px-6 cursor-pointer rounded-xl border border-light-gray-2 bg-zinc-50 text-xs font-semibold text-dull-gray hover:bg-light-gray transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isEditMode ? "Cancel" : "Close"}
                     </button>
@@ -2079,7 +2157,7 @@ export function OrganisationUsersPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.18 }}
-              className="relative w-full max-w-sm rounded-2xl bg-primary border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
+              className="relative w-full max-w-sm rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
             >
               <div className="flex items-start gap-3">
                 <div className="w-10 h-7 md:h-10 rounded-full bg-light-gray-2 flex items-center justify-center">
@@ -2131,7 +2209,7 @@ export function OrganisationUsersPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.18 }}
-              className="relative w-full max-w-md rounded-3xl bg-primary border border-light-gray-2 shadow-[0_22px_45px_rgba(0,0,0,0.2)] p-7 space-y-6"
+              className="relative w-full max-w-md rounded-3xl bg-zinc-50 border border-light-gray-2 shadow-[0_22px_45px_rgba(0,0,0,0.2)] p-7 space-y-6"
             >
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray/30">
@@ -2162,7 +2240,7 @@ export function OrganisationUsersPage() {
                 <button
                   type="button"
                   onClick={() => setIsDeleteOpen(false)}
-                  className="h-10 px-6 rounded-lg border cursor-pointer border-light-gray-2 bg-primary text-xs font-semibold text-dull-gray hover:bg-light-gray transition-colors"
+                  className="h-10 px-6 rounded-lg border cursor-pointer border-light-gray-2 bg-zinc-50 text-xs font-semibold text-dull-gray hover:bg-light-gray transition-colors"
                 >
                   Cancel
                 </button>
@@ -2226,7 +2304,7 @@ export function OrganisationUsersPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.18 }}
-              className="relative w-full max-w-sm rounded-2xl bg-primary border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
+              className="relative w-full max-w-sm rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
             >
               <div className="space-y-1">
                 <h3 className="text-base font-semibold text-secondary">
@@ -2242,7 +2320,7 @@ export function OrganisationUsersPage() {
                 <button
                   type="button"
                   onClick={() => setIsCloseConfirmOpen(false)}
-                  className="h-9 px-4 rounded-lg border border-light-gray-2 bg-primary text-xs font-semibold text-dull-gray hover:bg-light-gray transition-colors"
+                  className="h-9 px-4 rounded-lg border border-light-gray-2 bg-zinc-50 text-xs font-semibold text-dull-gray hover:bg-light-gray transition-colors"
                 >
                   Cancel
                 </button>
@@ -2256,6 +2334,10 @@ export function OrganisationUsersPage() {
                     setIsInviteOpen(false);
                     setEditingUserIndex(null);
                     setOriginalEmail("");
+                    setApiErrorMessage(null);
+                    setOtpError(null);
+                    setEmailOtp("");
+                    setVerifiedEmailOtp("");
                   }}
                 >
                   Discard

@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
   });
 
   return (
-    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(32rem,45vw)] mx-auto bg-primary rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center">
+    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(32rem,45vw)] mx-auto bg-zinc-50 rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center">
       <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mb-[clamp(1rem,3vh,1.5rem)] shadow-lg">
         <img
           src="/assets/imgs/icons/envelope.svg"
@@ -101,3 +101,4 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+

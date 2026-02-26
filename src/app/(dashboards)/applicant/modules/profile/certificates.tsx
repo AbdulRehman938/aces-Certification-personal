@@ -14,7 +14,7 @@ const Card = ({
 }) => (
   <div
     className={cn(
-      "bg-primary rounded-2xl border border-zinc-100 shadow-sm p-4 lg:p-5 flex flex-col",
+      "bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm p-4 lg:p-5 flex flex-col",
       className,
     )}
   >

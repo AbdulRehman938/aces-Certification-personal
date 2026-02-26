@@ -159,7 +159,7 @@ export default function CompletedReviewsReview() {
           className={`px-4 py-1.5 md:px-6 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${
             activeButton === "assessment"
               ? "bg-black text-white shadow-lg"
-              : "bg-white text-secondary hover:bg-zinc-50"
+              : "bg-white text-secondary hover:bg-primary"
           }`}
           style={
             activeButton === "assessment"
@@ -180,7 +180,7 @@ export default function CompletedReviewsReview() {
           className={`px-4 py-1.5 md:px-6 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${
             activeButton === "submit"
               ? "bg-black text-white shadow-lg"
-              : "bg-white text-secondary hover:bg-zinc-50"
+              : "bg-white text-secondary hover:bg-primary"
           }`}
           style={
             activeButton === "submit"

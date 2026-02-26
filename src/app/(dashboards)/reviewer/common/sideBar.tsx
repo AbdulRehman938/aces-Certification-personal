@@ -68,7 +68,7 @@ export default function SideBar() {
           top-0 left-0
           ${isCollapsed ? "w-20" : "w-70"}
           h-screen lg:h-[calc(100vh-60px)]
-          bg-primary border-r border-zinc-100
+          bg-zinc-50 border-r border-zinc-100
           flex flex-col
           z-50
           transform transition-all duration-300 ease-in-out
@@ -145,8 +145,7 @@ export default function SideBar() {
               );
             })}
           </ul>
-          
-          
+
           <div className="mt-auto pt-2">
             <button
               onClick={handleLogout}
@@ -175,3 +174,4 @@ export default function SideBar() {
     </>
   );
 }
+

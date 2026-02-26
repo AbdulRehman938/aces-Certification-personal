@@ -147,7 +147,7 @@ export function SubmissionDetails({
       </div>
 
       {/* Progress Tracker */}
-      <div className="bg-primary rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10">
+      <div className="bg-zinc-50 rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10">
         <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8 md:gap-0">
           {/* Connecting Line (Desktop) */}
           <div className="absolute top-[21px] left-[40px] right-[40px] h-[2px] bg-zinc-100 hidden md:block" />
@@ -163,8 +163,8 @@ export function SubmissionDetails({
                   step.status === "completed"
                     ? "bg-secondary border-secondary text-primary"
                     : step.status === "active"
-                      ? "bg-primary border-zinc-200 text-zinc-400"
-                      : "bg-primary border-zinc-100 text-zinc-200"
+                      ? "bg-zinc-50 border-zinc-200 text-zinc-400"
+                      : "bg-zinc-50 border-zinc-100 text-zinc-200"
                 }`}
               >
                 {step.status === "completed" ? (
@@ -194,7 +194,7 @@ export function SubmissionDetails({
         </div>
       </div>
 
-      <div className="bg-primary rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10 space-y-6">
+      <div className="bg-zinc-50 rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10 space-y-6">
         <h3 className="text-xl font-semibold text-secondary">Current Stage</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="flex items-center gap-4">
@@ -241,7 +241,7 @@ export function SubmissionDetails({
 
       {/* Action Required Section */}
       {details.actionRequired && (
-        <div className="bg-zinc-50/50 rounded-4xl border border-zinc-100 p-8 md:p-10 space-y-8">
+        <div className="bg-primary/50 rounded-4xl border border-zinc-100 p-8 md:p-10 space-y-8">
           <div className="space-y-1">
             <h3 className="text-xl font-semibold text-secondary">
               Action Required
@@ -256,7 +256,7 @@ export function SubmissionDetails({
             {details.actionRequired.map((action, i) => (
               <div
                 key={i}
-                className="bg-primary rounded-2xl border border-zinc-100 p-6 flex gap-4 items-start shadow-sm"
+                className="bg-zinc-50 rounded-2xl border border-zinc-100 p-6 flex gap-4 items-start shadow-sm"
               >
                 <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center border border-zinc-100 text-xs font-semibold text-zinc-400 shrink-0">
                   {i + 1}
@@ -282,7 +282,7 @@ export function SubmissionDetails({
             </Button>
             <Button
               variant="primary"
-              className="w-auto px-8 h-12 text-sm bg-white border border-zinc-200 text-secondary font-semibold hover:bg-zinc-50"
+              className="w-auto px-8 h-12 text-sm bg-white border border-zinc-200 text-secondary font-semibold hover:bg-primary"
             >
               Respond to Auditor
             </Button>
@@ -293,10 +293,12 @@ export function SubmissionDetails({
       {/* Remarks Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Auditor Remarks */}
-        <div className="bg-primary rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10 space-y-6">
-          <h3 className="text-xl font-semibold text-secondary">Auditor Remarks</h3>
+        <div className="bg-zinc-50 rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10 space-y-6">
+          <h3 className="text-xl font-semibold text-secondary">
+            Auditor Remarks
+          </h3>
           {details.auditorRemarks ? (
-            <div className="bg-zinc-50/30 rounded-3xl border border-zinc-100 p-6 space-y-6">
+            <div className="bg-primary/30 rounded-3xl border border-zinc-100 p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-semibold text-zinc-500">
@@ -328,7 +330,7 @@ export function SubmissionDetails({
               </p>
             </div>
           ) : (
-            <div className="h-40 flex flex-col items-center justify-center text-center space-y-3 bg-zinc-50/30 rounded-3xl border border-dashed border-zinc-200">
+            <div className="h-40 flex flex-col items-center justify-center text-center space-y-3 bg-primary/30 rounded-3xl border border-dashed border-zinc-200">
               <MessageSquare className="w-8 h-8 text-zinc-200" />
               <p className="text-xs text-zinc-400 font-medium">
                 No remarks yet
@@ -338,12 +340,12 @@ export function SubmissionDetails({
         </div>
 
         {/* Management Reviewer Remarks */}
-        <div className="bg-primary rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10 space-y-6">
+        <div className="bg-zinc-50 rounded-4xl border border-zinc-100 shadow-sm p-8 md:p-10 space-y-6">
           <h3 className="text-xl font-semibold text-secondary">
             Management Reviewer Remarks
           </h3>
           {details.reviewerRemarks ? (
-            <div className="bg-zinc-50/30 rounded-3xl border border-zinc-100 p-6 space-y-6">
+            <div className="bg-primary/30 rounded-3xl border border-zinc-100 p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-semibold text-zinc-500">
@@ -364,7 +366,7 @@ export function SubmissionDetails({
               </div>
             </div>
           ) : (
-            <div className="h-40 flex flex-col items-center justify-center text-center space-y-3 bg-zinc-50/30 rounded-3xl border border-dashed border-zinc-200">
+            <div className="h-40 flex flex-col items-center justify-center text-center space-y-3 bg-primary/30 rounded-3xl border border-dashed border-zinc-200">
               <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center border border-zinc-200">
                 <ShieldCheck className="w-6 h-6 text-zinc-300" />
               </div>

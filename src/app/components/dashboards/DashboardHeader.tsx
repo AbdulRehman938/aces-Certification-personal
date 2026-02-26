@@ -124,7 +124,7 @@ export default function DashboardHeader({
   }, []);
 
   return (
-    <div className="bg-light-gray md:bg-primary shadow-lg border-b border-zinc-100">
+    <div className="bg-light-gray md:bg-zinc-50 shadow-lg border-b border-zinc-100">
       <header className="h-[60px] flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-4">
           <div className="hidden lg:flex items-center gap-4">
@@ -277,3 +277,4 @@ export default function DashboardHeader({
     </div>
   );
 }
+

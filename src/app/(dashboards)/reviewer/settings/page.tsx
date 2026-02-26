@@ -625,7 +625,7 @@ export default function Settings() {
           className={`px-7 py-1.5 md:px-10 md:py-2 rounded-lg text-sm md:text-base font-medium transition-colors ${
             activeTab === "account"
               ? "bg-black text-white shadow-lg"
-              : "bg-white text-secondary hover:bg-zinc-50"
+              : "bg-white text-secondary hover:bg-primary"
           }`}
           style={
             activeTab === "account"
@@ -643,7 +643,7 @@ export default function Settings() {
           className={`px-7 py-1.5 md:px-10 md:py-2 rounded-lg text-sm md:text-base font-medium transition-colors ${
             activeTab === "notification"
               ? "bg-black text-white shadow-lg"
-              : "bg-white text-secondary hover:bg-zinc-50"
+              : "bg-white text-secondary hover:bg-primary"
           }`}
           style={
             activeTab === "notification"
@@ -1388,3 +1388,4 @@ export default function Settings() {
     </div>
   );
 }
+

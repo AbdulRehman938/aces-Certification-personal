@@ -353,3 +353,4 @@ export const PrivacyPolicy = () => {
     </motion.div>
   );
 };
+

@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  Suspense,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
@@ -73,15 +79,21 @@ function CreateCertificationPageContent() {
   const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
   const [showAddMainSectionInput, setShowAddMainSectionInput] = useState(false);
   const [newMainSectionName, setNewMainSectionName] = useState("");
-  const [showAddSectionInput, setShowAddSectionInput] = useState<string | null>(null); 
+  const [showAddSectionInput, setShowAddSectionInput] = useState<string | null>(
+    null,
+  );
   const [newSectionName, setNewSectionName] = useState("");
-  const [showAddSubSectionInput, setShowAddSubSectionInput] = useState<string | null>(null); 
+  const [showAddSubSectionInput, setShowAddSubSectionInput] = useState<
+    string | null
+  >(null);
   const [newSubSectionName, setNewSubSectionName] = useState("");
   const [mainSections, setMainSections] = useState<MainSection[]>([]);
-  const [selectedMainSection, setSelectedMainSection] = useState<string | null>(null);
+  const [selectedMainSection, setSelectedMainSection] = useState<string | null>(
+    null,
+  );
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedSubSection, setSelectedSubSection] = useState<string | null>(
-    null
+    null,
   );
   const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -95,7 +107,7 @@ function CreateCertificationPageContent() {
 
   const showAlert = (
     subText: string,
-    options?: { title?: string; buttonTitle?: string; onPress?: () => void }
+    options?: { title?: string; buttonTitle?: string; onPress?: () => void },
   ) => {
     alertActionRef.current = options?.onPress ?? null;
     setAlertModal({
@@ -120,7 +132,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const [certificationName, setCertificationName] = useState("");
   const [productId, setProductId] = useState("");
   const [industry, setIndustry] = useState<string[]>([]);
@@ -140,40 +151,45 @@ function CreateCertificationPageContent() {
   const [yesRank, setYesRank] = useState("");
   const [noRank, setNoRank] = useState("");
 
-  
   const [questionText, setQuestionText] = useState("");
   const [helpText, setHelpText] = useState("");
   const [criteriaInformation, setCriteriaInformation] = useState("");
 
-  
   const [acesRatedBronze, setAcesRatedBronze] = useState("");
   const [acesRatedSilver, setAcesRatedSilver] = useState("");
   const [acesRatedGold, setAcesRatedGold] = useState("");
   const [acesRatedEmerald, setAcesRatedEmerald] = useState("");
 
-  
   const [acesVerifiedBronze, setAcesVerifiedBronze] = useState("");
 
-  
   const [acesCertifiedSilver, setAcesCertifiedSilver] = useState("");
   const [acesCertifiedGold, setAcesCertifiedGold] = useState("");
   const [acesCertifiedEmerald, setAcesCertifiedEmerald] = useState("");
 
-  
   const [certificateId, setCertificateId] = useState<string | null>("");
   const [isCreatingSection, setIsCreatingSection] = useState(false);
   const [isCreatingSubSection, setIsCreatingSubSection] = useState(false);
   const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [isDeletingMainSection, setIsDeletingMainSection] = useState<string | null>(null);
-  const [isDeletingSection, setIsDeletingSection] = useState<string | null>(null);
-  const [isDeletingSubSection, setIsDeletingSubSection] = useState<string | null>(null);
-  const [isDeletingQuestion, setIsDeletingQuestion] = useState<string | null>(null);
-  const [databaseQuestionCount, setDatabaseQuestionCount] = useState<number | null>(null);
-  const [isCheckingPublishEligibility, setIsCheckingPublishEligibility] = useState(false);
+  const [isDeletingMainSection, setIsDeletingMainSection] = useState<
+    string | null
+  >(null);
+  const [isDeletingSection, setIsDeletingSection] = useState<string | null>(
+    null,
+  );
+  const [isDeletingSubSection, setIsDeletingSubSection] = useState<
+    string | null
+  >(null);
+  const [isDeletingQuestion, setIsDeletingQuestion] = useState<string | null>(
+    null,
+  );
+  const [databaseQuestionCount, setDatabaseQuestionCount] = useState<
+    number | null
+  >(null);
+  const [isCheckingPublishEligibility, setIsCheckingPublishEligibility] =
+    useState(false);
 
-  
   const [errors, setErrors] = useState<{
     certificationName?: string;
     productId?: string;
@@ -193,10 +209,10 @@ function CreateCertificationPageContent() {
     acesCertifiedEmerald?: string;
   }>({});
 
-
-  
   const [industries, setIndustries] = useState<Industry[]>([]);
-  const [industryOptions, setIndustryOptions] = useState<{ value: string; label: string }[]>([]);
+  const [industryOptions, setIndustryOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
   const [isLoadingIndustries, setIsLoadingIndustries] = useState(false);
   const [industryPagination, setIndustryPagination] = useState({
     pageIndex: 1,
@@ -207,34 +223,46 @@ function CreateCertificationPageContent() {
   const industryDropdownRef = useRef<HTMLDivElement>(null);
   const industryListRef = useRef<HTMLDivElement>(null);
 
-  const countQuestionsFromCertificateData = useCallback((certData: any): number => {
-    const directCount = Number(certData?.questions_count);
-    if (!Number.isNaN(directCount) && directCount >= 0) {
-      return directCount;
-    }
+  const countQuestionsFromCertificateData = useCallback(
+    (certData: any): number => {
+      const directCount = Number(certData?.questions_count);
+      if (!Number.isNaN(directCount) && directCount >= 0) {
+        return directCount;
+      }
 
-    let total = 0;
-    const mainSectionsData = Array.isArray(certData?.main_sections)
-      ? certData.main_sections
-      : [];
+      let total = 0;
+      const mainSectionsData = Array.isArray(certData?.main_sections)
+        ? certData.main_sections
+        : [];
 
-    mainSectionsData.forEach((mainSection: any) => {
-      const sections = Array.isArray(mainSection?.sections) ? mainSection.sections : [];
-      sections.forEach((section: any) => {
-        total += Array.isArray(section?.questions) ? section.questions.length : 0;
-        const subSections = Array.isArray(section?.sub_sections) ? section.sub_sections : [];
-        subSections.forEach((subSection: any) => {
-          total += Array.isArray(subSection?.questions) ? subSection.questions.length : 0;
+      mainSectionsData.forEach((mainSection: any) => {
+        const sections = Array.isArray(mainSection?.sections)
+          ? mainSection.sections
+          : [];
+        sections.forEach((section: any) => {
+          total += Array.isArray(section?.questions)
+            ? section.questions.length
+            : 0;
+          const subSections = Array.isArray(section?.sub_sections)
+            ? section.sub_sections
+            : [];
+          subSections.forEach((subSection: any) => {
+            total += Array.isArray(subSection?.questions)
+              ? subSection.questions.length
+              : 0;
+          });
         });
       });
-    });
 
-    return total;
-  }, []);
+      return total;
+    },
+    [],
+  );
 
   const fetchDatabaseQuestionCount = useCallback(
     async (targetCertificateId?: string): Promise<number> => {
-      const resolvedCertificateId = targetCertificateId || certificateIdFromUrl || certificateId || "";
+      const resolvedCertificateId =
+        targetCertificateId || certificateIdFromUrl || certificateId || "";
       if (!resolvedCertificateId) {
         setDatabaseQuestionCount(0);
         return 0;
@@ -243,7 +271,7 @@ function CreateCertificationPageContent() {
       setIsCheckingPublishEligibility(true);
       try {
         const response = await axiosInstance.get(
-          `/certificates/${resolvedCertificateId}?include=questions`
+          `/certificates/${resolvedCertificateId}?include=questions`,
         );
         const certData = response.data?.data;
         const count = countQuestionsFromCertificateData(certData);
@@ -257,10 +285,9 @@ function CreateCertificationPageContent() {
         setIsCheckingPublishEligibility(false);
       }
     },
-    [certificateIdFromUrl, certificateId, countQuestionsFromCertificateData]
+    [certificateIdFromUrl, certificateId, countQuestionsFromCertificateData],
   );
 
-  
   useEffect(() => {
     if (questionType !== "boolean") {
       setHasConditionalLogic(false);
@@ -271,7 +298,6 @@ function CreateCertificationPageContent() {
     }
   }, [questionType]);
 
-  
   useEffect(() => {
     setHasConditionalLogic(false);
     setQuestionType("");
@@ -283,20 +309,23 @@ function CreateCertificationPageContent() {
     setHelpText("");
     setCriteriaInformation("");
 
-    
     if (selectedQuestion && selectedMainSection && selectedSection) {
-      const mainSection = mainSections.find(ms => ms.id === selectedMainSection);
-      const section = mainSection?.sections.find(s => s.id === selectedSection);
+      const mainSection = mainSections.find(
+        (ms) => ms.id === selectedMainSection,
+      );
+      const section = mainSection?.sections.find(
+        (s) => s.id === selectedSection,
+      );
 
       let question: Question | undefined;
 
-      
       if (selectedSubSection) {
-        const subSection = section?.subSections.find(ss => ss.id === selectedSubSection);
-        question = subSection?.questions.find(q => q.id === selectedQuestion);
+        const subSection = section?.subSections.find(
+          (ss) => ss.id === selectedSubSection,
+        );
+        question = subSection?.questions.find((q) => q.id === selectedQuestion);
       } else {
-        
-        question = section?.questions?.find(q => q.id === selectedQuestion);
+        question = section?.questions?.find((q) => q.id === selectedQuestion);
       }
 
       if (question) {
@@ -311,9 +340,14 @@ function CreateCertificationPageContent() {
         setNoRank(question.conditionalRules?.noRank || "");
       }
     }
-  }, [selectedQuestion, selectedMainSection, selectedSection, selectedSubSection, mainSections]);
+  }, [
+    selectedQuestion,
+    selectedMainSection,
+    selectedSection,
+    selectedSubSection,
+    mainSections,
+  ]);
 
-  
   useEffect(() => {
     if (!selectedMainSection) {
       setSelectedSection(null);
@@ -339,7 +373,7 @@ function CreateCertificationPageContent() {
     mainSectionId: string,
     sectionId: string,
     subSectionId: string | null,
-    questionId: string
+    questionId: string,
   ): Question | undefined => {
     const mainSection = mainSections.find((ms) => ms.id === mainSectionId);
     const section = mainSection?.sections.find((s) => s.id === sectionId);
@@ -349,7 +383,9 @@ function CreateCertificationPageContent() {
     }
 
     if (subSectionId) {
-      const subSection = section.subSections.find((ss) => ss.id === subSectionId);
+      const subSection = section.subSections.find(
+        (ss) => ss.id === subSectionId,
+      );
       return subSection?.questions.find((q) => q.id === questionId);
     }
 
@@ -365,7 +401,7 @@ function CreateCertificationPageContent() {
       selectedMainSection,
       selectedSection,
       selectedSubSection,
-      selectedQuestion
+      selectedQuestion,
     );
 
     if (!originalQuestion) {
@@ -381,7 +417,9 @@ function CreateCertificationPageContent() {
     const originalHasConditionalLogic = originalIsBoolean
       ? Boolean(originalQuestion.hasConditionalLogic)
       : false;
-    const currentHasConditionalLogic = currentIsBoolean ? hasConditionalLogic : false;
+    const currentHasConditionalLogic = currentIsBoolean
+      ? hasConditionalLogic
+      : false;
 
     const originalYesExitLevel = originalHasConditionalLogic
       ? originalQuestion.conditionalRules?.yesExitLevel || ""
@@ -418,7 +456,7 @@ function CreateCertificationPageContent() {
     nextMainSectionId: string,
     nextSectionId: string,
     nextSubSectionId: string | null,
-    nextQuestionId: string | null
+    nextQuestionId: string | null,
   ): boolean => {
     const isSameTarget =
       selectedMainSection === nextMainSectionId &&
@@ -431,64 +469,63 @@ function CreateCertificationPageContent() {
     }
 
     return window.confirm(
-      "You have unsaved changes in this question. Press OK to discard and continue, or Cancel to stay on this question."
+      "You have unsaved changes in this question. Press OK to discard and continue, or Cancel to stay on this question.",
     );
   };
 
-  
-  const fetchIndustries = useCallback(async (pageIndex: number, pageSize: number, append = false) => {
-    setIsLoadingIndustries(true);
-    try {
-      const response = await axiosInstance.get<IndustriesResponse>(
-        `/industries?page=${pageIndex}&limit=${pageSize}`
-      );
+  const fetchIndustries = useCallback(
+    async (pageIndex: number, pageSize: number, append = false) => {
+      setIsLoadingIndustries(true);
+      try {
+        const response = await axiosInstance.get<IndustriesResponse>(
+          `/industries?page=${pageIndex}&limit=${pageSize}`,
+        );
 
-      const industriesData = response.data?.data?.data || [];
-      const meta = response.data?.data || { total: 0, totalPages: 0 };
+        const industriesData = response.data?.data?.data || [];
+        const meta = response.data?.data || { total: 0, totalPages: 0 };
 
-      if (append) {
-        setIndustries((prev) => [...prev, ...industriesData]);
-      } else {
-        setIndustries(industriesData);
+        if (append) {
+          setIndustries((prev) => [...prev, ...industriesData]);
+        } else {
+          setIndustries(industriesData);
+        }
+
+        const options = industriesData.map((ind) => ({
+          value: ind.id,
+          label: ind.name,
+        }));
+
+        if (append) {
+          setIndustryOptions((prev) => [...prev, ...options]);
+        } else {
+          setIndustryOptions(options);
+        }
+
+        setIndustryPagination({
+          pageIndex,
+          pageSize,
+          totalPages: meta.totalPages || 1,
+        });
+      } catch (err) {
+        console.error("Failed to fetch industries:", err);
+        if (!append) {
+          setIndustries([]);
+          setIndustryOptions([]);
+        }
+      } finally {
+        setIsLoadingIndustries(false);
       }
+    },
+    [],
+  );
 
-      const options = industriesData.map((ind) => ({
-        value: ind.id,
-        label: ind.name,
-      }));
-
-      if (append) {
-        setIndustryOptions((prev) => [...prev, ...options]);
-      } else {
-        setIndustryOptions(options);
-      }
-
-      setIndustryPagination({
-        pageIndex,
-        pageSize,
-        totalPages: meta.totalPages || 1,
-      });
-    } catch (err) {
-      console.error("Failed to fetch industries:", err);
-      if (!append) {
-        setIndustries([]);
-        setIndustryOptions([]);
-      }
-    } finally {
-      setIsLoadingIndustries(false);
-    }
-  }, []);
-
-  
   useEffect(() => {
     fetchIndustries(1, 20, false);
   }, [fetchIndustries]);
 
-  
   useEffect(() => {
     const fetchCertificateData = async () => {
       if (!certificateIdFromUrl) {
-        
         setCertificateId("");
         setDatabaseQuestionCount(0);
         return;
@@ -496,16 +533,17 @@ function CreateCertificationPageContent() {
 
       setIsLoadingCertificate(true);
       try {
-        const response = await axiosInstance.get(`/certificates/${certificateIdFromUrl}?include=questions`);
+        const response = await axiosInstance.get(
+          `/certificates/${certificateIdFromUrl}?include=questions`,
+        );
         const certData = response.data?.data;
         console.log("certData", certData);
 
         if (certData) {
           setDatabaseQuestionCount(countQuestionsFromCertificateData(certData));
-          
+
           setCertificateId(certData.id);
 
-          
           setCertificationName(certData.name || "");
           setProductId(certData.certificate_id || "");
           setIndustry(certData.industry_ids || []);
@@ -518,95 +556,114 @@ function CreateCertificationPageContent() {
           setShortDescription(certData.description || "");
           setCompulsoryDocuments(certData.compulsory_docs || []);
 
-          
           if (certData.badges && Array.isArray(certData.badges)) {
             certData.badges.forEach((badge: any) => {
               if (badge.name === "ACES Rated" && badge.colors) {
                 badge.colors.forEach((color: any) => {
-                  if (color.color === "#CD7F32") setAcesRatedBronze(color.min_score?.toString() || "");
-                  if (color.color === "#C0C0C0") setAcesRatedSilver(color.min_score?.toString() || "");
-                  if (color.color === "#FFD700") setAcesRatedGold(color.min_score?.toString() || "");
-                  if (color.color === "#00C853") setAcesRatedEmerald(color.min_score?.toString() || "");
+                  if (color.color === "#CD7F32")
+                    setAcesRatedBronze(color.min_score?.toString() || "");
+                  if (color.color === "#C0C0C0")
+                    setAcesRatedSilver(color.min_score?.toString() || "");
+                  if (color.color === "#FFD700")
+                    setAcesRatedGold(color.min_score?.toString() || "");
+                  if (color.color === "#00C853")
+                    setAcesRatedEmerald(color.min_score?.toString() || "");
                 });
               }
               if (badge.name === "ACES Verified" && badge.colors) {
                 badge.colors.forEach((color: any) => {
-                  if (color.color === "#CD7F32") setAcesVerifiedBronze(color.min_score?.toString() || "");
+                  if (color.color === "#CD7F32")
+                    setAcesVerifiedBronze(color.min_score?.toString() || "");
                 });
               }
               if (badge.name === "ACES Certified" && badge.colors) {
                 badge.colors.forEach((color: any) => {
-                  if (color.color === "#C0C0C0") setAcesCertifiedSilver(color.min_score?.toString() || "");
-                  if (color.color === "#FFD700") setAcesCertifiedGold(color.min_score?.toString() || "");
-                  if (color.color === "#00C853") setAcesCertifiedEmerald(color.min_score?.toString() || "");
+                  if (color.color === "#C0C0C0")
+                    setAcesCertifiedSilver(color.min_score?.toString() || "");
+                  if (color.color === "#FFD700")
+                    setAcesCertifiedGold(color.min_score?.toString() || "");
+                  if (color.color === "#00C853")
+                    setAcesCertifiedEmerald(color.min_score?.toString() || "");
                 });
               }
             });
           }
 
-          
           if (certData.main_sections && Array.isArray(certData.main_sections)) {
-            const transformedMainSections: MainSection[] = certData.main_sections.map(
-              (ms: any) => {
-                const sections: Section[] = (ms.sections || []).map((s: any) => {
-                  
-                  const sectionQuestions: Question[] = (s.questions || []).map((q: any) => ({
-                    id: q.id,
-                    text: q.question || "",
-                    helpText: q.hint || "",
-                    criteriaInformation: q.criteria || "",
-                    type: q.type || "",
-                    hasConditionalLogic: q.conditions && Object.keys(q.conditions).length > 0,
-                    conditionalRules: q.conditions
-                      ? {
-                        yesAction: q.conditions.yes?.redirect_type || "",
-                        noAction: q.conditions.no?.redirect_type || "",
-                        yesExitLevel: q.conditions.yes?.redirect_type || "",
-                        noExitLevel: q.conditions.no?.redirect_type || "",
-                        yesRank: q.conditions.yes?.rank?.toString?.() || undefined,
-                        noRank: q.conditions.no?.rank?.toString?.() || undefined,
-                      }
-                      : undefined,
-                  }));
-
-                  
-                  const subSections: SubSection[] = (s.sub_sections || []).map((ss: any) => ({
-                    id: ss.id,
-                    name: ss.name,
-                    questions: (ss.questions || []).map((q: any) => ({
+            const transformedMainSections: MainSection[] =
+              certData.main_sections.map((ms: any) => {
+                const sections: Section[] = (ms.sections || []).map(
+                  (s: any) => {
+                    const sectionQuestions: Question[] = (
+                      s.questions || []
+                    ).map((q: any) => ({
                       id: q.id,
                       text: q.question || "",
                       helpText: q.hint || "",
                       criteriaInformation: q.criteria || "",
                       type: q.type || "",
-                      hasConditionalLogic: q.conditions && Object.keys(q.conditions).length > 0,
+                      hasConditionalLogic:
+                        q.conditions && Object.keys(q.conditions).length > 0,
                       conditionalRules: q.conditions
                         ? {
-                          yesAction: q.conditions.yes?.redirect_type || "",
-                          noAction: q.conditions.no?.redirect_type || "",
-                          yesExitLevel: q.conditions.yes?.redirect_type || "",
-                          noExitLevel: q.conditions.no?.redirect_type || "",
-                          yesRank: q.conditions.yes?.rank?.toString?.() || undefined,
-                          noRank: q.conditions.no?.rank?.toString?.() || undefined,
-                        }
+                            yesAction: q.conditions.yes?.redirect_type || "",
+                            noAction: q.conditions.no?.redirect_type || "",
+                            yesExitLevel: q.conditions.yes?.redirect_type || "",
+                            noExitLevel: q.conditions.no?.redirect_type || "",
+                            yesRank:
+                              q.conditions.yes?.rank?.toString?.() || undefined,
+                            noRank:
+                              q.conditions.no?.rank?.toString?.() || undefined,
+                          }
                         : undefined,
-                    })),
-                    isExpanded: (ss.questions || []).length > 0,
-                  }));
+                    }));
 
-                  const hasSectionQuestions = sectionQuestions.length > 0;
-                  const hasSubSectionQuestions = subSections.some(
-                    (subSection) => subSection.questions.length > 0
-                  );
+                    const subSections: SubSection[] = (
+                      s.sub_sections || []
+                    ).map((ss: any) => ({
+                      id: ss.id,
+                      name: ss.name,
+                      questions: (ss.questions || []).map((q: any) => ({
+                        id: q.id,
+                        text: q.question || "",
+                        helpText: q.hint || "",
+                        criteriaInformation: q.criteria || "",
+                        type: q.type || "",
+                        hasConditionalLogic:
+                          q.conditions && Object.keys(q.conditions).length > 0,
+                        conditionalRules: q.conditions
+                          ? {
+                              yesAction: q.conditions.yes?.redirect_type || "",
+                              noAction: q.conditions.no?.redirect_type || "",
+                              yesExitLevel:
+                                q.conditions.yes?.redirect_type || "",
+                              noExitLevel: q.conditions.no?.redirect_type || "",
+                              yesRank:
+                                q.conditions.yes?.rank?.toString?.() ||
+                                undefined,
+                              noRank:
+                                q.conditions.no?.rank?.toString?.() ||
+                                undefined,
+                            }
+                          : undefined,
+                      })),
+                      isExpanded: (ss.questions || []).length > 0,
+                    }));
 
-                  return {
-                    id: s.id,
-                    name: s.name,
-                    subSections,
-                    questions: sectionQuestions,
-                    isExpanded: hasSectionQuestions || hasSubSectionQuestions,
-                  };
-                });
+                    const hasSectionQuestions = sectionQuestions.length > 0;
+                    const hasSubSectionQuestions = subSections.some(
+                      (subSection) => subSection.questions.length > 0,
+                    );
+
+                    return {
+                      id: s.id,
+                      name: s.name,
+                      subSections,
+                      questions: sectionQuestions,
+                      isExpanded: hasSectionQuestions || hasSubSectionQuestions,
+                    };
+                  },
+                );
 
                 return {
                   id: ms.id,
@@ -614,8 +671,7 @@ function CreateCertificationPageContent() {
                   sections,
                   isExpanded: true,
                 };
-              }
-            );
+              });
 
             setMainSections(transformedMainSections);
           }
@@ -630,7 +686,6 @@ function CreateCertificationPageContent() {
     };
 
     fetchCertificateData();
-    
   }, [certificateIdFromUrl]);
 
   useEffect(() => {
@@ -647,23 +702,24 @@ function CreateCertificationPageContent() {
     fetchDatabaseQuestionCount(resolvedCertificateId);
   }, [step, certificateIdFromUrl, certificateId, fetchDatabaseQuestionCount]);
 
-  
-  const handleIndustryScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const { scrollTop, scrollHeight, clientHeight } = target;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+  const handleIndustryScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const target = e.currentTarget;
+      const { scrollTop, scrollHeight, clientHeight } = target;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
 
-    if (
-      isNearBottom &&
-      !isLoadingIndustries &&
-      industryPagination.pageIndex < industryPagination.totalPages
-    ) {
-      const nextPage = industryPagination.pageIndex + 1;
-      fetchIndustries(nextPage, industryPagination.pageSize, true);
-    }
-  }, [isLoadingIndustries, industryPagination, fetchIndustries]);
+      if (
+        isNearBottom &&
+        !isLoadingIndustries &&
+        industryPagination.pageIndex < industryPagination.totalPages
+      ) {
+        const nextPage = industryPagination.pageIndex + 1;
+        fetchIndustries(nextPage, industryPagination.pageSize, true);
+      }
+    },
+    [isLoadingIndustries, industryPagination, fetchIndustries],
+  );
 
-  
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -683,7 +739,6 @@ function CreateCertificationPageContent() {
     };
   }, [showIndustryDropdown]);
 
-  
   const createMainSectionAPI = async (name: string) => {
     if (!certificateId) {
       console.error("Certificate ID is required");
@@ -694,7 +749,7 @@ function CreateCertificationPageContent() {
         `/certificates/${certificateId}/main-sections`,
         {
           sections: [{ name: name.trim() }],
-        }
+        },
       );
       return response.data?.data?.[0] || null;
     } catch (err) {
@@ -703,16 +758,13 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const deleteMainSectionAPI = async (mainSectionId: string) => {
     if (!certificateId) {
       console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
-      await axiosInstance.delete(
-        `/main-sections/${mainSectionId}`
-      );
+      await axiosInstance.delete(`/main-sections/${mainSectionId}`);
       return true;
     } catch (err) {
       console.error("Failed to delete main section:", err);
@@ -720,16 +772,13 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const deleteSectionAPI = async (sectionId: string) => {
     if (!certificateId) {
       console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
-      await axiosInstance.delete(
-        `/sections/${sectionId}`
-      );
+      await axiosInstance.delete(`/sections/${sectionId}`);
       return true;
     } catch (err) {
       console.error("Failed to delete section:", err);
@@ -737,16 +786,13 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const deleteSubSectionAPI = async (subSectionId: string) => {
     if (!certificateId) {
       console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
-      await axiosInstance.delete(
-        `/subsections/${subSectionId}`
-      );
+      await axiosInstance.delete(`/subsections/${subSectionId}`);
       return true;
     } catch (err) {
       console.error("Failed to delete subsection:", err);
@@ -754,7 +800,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const deleteQuestionAPI = async (questionId: string) => {
     console.log("questionId", questionId);
     if (!certificateId) {
@@ -762,9 +807,7 @@ function CreateCertificationPageContent() {
       throw new Error("Certificate ID is required");
     }
     try {
-      await axiosInstance.delete(
-        `/questions/${questionId}`
-      );
+      await axiosInstance.delete(`/questions/${questionId}`);
       return true;
     } catch (err) {
       console.error("Failed to delete question:", err);
@@ -772,7 +815,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const addMainSection = async () => {
     if (!newMainSectionName.trim() || !certificateId) {
       return;
@@ -805,10 +847,10 @@ function CreateCertificationPageContent() {
       mainSections.map((mainSection) =>
         mainSection.id === mainSectionId
           ? { ...mainSection, isExpanded: !mainSection.isExpanded }
-          : mainSection
-      )
+          : mainSection,
+      ),
     );
-    
+
     if (showAddSectionInput === mainSectionId) {
       setShowAddSectionInput(null);
       setNewSectionName("");
@@ -817,22 +859,26 @@ function CreateCertificationPageContent() {
 
   const deleteMainSection = async (mainSectionId: string) => {
     if (!certificateId) {
-      showAlert("Certificate ID is missing. Please save the certificate first.");
+      showAlert(
+        "Certificate ID is missing. Please save the certificate first.",
+      );
       return;
     }
 
     setIsDeletingMainSection(mainSectionId);
     try {
       await deleteMainSectionAPI(mainSectionId);
-      
-      setMainSections(mainSections.filter((mainSection) => mainSection.id !== mainSectionId));
+
+      setMainSections(
+        mainSections.filter((mainSection) => mainSection.id !== mainSectionId),
+      );
       if (selectedMainSection === mainSectionId) {
         setSelectedMainSection(null);
         setSelectedSection(null);
         setSelectedSubSection(null);
         setSelectedQuestion(null);
       }
-      
+
       if (showAddSectionInput === mainSectionId) {
         setShowAddSectionInput(null);
         setNewSectionName("");
@@ -845,15 +891,18 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
-  const createSectionAPI = async (parentId: string, parentType: "main" | "section", name: string) => {
+  const createSectionAPI = async (
+    parentId: string,
+    parentType: "main" | "section",
+    name: string,
+  ) => {
     try {
       const response = await axiosInstance.post(
         `/sections/${parentId}/subsections`,
         {
           parent_type: parentType,
           sections: [{ name: name.trim() }],
-        }
+        },
       );
       return response.data?.data?.[0] || null;
     } catch (err) {
@@ -862,7 +911,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const addSection = async (mainSectionId: string) => {
     if (!newSectionName.trim()) {
       return;
@@ -870,7 +918,11 @@ function CreateCertificationPageContent() {
 
     setIsCreatingSection(true);
     try {
-      const createdSection = await createSectionAPI(mainSectionId, "main", newSectionName);
+      const createdSection = await createSectionAPI(
+        mainSectionId,
+        "main",
+        newSectionName,
+      );
       if (createdSection) {
         setMainSections(
           mainSections.map((mainSection) => {
@@ -890,7 +942,7 @@ function CreateCertificationPageContent() {
               };
             }
             return mainSection;
-          })
+          }),
         );
         setNewSectionName("");
         setShowAddSectionInput(null);
@@ -912,14 +964,14 @@ function CreateCertificationPageContent() {
             sections: mainSection.sections.map((section) =>
               section.id === sectionId
                 ? { ...section, isExpanded: !section.isExpanded }
-                : section
+                : section,
             ),
           };
         }
         return mainSection;
-      })
+      }),
     );
-    
+
     if (showAddSubSectionInput === sectionId) {
       setShowAddSubSectionInput(null);
       setNewSubSectionName("");
@@ -928,33 +980,35 @@ function CreateCertificationPageContent() {
 
   const deleteSection = async (mainSectionId: string, sectionId: string) => {
     if (!certificateId) {
-      showAlert("Certificate ID is missing. Please save the certificate first.");
+      showAlert(
+        "Certificate ID is missing. Please save the certificate first.",
+      );
       return;
     }
 
     setIsDeletingSection(sectionId);
     try {
       await deleteSectionAPI(sectionId);
-      
+
       setMainSections(
         mainSections.map((mainSection) => {
           if (mainSection.id === mainSectionId) {
             return {
               ...mainSection,
               sections: mainSection.sections.filter(
-                (section) => section.id !== sectionId
+                (section) => section.id !== sectionId,
               ),
             };
           }
           return mainSection;
-        })
+        }),
       );
       if (selectedSection === sectionId) {
         setSelectedSection(null);
         setSelectedSubSection(null);
         setSelectedQuestion(null);
       }
-      
+
       if (showAddSubSectionInput === sectionId) {
         setShowAddSubSectionInput(null);
         setNewSubSectionName("");
@@ -967,7 +1021,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const addSubSection = async (mainSectionId: string, sectionId: string) => {
     if (!newSubSectionName.trim()) {
       return;
@@ -975,7 +1028,11 @@ function CreateCertificationPageContent() {
 
     setIsCreatingSubSection(true);
     try {
-      const createdSubSection = await createSectionAPI(sectionId, "section", newSubSectionName);
+      const createdSubSection = await createSectionAPI(
+        sectionId,
+        "section",
+        newSubSectionName,
+      );
       if (createdSubSection) {
         setMainSections(
           mainSections.map((mainSection) => {
@@ -986,7 +1043,7 @@ function CreateCertificationPageContent() {
                   if (section.id === sectionId) {
                     return {
                       ...section,
-                      isExpanded: true, 
+                      isExpanded: true,
                       subSections: [
                         ...section.subSections,
                         {
@@ -1003,7 +1060,7 @@ function CreateCertificationPageContent() {
               };
             }
             return mainSection;
-          })
+          }),
         );
         setNewSubSectionName("");
         setShowAddSubSectionInput(null);
@@ -1016,17 +1073,22 @@ function CreateCertificationPageContent() {
     }
   };
 
-
-  const deleteSubSection = async (mainSectionId: string, sectionId: string, subSectionId: string) => {
+  const deleteSubSection = async (
+    mainSectionId: string,
+    sectionId: string,
+    subSectionId: string,
+  ) => {
     if (!certificateId) {
-      showAlert("Certificate ID is missing. Please save the certificate first.");
+      showAlert(
+        "Certificate ID is missing. Please save the certificate first.",
+      );
       return;
     }
 
     setIsDeletingSubSection(subSectionId);
     try {
       await deleteSubSectionAPI(subSectionId);
-      
+
       setMainSections(
         mainSections.map((mainSection) => {
           if (mainSection.id === mainSectionId) {
@@ -1037,7 +1099,7 @@ function CreateCertificationPageContent() {
                   return {
                     ...section,
                     subSections: section.subSections.filter(
-                      (sub) => sub.id !== subSectionId
+                      (sub) => sub.id !== subSectionId,
                     ),
                   };
                 }
@@ -1046,7 +1108,7 @@ function CreateCertificationPageContent() {
             };
           }
           return mainSection;
-        })
+        }),
       );
       if (selectedSubSection === subSectionId) {
         setSelectedSubSection(null);
@@ -1060,10 +1122,10 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
-  const isLocalQuestionId = (questionId: string) => questionId.startsWith("temp-");
+  const isLocalQuestionId = (questionId: string) =>
+    questionId.startsWith("temp-");
   const isSavedQuestionSelected = Boolean(
-    selectedQuestion && !isLocalQuestionId(selectedQuestion)
+    selectedQuestion && !isLocalQuestionId(selectedQuestion),
   );
   const isQuestionActionDisabled =
     isCreatingQuestion ||
@@ -1081,7 +1143,7 @@ function CreateCertificationPageContent() {
     mainSectionId: string,
     sectionId: string,
     subSectionId: string | null,
-    questionId: string
+    questionId: string,
   ) => {
     return prevMainSections.map((mainSection) => {
       if (mainSection.id !== mainSectionId) {
@@ -1106,7 +1168,7 @@ function CreateCertificationPageContent() {
                 return {
                   ...subSection,
                   questions: subSection.questions.filter(
-                    (question) => question.id !== questionId
+                    (question) => question.id !== questionId,
                   ),
                 };
               }),
@@ -1116,7 +1178,7 @@ function CreateCertificationPageContent() {
           return {
             ...section,
             questions: (section.questions || []).filter(
-              (question) => question.id !== questionId
+              (question) => question.id !== questionId,
             ),
           };
         }),
@@ -1124,7 +1186,11 @@ function CreateCertificationPageContent() {
     });
   };
 
-  const addQuestion = (mainSectionId: string, sectionId: string, subSectionId?: string | null) => {
+  const addQuestion = (
+    mainSectionId: string,
+    sectionId: string,
+    subSectionId?: string | null,
+  ) => {
     const newQuestion: Question = {
       id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       text: "",
@@ -1141,7 +1207,6 @@ function CreateCertificationPageContent() {
             isExpanded: true,
             sections: mainSection.sections.map((section) => {
               if (section.id === sectionId) {
-                
                 if (subSectionId) {
                   return {
                     ...section,
@@ -1158,7 +1223,6 @@ function CreateCertificationPageContent() {
                   };
                 }
 
-                
                 const existingQuestions = section.questions || [];
                 return {
                   ...section,
@@ -1171,7 +1235,7 @@ function CreateCertificationPageContent() {
           };
         }
         return mainSection;
-      })
+      }),
     );
 
     setSelectedMainSection(mainSectionId);
@@ -1180,11 +1244,18 @@ function CreateCertificationPageContent() {
     setSelectedQuestion(newQuestion.id);
   };
 
-  const deleteQuestion = async (mainSectionId: string, sectionId: string, subSectionId: string | null, questionId: string) => {
+  const deleteQuestion = async (
+    mainSectionId: string,
+    sectionId: string,
+    subSectionId: string | null,
+    questionId: string,
+  ) => {
     const isLocalOnlyQuestion = isLocalQuestionId(questionId);
 
     if (!isLocalOnlyQuestion && !certificateId) {
-      showAlert("Certificate ID is missing. Please save the certificate first.");
+      showAlert(
+        "Certificate ID is missing. Please save the certificate first.",
+      );
       return;
     }
 
@@ -1196,10 +1267,15 @@ function CreateCertificationPageContent() {
       }
 
       setMainSections((prev) =>
-        removeQuestionFromState(prev, mainSectionId, sectionId, subSectionId, questionId)
+        removeQuestionFromState(
+          prev,
+          mainSectionId,
+          sectionId,
+          subSectionId,
+          questionId,
+        ),
       );
 
-      
       if (selectedQuestion === questionId) {
         setSelectedQuestion(null);
       }
@@ -1211,13 +1287,12 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const createQuestionAPI = async (sectionId: string, questionData: any) => {
     try {
       console.log("Creating question with data:", questionData);
       const response = await axiosInstance.post(
         `/sections/${sectionId}/questions`,
-        questionData
+        questionData,
       );
       console.log("API response:", response.data);
       const createdQuestion = response.data?.data?.questions?.[0] || null;
@@ -1234,7 +1309,7 @@ function CreateCertificationPageContent() {
       console.log("Updating question with data:", questionData);
       const response = await axiosInstance.patch(
         `/questions/${questionId}`,
-        questionData
+        questionData,
       );
       console.log("Update question API response:", response.data);
       return response.data;
@@ -1244,7 +1319,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const handleSaveQuestion = async () => {
     if (!selectedMainSection || !selectedSection || !selectedQuestion) {
       return;
@@ -1265,22 +1339,23 @@ function CreateCertificationPageContent() {
       return;
     }
 
-    
     if (questionType === "boolean" && hasConditionalLogic) {
       if (!yesExitLevel || yesRank === "") {
-        showAlert("Please provide both Redirect Type and Rank for YES condition");
+        showAlert(
+          "Please provide both Redirect Type and Rank for YES condition",
+        );
         return;
       }
       if (!noExitLevel || noRank === "") {
-        showAlert("Please provide both Redirect Type and Rank for NO condition");
+        showAlert(
+          "Please provide both Redirect Type and Rank for NO condition",
+        );
         return;
       }
     }
 
-    
     const conditions: any = {};
     if (questionType === "boolean" && hasConditionalLogic) {
-      
       if (yesExitLevel && yesRank !== "") {
         conditions.yes = {
           redirect_type: yesExitLevel,
@@ -1288,7 +1363,6 @@ function CreateCertificationPageContent() {
         };
       }
 
-      
       if (noExitLevel && noRank !== "") {
         conditions.no = {
           redirect_type: noExitLevel,
@@ -1297,12 +1371,10 @@ function CreateCertificationPageContent() {
       }
     }
 
-    
     const isForSubSection = Boolean(selectedSubSection);
     const sectionType = isForSubSection ? "sub_section" : "section";
     const targetId = selectedSubSection || selectedSection || "";
 
-    
     const questionData = {
       section_type: sectionType,
       questions: [
@@ -1311,12 +1383,12 @@ function CreateCertificationPageContent() {
           type: questionType,
           hint: helpText.trim() || undefined,
           criteria: criteriaInformation.trim() || undefined,
-          conditions: questionType === "boolean" && hasConditionalLogic ? conditions : {},
+          conditions:
+            questionType === "boolean" && hasConditionalLogic ? conditions : {},
         },
       ],
     };
 
-    
     const cleanedQuestion = { ...questionData.questions[0] };
     if (!cleanedQuestion.hint) delete cleanedQuestion.hint;
     if (!cleanedQuestion.criteria) delete cleanedQuestion.criteria;
@@ -1333,8 +1405,14 @@ function CreateCertificationPageContent() {
       let savedQuestionId = selectedQuestion;
 
       if (isNewQuestion) {
-        const createdQuestion = await createQuestionAPI(targetId, finalQuestionData);
-        console.log("About to update question with createdQuestion:", createdQuestion);
+        const createdQuestion = await createQuestionAPI(
+          targetId,
+          finalQuestionData,
+        );
+        console.log(
+          "About to update question with createdQuestion:",
+          createdQuestion,
+        );
         if (!createdQuestion?.id) {
           throw new Error("Question creation failed");
         }
@@ -1365,19 +1443,25 @@ function CreateCertificationPageContent() {
                                   id: savedQuestionId,
                                   text: questionText.trim(),
                                   helpText: helpText.trim(),
-                                  criteriaInformation: criteriaInformation.trim(),
+                                  criteriaInformation:
+                                    criteriaInformation.trim(),
                                   type: questionType,
-                                  hasConditionalLogic: questionType === "boolean" ? hasConditionalLogic : false,
-                                  conditionalRules: questionType === "boolean" && hasConditionalLogic
-                                    ? {
-                                      yesAction: "continue",
-                                      noAction: "continue",
-                                      yesExitLevel: yesExitLevel,
-                                      noExitLevel: noExitLevel,
-                                      yesRank: yesRank,
-                                      noRank: noRank,
-                                    }
-                                    : undefined,
+                                  hasConditionalLogic:
+                                    questionType === "boolean"
+                                      ? hasConditionalLogic
+                                      : false,
+                                  conditionalRules:
+                                    questionType === "boolean" &&
+                                    hasConditionalLogic
+                                      ? {
+                                          yesAction: "continue",
+                                          noAction: "continue",
+                                          yesExitLevel: yesExitLevel,
+                                          noExitLevel: noExitLevel,
+                                          yesRank: yesRank,
+                                          noRank: noRank,
+                                        }
+                                      : undefined,
                                 };
                               }
                               return question;
@@ -1389,29 +1473,33 @@ function CreateCertificationPageContent() {
                     };
                   }
 
-                  const updatedQuestions = (section.questions || []).map((question) =>
-                    question.id === selectedQuestion
-                      ? {
-                        ...question,
-                        id: savedQuestionId,
-                        text: questionText.trim(),
-                        helpText: helpText.trim(),
-                        criteriaInformation: criteriaInformation.trim(),
-                        type: questionType,
-                        hasConditionalLogic: questionType === "boolean" ? hasConditionalLogic : false,
-                        conditionalRules:
-                          questionType === "boolean" && hasConditionalLogic
-                            ? {
-                              yesAction: "continue",
-                              noAction: "continue",
-                              yesExitLevel: yesExitLevel,
-                              noExitLevel: noExitLevel,
-                              yesRank: yesRank,
-                              noRank: noRank,
-                            }
-                            : undefined,
-                      }
-                      : question
+                  const updatedQuestions = (section.questions || []).map(
+                    (question) =>
+                      question.id === selectedQuestion
+                        ? {
+                            ...question,
+                            id: savedQuestionId,
+                            text: questionText.trim(),
+                            helpText: helpText.trim(),
+                            criteriaInformation: criteriaInformation.trim(),
+                            type: questionType,
+                            hasConditionalLogic:
+                              questionType === "boolean"
+                                ? hasConditionalLogic
+                                : false,
+                            conditionalRules:
+                              questionType === "boolean" && hasConditionalLogic
+                                ? {
+                                    yesAction: "continue",
+                                    noAction: "continue",
+                                    yesExitLevel: yesExitLevel,
+                                    noExitLevel: noExitLevel,
+                                    yesRank: yesRank,
+                                    noRank: noRank,
+                                  }
+                                : undefined,
+                          }
+                        : question,
                   );
 
                   return {
@@ -1424,7 +1512,7 @@ function CreateCertificationPageContent() {
             };
           }
           return mainSection;
-        })
+        }),
       );
 
       setSelectedQuestion(null);
@@ -1452,13 +1540,14 @@ function CreateCertificationPageContent() {
       return;
     }
 
-    
     if (isPublished) {
       router.push("/admin/certifications");
       return;
     }
 
-    const totalQuestionsInDatabase = await fetchDatabaseQuestionCount(resolvedCertificateId);
+    const totalQuestionsInDatabase = await fetchDatabaseQuestionCount(
+      resolvedCertificateId,
+    );
     if (totalQuestionsInDatabase === 0) {
       showAlert("Please add at least one question before publishing.");
       return;
@@ -1466,25 +1555,27 @@ function CreateCertificationPageContent() {
 
     setIsSaving(true);
     try {
-      
-      await axiosInstance.patch(`/certificates/${resolvedCertificateId}/publish`, {
-        is_published: true,
-      });
-      
+      await axiosInstance.patch(
+        `/certificates/${resolvedCertificateId}/publish`,
+        {
+          is_published: true,
+        },
+      );
+
       setIsPublished(true);
       setShowSuccessModal(true);
     } catch (err) {
       console.error("Failed to publish certificate:", err);
       if (axios.isAxiosError(err)) {
         const serverMessage = err.response?.data?.message;
-        
+
         if (serverMessage === "Certificate is already published") {
           setIsPublished(true);
           setShowSuccessModal(true);
           return;
         }
       }
-      
+
       let errorMessage = "Failed to publish certificate. Please try again.";
       if (axios.isAxiosError(err)) {
         const serverMessage = err.response?.data?.message || err.message;
@@ -1512,16 +1603,34 @@ function CreateCertificationPageContent() {
     setCompulsoryDocuments(compulsoryDocuments.filter((_, i) => i !== index));
   };
 
-  
   const prepareBadges = () => {
     const badges: any[] = [];
 
-    
     const acesRatedColors: any[] = [];
-    if (acesRatedEmerald) acesRatedColors.push({ color: "#00C853", min_score: parseInt(acesRatedEmerald) || 90, max_score: 100 });
-    if (acesRatedGold) acesRatedColors.push({ color: "#FFD700", min_score: parseInt(acesRatedGold) || 80, max_score: parseInt(acesRatedEmerald) || 89 });
-    if (acesRatedSilver) acesRatedColors.push({ color: "#C0C0C0", min_score: parseInt(acesRatedSilver) || 70, max_score: parseInt(acesRatedGold) || 79 });
-    if (acesRatedBronze) acesRatedColors.push({ color: "#CD7F32", min_score: parseInt(acesRatedBronze) || 50, max_score: parseInt(acesRatedSilver) || 69 });
+    if (acesRatedEmerald)
+      acesRatedColors.push({
+        color: "#00C853",
+        min_score: parseInt(acesRatedEmerald) || 90,
+        max_score: 100,
+      });
+    if (acesRatedGold)
+      acesRatedColors.push({
+        color: "#FFD700",
+        min_score: parseInt(acesRatedGold) || 80,
+        max_score: parseInt(acesRatedEmerald) || 89,
+      });
+    if (acesRatedSilver)
+      acesRatedColors.push({
+        color: "#C0C0C0",
+        min_score: parseInt(acesRatedSilver) || 70,
+        max_score: parseInt(acesRatedGold) || 79,
+      });
+    if (acesRatedBronze)
+      acesRatedColors.push({
+        color: "#CD7F32",
+        min_score: parseInt(acesRatedBronze) || 50,
+        max_score: parseInt(acesRatedSilver) || 69,
+      });
 
     if (acesRatedColors.length > 0) {
       badges.push({
@@ -1531,22 +1640,39 @@ function CreateCertificationPageContent() {
       });
     }
 
-    
     if (acesVerifiedBronze) {
       badges.push({
         slot: 2,
         name: "ACES Verified",
         colors: [
-          { color: "#CD7F32", min_score: parseInt(acesVerifiedBronze) || 50, max_score: 100 }
+          {
+            color: "#CD7F32",
+            min_score: parseInt(acesVerifiedBronze) || 50,
+            max_score: 100,
+          },
         ],
       });
     }
 
-    
     const acesCertifiedColors: any[] = [];
-    if (acesCertifiedEmerald) acesCertifiedColors.push({ color: "#00C853", min_score: parseInt(acesCertifiedEmerald) || 90, max_score: 100 });
-    if (acesCertifiedGold) acesCertifiedColors.push({ color: "#FFD700", min_score: parseInt(acesCertifiedGold) || 80, max_score: parseInt(acesCertifiedEmerald) || 89 });
-    if (acesCertifiedSilver) acesCertifiedColors.push({ color: "#C0C0C0", min_score: parseInt(acesCertifiedSilver) || 70, max_score: parseInt(acesCertifiedGold) || 79 });
+    if (acesCertifiedEmerald)
+      acesCertifiedColors.push({
+        color: "#00C853",
+        min_score: parseInt(acesCertifiedEmerald) || 90,
+        max_score: 100,
+      });
+    if (acesCertifiedGold)
+      acesCertifiedColors.push({
+        color: "#FFD700",
+        min_score: parseInt(acesCertifiedGold) || 80,
+        max_score: parseInt(acesCertifiedEmerald) || 89,
+      });
+    if (acesCertifiedSilver)
+      acesCertifiedColors.push({
+        color: "#C0C0C0",
+        min_score: parseInt(acesCertifiedSilver) || 70,
+        max_score: parseInt(acesCertifiedGold) || 79,
+      });
 
     if (acesCertifiedColors.length > 0) {
       badges.push({
@@ -1559,7 +1685,6 @@ function CreateCertificationPageContent() {
     return badges;
   };
 
-  
   const validateForm = (): boolean => {
     const newErrors: typeof errors = {};
 
@@ -1567,7 +1692,6 @@ function CreateCertificationPageContent() {
       newErrors.certificationName = "Certification name is required";
     }
 
-    
     if (!certificateIdFromUrl && !productId.trim()) {
       newErrors.productId = "Product ID is required";
     }
@@ -1577,92 +1701,102 @@ function CreateCertificationPageContent() {
     }
 
     if (!selfDisclosurePrice || parseFloat(selfDisclosurePrice) <= 0) {
-      newErrors.selfDisclosurePrice = "Self Disclosure price is required and must be greater than 0";
+      newErrors.selfDisclosurePrice =
+        "Self Disclosure price is required and must be greater than 0";
     }
 
     if (!assuredPrice || parseFloat(assuredPrice) <= 0) {
-      newErrors.assuredPrice = "Assured price is required and must be greater than 0";
+      newErrors.assuredPrice =
+        "Assured price is required and must be greater than 0";
     }
 
     if (!validityDays && !validityMonths && !validityYears) {
-      newErrors.validityPeriod = "At least one validity period (Days, Months, or Years) is required";
+      newErrors.validityPeriod =
+        "At least one validity period (Days, Months, or Years) is required";
     }
 
-    
-    const hasAcesRatedBadges = acesRatedBronze || acesRatedSilver || acesRatedGold || acesRatedEmerald;
+    const hasAcesRatedBadges =
+      acesRatedBronze || acesRatedSilver || acesRatedGold || acesRatedEmerald;
     const hasAcesVerifiedBadges = acesVerifiedBronze;
-    const hasAcesCertifiedBadges = acesCertifiedSilver || acesCertifiedGold || acesCertifiedEmerald;
+    const hasAcesCertifiedBadges =
+      acesCertifiedSilver || acesCertifiedGold || acesCertifiedEmerald;
 
-    
     if (!hasAcesRatedBadges) {
       newErrors.acesRatedBronze = "At least one ACES Rated badge is required";
     }
 
-    
     if (!acesVerifiedBronze.trim()) {
       newErrors.acesVerifiedBronze = "Bronze score is required";
     }
 
-    
     if (!hasAcesCertifiedBadges) {
-      newErrors.acesCertifiedSilver = "At least one ACES Certified badge is required";
+      newErrors.acesCertifiedSilver =
+        "At least one ACES Certified badge is required";
     }
 
-    
-    if (acesRatedBronze || acesRatedSilver || acesRatedGold || acesRatedEmerald) {
+    if (
+      acesRatedBronze ||
+      acesRatedSilver ||
+      acesRatedGold ||
+      acesRatedEmerald
+    ) {
       const bronze = parseFloat(acesRatedBronze) || 0;
       const silver = parseFloat(acesRatedSilver) || 0;
       const gold = parseFloat(acesRatedGold) || 0;
       const emerald = parseFloat(acesRatedEmerald) || 0;
 
-      
       if (acesRatedBronze) {
         if (acesRatedSilver && silver <= bronze) {
-          newErrors.acesRatedSilver = "Silver score must be greater than Bronze";
+          newErrors.acesRatedSilver =
+            "Silver score must be greater than Bronze";
         }
         if (acesRatedGold && gold <= bronze) {
           newErrors.acesRatedGold = "Gold score must be greater than Bronze";
         }
         if (acesRatedEmerald && emerald <= bronze) {
-          newErrors.acesRatedEmerald = "Emerald score must be greater than Bronze";
+          newErrors.acesRatedEmerald =
+            "Emerald score must be greater than Bronze";
         }
       }
 
-      
       if (acesRatedSilver) {
         if (acesRatedGold && gold <= silver) {
           newErrors.acesRatedGold = "Gold score must be greater than Silver";
         }
         if (acesRatedEmerald && emerald <= silver) {
-          newErrors.acesRatedEmerald = "Emerald score must be greater than Silver";
+          newErrors.acesRatedEmerald =
+            "Emerald score must be greater than Silver";
         }
       }
 
-      
       if (acesRatedGold && acesRatedEmerald && emerald <= gold) {
         newErrors.acesRatedEmerald = "Emerald score must be greater than Gold";
       }
     }
 
-    
     if (acesCertifiedSilver || acesCertifiedGold || acesCertifiedEmerald) {
       const certifiedSilver = parseFloat(acesCertifiedSilver) || 0;
       const certifiedGold = parseFloat(acesCertifiedGold) || 0;
       const certifiedEmerald = parseFloat(acesCertifiedEmerald) || 0;
 
-      
       if (acesCertifiedSilver) {
         if (acesCertifiedGold && certifiedGold <= certifiedSilver) {
-          newErrors.acesCertifiedGold = "Gold score must be greater than Silver";
+          newErrors.acesCertifiedGold =
+            "Gold score must be greater than Silver";
         }
         if (acesCertifiedEmerald && certifiedEmerald <= certifiedSilver) {
-          newErrors.acesCertifiedEmerald = "Emerald score must be greater than Silver";
+          newErrors.acesCertifiedEmerald =
+            "Emerald score must be greater than Silver";
         }
       }
 
-      
-      if (acesCertifiedGold && acesCertifiedEmerald && certifiedEmerald <= certifiedGold) {
-        newErrors.acesCertifiedEmerald = "Emerald score must be greater than Gold";
+      if (
+        acesCertifiedGold &&
+        acesCertifiedEmerald &&
+        certifiedEmerald <= certifiedGold
+      ) {
+        newErrors.acesCertifiedEmerald =
+          "Emerald score must be greater than Gold";
       }
     }
 
@@ -1700,13 +1834,10 @@ function CreateCertificationPageContent() {
     }));
   };
 
-  
-  
   const createCertificate = async (options?: { forcePublished?: boolean }) => {
-    
     const isValid = validateForm();
     if (!isValid) {
-      console.log("isValid->>>>", isValid)
+      console.log("isValid->>>>", isValid);
       return null;
     }
 
@@ -1719,7 +1850,9 @@ function CreateCertificationPageContent() {
         certificate_id: productId.trim(),
         name: certificationName.trim(),
         industry_ids: industry,
-        disclosure_price: selfDisclosurePrice ? parseFloat(selfDisclosurePrice) : 0,
+        disclosure_price: selfDisclosurePrice
+          ? parseFloat(selfDisclosurePrice)
+          : 0,
         assured_price: assuredPrice ? parseFloat(assuredPrice) : 0,
         validity_days: validityDays ? parseInt(validityDays) : 0,
         validity_months: validityMonths ? parseInt(validityMonths) : 0,
@@ -1730,19 +1863,17 @@ function CreateCertificationPageContent() {
         badges: prepareBadges(),
       };
 
-      
       const isEdit = Boolean(certificateIdFromUrl);
 
-      
       const payloadToSend = payload;
-
 
       let response;
       if (isEdit && certificateIdFromUrl) {
-        
-        response = await axiosInstance.patch(`/certificates/${certificateIdFromUrl}`, payloadToSend);
+        response = await axiosInstance.patch(
+          `/certificates/${certificateIdFromUrl}`,
+          payloadToSend,
+        );
       } else {
-        
         response = await axiosInstance.post("/certificates", payloadToSend);
       }
 
@@ -1753,7 +1884,8 @@ function CreateCertificationPageContent() {
 
       return response.data;
     } catch (err) {
-      let errorMessage = "Failed to create/update certificate. Please try again.";
+      let errorMessage =
+        "Failed to create/update certificate. Please try again.";
       if (axios.isAxiosError(err)) {
         errorMessage = err.response?.data?.message || errorMessage;
       }
@@ -1764,7 +1896,6 @@ function CreateCertificationPageContent() {
     }
   };
 
-  
   const handleSaveDraft = async () => {
     if (!validateForm()) {
       return;
@@ -1772,10 +1903,8 @@ function CreateCertificationPageContent() {
 
     try {
       await createCertificate({ forcePublished: false });
-      
-      
+
       if (!certificateIdFromUrl) {
-        
         setCertificationName("");
         setProductId("");
         setIndustry([]);
@@ -1798,15 +1927,12 @@ function CreateCertificationPageContent() {
         setAcesCertifiedEmerald("");
         setCertificateId(null);
         setSaveError("");
-        setErrors({}); 
+        setErrors({});
       }
-    } catch (err) {
-    }
+    } catch (err) {}
   };
 
-  
   const handleSaveAndNext = async () => {
-    
     if (!validateForm()) {
       return;
     }
@@ -1817,16 +1943,14 @@ function CreateCertificationPageContent() {
         setCertificateId(response.data.id);
         setStep("sections");
       }
-    } catch (err) {
-      
-    }
+    } catch (err) {}
   };
 
   const handleBackToPreviousStep = () => {
     if (
       hasUnsavedQuestionChanges() &&
       !window.confirm(
-        "You have unsaved changes in this question. Press OK to discard and go back, or Cancel to stay."
+        "You have unsaved changes in this question. Press OK to discard and go back, or Cancel to stay.",
       )
     ) {
       return;
@@ -1834,7 +1958,6 @@ function CreateCertificationPageContent() {
     setStep("details");
   };
 
-  
   if (isLoadingCertificate) {
     return (
       <div className="bg-light-gray p-3 md:p-6">
@@ -1853,7 +1976,7 @@ function CreateCertificationPageContent() {
             <Loading isLoading size="lg" className="p-6" />
           </div>
         )}
-        
+
         <div className="mb-4 md:mb-6">
           <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2">
             Certifications
@@ -1863,7 +1986,6 @@ function CreateCertificationPageContent() {
           </p>
         </div>
 
-        
         <div className="flex items-center  mb-4 md:mb-6 text-sm">
           <button
             onClick={() => router.push("/admin/certifications")}
@@ -1889,9 +2011,7 @@ function CreateCertificationPageContent() {
           <span className="text-secondary">Create Certifications</span>
         </div>
 
-        
         <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm">
-          
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-semibold text-secondary mb-1">
@@ -1912,9 +2032,7 @@ function CreateCertificationPageContent() {
             </label>
           </div>
 
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            
             <div>
               <label className="block text-sm font-normal text-secondary mb-2">
                 Certification Name <span className="text-red-500">*</span>
@@ -1925,20 +2043,25 @@ function CreateCertificationPageContent() {
                 onChange={(e) => {
                   setCertificationName(e.target.value);
                   if (errors.certificationName) {
-                    setErrors((prev) => ({ ...prev, certificationName: undefined }));
+                    setErrors((prev) => ({
+                      ...prev,
+                      certificationName: undefined,
+                    }));
                   }
                 }}
-                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.certificationName
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-zinc-200 focus:ring-zinc-200"
-                  }`}
+                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                  errors.certificationName
+                    ? "border-red-500 focus:ring-red-200"
+                    : "border-zinc-200 focus:ring-zinc-200"
+                }`}
               />
               {errors.certificationName && (
-                <p className="text-xs text-red-500 mt-1">{errors.certificationName}</p>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.certificationName}
+                </p>
               )}
             </div>
 
-            
             <div>
               <label className="block text-sm font-normal text-secondary mb-2">
                 Product ID <span className="text-red-500">*</span>
@@ -1953,17 +2076,17 @@ function CreateCertificationPageContent() {
                   }
                 }}
                 placeholder="Enter Product ID"
-                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.productId
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-zinc-200 focus:ring-zinc-200"
-                  }`}
+                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                  errors.productId
+                    ? "border-red-500 focus:ring-red-200"
+                    : "border-zinc-200 focus:ring-zinc-200"
+                }`}
               />
               {errors.productId && (
                 <p className="text-xs text-red-500 mt-1">{errors.productId}</p>
               )}
             </div>
 
-            
             <div className="relative" ref={industryDropdownRef}>
               <label className="block text-sm font-medium text-secondary mb-2">
                 Industry <span className="text-red-500">*</span>
@@ -1971,12 +2094,17 @@ function CreateCertificationPageContent() {
               <button
                 type="button"
                 onClick={() => setShowIndustryDropdown(!showIndustryDropdown)}
-                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-gray text-sm font-normal leading-[19.2px] tracking-normal appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTciIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAxNyAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUuMjQ4NjEgNi4zNzQ3Nkw4LjUwNDM3IDkuNjMwNTFMMTEuNzYwMSA2LjM3NDc2TDEyLjc1NjggNy4zNzE0Mkw4LjUwNDM3IDExLjYyMzhMNC4yNTE5NSA3LjM3MTQyTDUuMjQ4NjEgNi4zNzQ3NloiIGZpbGw9IiM5OTk5OTkiLz4KPC9zdmc+Cg==')] bg-size-[17px_18px] bg-position-[right_1rem_center] bg-no-repeat pr-12 text-left flex items-center justify-between ${errors.industry
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-zinc-200 focus:ring-zinc-200"
-                  }`}
+                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-gray text-sm font-normal leading-[19.2px] tracking-normal appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTciIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAxNyAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUuMjQ4NjEgNi4zNzQ3Nkw4LjUwNDM3IDkuNjMwNTFMMTEuNzYwMSA2LjM3NDc2TDEyLjc1NjggNy4zNzE0Mkw4LjUwNDM3IDExLjYyMzhMNC4yNTE5NSA3LjM3MTQyTDUuMjQ4NjEgNi4zNzQ3NloiIGZpbGw9IiM5OTk5OTkiLz4KPC9zdmc+Cg==')] bg-size-[17px_18px] bg-position-[right_1rem_center] bg-no-repeat pr-12 text-left flex items-center justify-between ${
+                  errors.industry
+                    ? "border-red-500 focus:ring-red-200"
+                    : "border-zinc-200 focus:ring-zinc-200"
+                }`}
               >
-                <span className={industry.length > 0 ? "text-secondary" : "text-gray"}>
+                <span
+                  className={
+                    industry.length > 0 ? "text-secondary" : "text-gray"
+                  }
+                >
                   {industry.length > 0
                     ? `${industry.length} industr${industry.length === 1 ? "y" : "ies"} selected`
                     : "Select industries"}
@@ -2007,18 +2135,26 @@ function CreateCertificationPageContent() {
                               type="button"
                               onClick={() => {
                                 if (isSelected) {
-                                  setIndustry(industry.filter((id) => id !== option.value));
+                                  setIndustry(
+                                    industry.filter(
+                                      (id) => id !== option.value,
+                                    ),
+                                  );
                                 } else {
                                   setIndustry([...industry, option.value]);
                                 }
                                 if (errors.industry) {
-                                  setErrors((prev) => ({ ...prev, industry: undefined }));
+                                  setErrors((prev) => ({
+                                    ...prev,
+                                    industry: undefined,
+                                  }));
                                 }
                               }}
-                              className={`w-full px-4 py-2 text-left text-sm hover:bg-zinc-50 transition-colors flex items-center justify-between ${isSelected
-                                ? "bg-zinc-100 text-secondary font-medium"
-                                : "text-gray"
-                                }`}
+                              className={`w-full px-4 py-2 text-left text-sm hover:bg-zinc-50 transition-colors flex items-center justify-between ${
+                                isSelected
+                                  ? "bg-zinc-100 text-secondary font-medium"
+                                  : "text-gray"
+                              }`}
                             >
                               <span>{option.label}</span>
                               {isSelected && (
@@ -2054,7 +2190,6 @@ function CreateCertificationPageContent() {
               )}
             </div>
 
-            
             <div>
               <label className="block text-sm font-normal text-secondary mb-2">
                 Self Disclosure price<span className="text-red-500">*</span>
@@ -2065,23 +2200,28 @@ function CreateCertificationPageContent() {
                 onChange={(e) => {
                   setSelfDisclosurePrice(e.target.value);
                   if (errors.selfDisclosurePrice) {
-                    setErrors((prev) => ({ ...prev, selfDisclosurePrice: undefined }));
+                    setErrors((prev) => ({
+                      ...prev,
+                      selfDisclosurePrice: undefined,
+                    }));
                   }
                 }}
                 placeholder="Enter Self Disclosure price*"
                 min="0"
                 step="1"
-                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.selfDisclosurePrice
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-zinc-200 focus:ring-zinc-200"
-                  }`}
+                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                  errors.selfDisclosurePrice
+                    ? "border-red-500 focus:ring-red-200"
+                    : "border-zinc-200 focus:ring-zinc-200"
+                }`}
               />
               {errors.selfDisclosurePrice && (
-                <p className="text-xs text-red-500 mt-1">{errors.selfDisclosurePrice}</p>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.selfDisclosurePrice}
+                </p>
               )}
             </div>
 
-            
             <div>
               <label className="block text-sm font-normal text-secondary mb-2">
                 Assured Price<span className="text-red-500">*</span>
@@ -2098,24 +2238,28 @@ function CreateCertificationPageContent() {
                 placeholder="Enter Assured price"
                 min="0"
                 step="1"
-                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.assuredPrice
-                  ? "border-red-500 focus:ring-red-200"
-                  : "border-zinc-200 focus:ring-zinc-200"
-                  }`}
+                className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                  errors.assuredPrice
+                    ? "border-red-500 focus:ring-red-200"
+                    : "border-zinc-200 focus:ring-zinc-200"
+                }`}
               />
               {errors.assuredPrice && (
-                <p className="text-xs text-red-500 mt-1">{errors.assuredPrice}</p>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.assuredPrice}
+                </p>
               )}
             </div>
 
-            
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <label className="block text-sm font-normal text-secondary">
                   Validity Period <span className="text-red-500">*</span>
                 </label>
                 {errors.validityPeriod && (
-                  <span className="text-xs text-red-500">{errors.validityPeriod}</span>
+                  <span className="text-xs text-red-500">
+                    {errors.validityPeriod}
+                  </span>
                 )}
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -2125,14 +2269,18 @@ function CreateCertificationPageContent() {
                   onChange={(e) => {
                     setValidityDays(e.target.value);
                     if (errors.validityPeriod) {
-                      setErrors((prev) => ({ ...prev, validityPeriod: undefined }));
+                      setErrors((prev) => ({
+                        ...prev,
+                        validityPeriod: undefined,
+                      }));
                     }
                   }}
                   placeholder="Days"
-                  className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.validityPeriod
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.validityPeriod
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 <input
                   type="text"
@@ -2140,14 +2288,18 @@ function CreateCertificationPageContent() {
                   onChange={(e) => {
                     setValidityMonths(e.target.value);
                     if (errors.validityPeriod) {
-                      setErrors((prev) => ({ ...prev, validityPeriod: undefined }));
+                      setErrors((prev) => ({
+                        ...prev,
+                        validityPeriod: undefined,
+                      }));
                     }
                   }}
                   placeholder="Months"
-                  className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.validityPeriod
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.validityPeriod
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 <input
                   type="text"
@@ -2155,19 +2307,22 @@ function CreateCertificationPageContent() {
                   onChange={(e) => {
                     setValidityYears(e.target.value);
                     if (errors.validityPeriod) {
-                      setErrors((prev) => ({ ...prev, validityPeriod: undefined }));
+                      setErrors((prev) => ({
+                        ...prev,
+                        validityPeriod: undefined,
+                      }));
                     }
                   }}
                   placeholder="Years"
-                  className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.validityPeriod
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.validityPeriod
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
               </div>
             </div>
 
-            
             <div>
               <label className="block text-sm font-normal text-secondary mb-2">
                 Compulsory documents
@@ -2215,7 +2370,6 @@ function CreateCertificationPageContent() {
             </div>
           </div>
 
-          
           <div className="mt-8">
             <div className="flex items-center gap-2 mb-4">
               <h3 className="text-base font-semibold text-secondary">
@@ -2226,7 +2380,6 @@ function CreateCertificationPageContent() {
               )}
             </div>
 
-            
             <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-4 mb-4">
               <div>
                 <label className="block text-xs text-transparent mb-1 select-none">
@@ -2244,17 +2397,25 @@ function CreateCertificationPageContent() {
                   value={acesRatedBronze}
                   onChange={(e) => {
                     setAcesRatedBronze(e.target.value);
-                    if (errors.acesRatedBronze || errors.acesRatedSilver || errors.acesRatedGold || errors.acesRatedEmerald) {
+                    if (
+                      errors.acesRatedBronze ||
+                      errors.acesRatedSilver ||
+                      errors.acesRatedGold ||
+                      errors.acesRatedEmerald
+                    ) {
                       clearRatedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesRatedBronze
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesRatedBronze
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesRatedBronze && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesRatedBronze}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesRatedBronze}
+                  </span>
                 )}
               </div>
               <div>
@@ -2265,17 +2426,25 @@ function CreateCertificationPageContent() {
                   value={acesRatedSilver}
                   onChange={(e) => {
                     setAcesRatedSilver(e.target.value);
-                    if (errors.acesRatedBronze || errors.acesRatedSilver || errors.acesRatedGold || errors.acesRatedEmerald) {
+                    if (
+                      errors.acesRatedBronze ||
+                      errors.acesRatedSilver ||
+                      errors.acesRatedGold ||
+                      errors.acesRatedEmerald
+                    ) {
                       clearRatedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesRatedSilver
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesRatedSilver
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesRatedSilver && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesRatedSilver}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesRatedSilver}
+                  </span>
                 )}
               </div>
               <div>
@@ -2286,17 +2455,25 @@ function CreateCertificationPageContent() {
                   value={acesRatedGold}
                   onChange={(e) => {
                     setAcesRatedGold(e.target.value);
-                    if (errors.acesRatedBronze || errors.acesRatedSilver || errors.acesRatedGold || errors.acesRatedEmerald) {
+                    if (
+                      errors.acesRatedBronze ||
+                      errors.acesRatedSilver ||
+                      errors.acesRatedGold ||
+                      errors.acesRatedEmerald
+                    ) {
                       clearRatedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesRatedGold
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesRatedGold
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesRatedGold && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesRatedGold}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesRatedGold}
+                  </span>
                 )}
               </div>
               <div>
@@ -2307,22 +2484,29 @@ function CreateCertificationPageContent() {
                   value={acesRatedEmerald}
                   onChange={(e) => {
                     setAcesRatedEmerald(e.target.value);
-                    if (errors.acesRatedBronze || errors.acesRatedSilver || errors.acesRatedGold || errors.acesRatedEmerald) {
+                    if (
+                      errors.acesRatedBronze ||
+                      errors.acesRatedSilver ||
+                      errors.acesRatedGold ||
+                      errors.acesRatedEmerald
+                    ) {
                       clearRatedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesRatedEmerald
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesRatedEmerald
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesRatedEmerald && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesRatedEmerald}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesRatedEmerald}
+                  </span>
                 )}
               </div>
             </div>
 
-            
             <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-4 mb-4">
               <div>
                 <label className="block text-xs text-transparent mb-1 select-none">
@@ -2344,13 +2528,16 @@ function CreateCertificationPageContent() {
                       clearVerifiedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesVerifiedBronze
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesVerifiedBronze
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesVerifiedBronze && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesVerifiedBronze}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesVerifiedBronze}
+                  </span>
                 )}
               </div>
               <div>
@@ -2388,7 +2575,6 @@ function CreateCertificationPageContent() {
               </div>
             </div>
 
-            
             <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-4 mb-4">
               <div>
                 <label className="block text-xs text-transparent mb-1 select-none">
@@ -2417,17 +2603,24 @@ function CreateCertificationPageContent() {
                   value={acesCertifiedSilver}
                   onChange={(e) => {
                     setAcesCertifiedSilver(e.target.value);
-                    if (errors.acesCertifiedSilver || errors.acesCertifiedGold || errors.acesCertifiedEmerald) {
+                    if (
+                      errors.acesCertifiedSilver ||
+                      errors.acesCertifiedGold ||
+                      errors.acesCertifiedEmerald
+                    ) {
                       clearCertifiedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesCertifiedSilver
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesCertifiedSilver
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesCertifiedSilver && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesCertifiedSilver}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesCertifiedSilver}
+                  </span>
                 )}
               </div>
               <div>
@@ -2438,17 +2631,24 @@ function CreateCertificationPageContent() {
                   value={acesCertifiedGold}
                   onChange={(e) => {
                     setAcesCertifiedGold(e.target.value);
-                    if (errors.acesCertifiedSilver || errors.acesCertifiedGold || errors.acesCertifiedEmerald) {
+                    if (
+                      errors.acesCertifiedSilver ||
+                      errors.acesCertifiedGold ||
+                      errors.acesCertifiedEmerald
+                    ) {
                       clearCertifiedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesCertifiedGold
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesCertifiedGold
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesCertifiedGold && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesCertifiedGold}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesCertifiedGold}
+                  </span>
                 )}
               </div>
               <div>
@@ -2459,23 +2659,29 @@ function CreateCertificationPageContent() {
                   value={acesCertifiedEmerald}
                   onChange={(e) => {
                     setAcesCertifiedEmerald(e.target.value);
-                    if (errors.acesCertifiedSilver || errors.acesCertifiedGold || errors.acesCertifiedEmerald) {
+                    if (
+                      errors.acesCertifiedSilver ||
+                      errors.acesCertifiedGold ||
+                      errors.acesCertifiedEmerald
+                    ) {
                       clearCertifiedBadgeErrors();
                     }
                   }}
-                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${errors.acesCertifiedEmerald
-                    ? "border-red-500 focus:ring-red-200"
-                    : "border-zinc-200 focus:ring-zinc-200"
-                    }`}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesCertifiedEmerald
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
                 {errors.acesCertifiedEmerald && (
-                  <span className="text-xs text-red-500 mt-1 block">{errors.acesCertifiedEmerald}</span>
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesCertifiedEmerald}
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          
           <div className="mt-6">
             <label className="block text-sm font-normal text-secondary mb-2">
               Short Description <span className="text-red-500">*</span>
@@ -2485,30 +2691,34 @@ function CreateCertificationPageContent() {
               onChange={(e) => {
                 setShortDescription(e.target.value);
                 if (errors.shortDescription) {
-                  setErrors((prev) => ({ ...prev, shortDescription: undefined }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    shortDescription: undefined,
+                  }));
                 }
               }}
               placeholder="Brief description of the certification purpose and scope...."
               rows={4}
-              className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 resize-none text-sm font-normal leading-[19.2px] tracking-normal ${errors.shortDescription
-                ? "border-red-500 focus:ring-red-200"
-                : "border-zinc-200 focus:ring-zinc-200"
-                }`}
+              className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 resize-none text-sm font-normal leading-[19.2px] tracking-normal ${
+                errors.shortDescription
+                  ? "border-red-500 focus:ring-red-200"
+                  : "border-zinc-200 focus:ring-zinc-200"
+              }`}
             />
             {errors.shortDescription && (
-              <p className="text-xs text-red-500 mt-1">{errors.shortDescription}</p>
+              <p className="text-xs text-red-500 mt-1">
+                {errors.shortDescription}
+              </p>
             )}
           </div>
         </div>
 
-        
         {saveError && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
             <p className="text-sm text-red-600">{saveError}</p>
           </div>
         )}
 
-        
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={handleSaveDraft}
@@ -2552,7 +2762,7 @@ function CreateCertificationPageContent() {
           <Loading isLoading size="lg" className="p-6" />
         </div>
       )}
-      
+
       <div className="mb-4 md:mb-6">
         <div className="flex items-center justify-between">
           <div>
@@ -2622,15 +2832,17 @@ function CreateCertificationPageContent() {
         </div>
       </div>
 
-      
       <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-4">
-        
         <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden flex flex-col h-[calc(100vh-180px)]">
           <div className="p-4 border-b border-zinc-200">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-secondary">Main Sections</h2>
+              <h2 className="text-lg font-semibold text-secondary">
+                Main Sections
+              </h2>
               <button
-                onClick={() => setShowAddMainSectionInput(!showAddMainSectionInput)}
+                onClick={() =>
+                  setShowAddMainSectionInput(!showAddMainSectionInput)
+                }
                 className="w-9 h-9 bg-black text-white rounded-md flex items-center justify-center hover:bg-gray-800 transition-colors"
               >
                 <span className="text-xl">+</span>
@@ -2638,7 +2850,6 @@ function CreateCertificationPageContent() {
             </div>
           </div>
 
-          
           {showAddMainSectionInput && (
             <div className="p-4  bg-white">
               <div className="flex gap-2 items-center">
@@ -2675,7 +2886,6 @@ function CreateCertificationPageContent() {
             </div>
           )}
 
-          
           <div className="p-4 overflow-y-auto flex-1">
             {mainSections.length === 0 && !showAddMainSectionInput ? (
               <div className="py-12 text-center">
@@ -2708,7 +2918,6 @@ function CreateCertificationPageContent() {
               <div className="space-y-2">
                 {mainSections.map((mainSection) => (
                   <div key={mainSection.id} className="bg-white">
-                    
                     <div className="flex items-start justify-between p-3 hover:bg-gray-50">
                       <div className="flex items-start gap-2 flex-1 min-w-0">
                         <button
@@ -2781,7 +2990,6 @@ function CreateCertificationPageContent() {
                       </div>
                     </div>
 
-                    
                     {showAddSectionInput === mainSection.id && (
                       <div className="pl-6 p-3 bg-white">
                         <div className="flex gap-2">
@@ -2791,7 +2999,9 @@ function CreateCertificationPageContent() {
                             onChange={(e) => setNewSectionName(e.target.value)}
                             placeholder="Enter Section Name"
                             className="flex-1 px-3 py-2 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
-                            onKeyPress={(e) => e.key === "Enter" && addSection(mainSection.id)}
+                            onKeyPress={(e) =>
+                              e.key === "Enter" && addSection(mainSection.id)
+                            }
                             autoFocus
                           />
                           <button
@@ -2819,277 +3029,364 @@ function CreateCertificationPageContent() {
                       </div>
                     )}
 
-                    
-                    {mainSection.isExpanded && mainSection.sections.length > 0 && (
-                      <div className="bg-white">
-                        {mainSection.sections.map((section) => (
-                          <div key={section.id} className="pl-6">
-                            <div className="flex items-start justify-between p-3 hover:bg-gray-100">
-                              <div
-                                className="flex items-start gap-2 flex-1 min-w-0 cursor-pointer"
-                                onClick={() => {
-                                  if (!canNavigateQuestion(mainSection.id, section.id, null, null)) {
-                                    return;
-                                  }
-                                  setSelectedMainSection(mainSection.id);
-                                  setSelectedSection(section.id);
-                                  setSelectedSubSection(null);
-                                  setSelectedQuestion(null);
-                                }}
-                              >
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleSection(mainSection.id, section.id);
-                                  }}
-                                  className="text-gray-500 hover:text-gray-700"
-                                >
-                                  {section.isExpanded ? (
-                                    <svg
-                                      width="16"
-                                      height="16"
-                                      viewBox="0 0 16 16"
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                      <path
-                                        d="M4 6L8 10L12 6"
-                                        stroke="#999999"
-                                        strokeWidth="1.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  ) : (
-                                    <svg
-                                      width="16"
-                                      height="16"
-                                      viewBox="0 0 16 16"
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                      <path
-                                        d="M6 4L10 8L6 12"
-                                        stroke="#999999"
-                                        strokeWidth="1.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  )}
-                                </button>
-                                <span className={`text-sm font-medium break-words whitespace-normal ${selectedSection === section.id && !selectedSubSection ? "text-black" : "text-[#999999]"
-                                  }`}>
-                                  {section.name}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
+                    {mainSection.isExpanded &&
+                      mainSection.sections.length > 0 && (
+                        <div className="bg-white">
+                          {mainSection.sections.map((section) => (
+                            <div key={section.id} className="pl-6">
+                              <div className="flex items-start justify-between p-3 hover:bg-gray-100">
+                                <div
+                                  className="flex items-start gap-2 flex-1 min-w-0 cursor-pointer"
                                   onClick={() => {
-                                    setShowAddSubSectionInput(section.id);
-                                    setNewSubSectionName("");
+                                    if (
+                                      !canNavigateQuestion(
+                                        mainSection.id,
+                                        section.id,
+                                        null,
+                                        null,
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    setSelectedMainSection(mainSection.id);
+                                    setSelectedSection(section.id);
+                                    setSelectedSubSection(null);
+                                    setSelectedQuestion(null);
                                   }}
-                                  className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded"
-                                  title="Add Sub-Section"
                                 >
-                                  <img
-                                    src="/assets/imgs/admin/certifications/plus.svg"
-                                    alt="Add"
-                                    className="w-4 h-4"
-                                    style={{ filter: "brightness(0)" }}
-                                  />
-                                </button>
-                                <button
-                                  onClick={() => deleteSection(mainSection.id, section.id)}
-                                  disabled={isDeletingSection === section.id}
-                                  className="w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {isDeletingSection === section.id ? (
-                                    <span className="text-xs">...</span>
-                                  ) : (
-                                    <img
-                                      src="/assets/imgs/admin/certifications/delete.svg"
-                                      alt="Delete"
-                                      className="w-4 h-4"
-                                    />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-
-                            
-                            {showAddSubSectionInput === section.id && (
-                              <div className="pl-6 p-3 bg-white">
-                                <div className="flex gap-2 items-center">
-                                  <input
-                                    type="text"
-                                    value={newSubSectionName}
-                                    onChange={(e) => setNewSubSectionName(e.target.value)}
-                                    placeholder="Enter Sub-Section Name"
-                                    className="flex-1 max-w-[180px] px-3 py-2 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
-                                    onKeyPress={(e) => e.key === "Enter" && addSubSection(mainSection.id, section.id)}
-                                    autoFocus
-                                  />
                                   <button
-                                    onClick={() => addSubSection(mainSection.id, section.id)}
-                                    disabled={isCreatingSubSection}
-                                    className="px-3 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleSection(mainSection.id, section.id);
+                                    }}
+                                    className="text-gray-500 hover:text-gray-700"
                                   >
-                                    {isCreatingSubSection ? "Adding..." : "Add"}
+                                    {section.isExpanded ? (
+                                      <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 16 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                      >
+                                        <path
+                                          d="M4 6L8 10L12 6"
+                                          stroke="#999999"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                    ) : (
+                                      <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 16 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                      >
+                                        <path
+                                          d="M6 4L10 8L6 12"
+                                          stroke="#999999"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                    )}
                                   </button>
+                                  <span
+                                    className={`text-sm font-medium break-words whitespace-normal ${
+                                      selectedSection === section.id &&
+                                      !selectedSubSection
+                                        ? "text-black"
+                                        : "text-[#999999]"
+                                    }`}
+                                  >
+                                    {section.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => {
-                                      setShowAddSubSectionInput(null);
+                                      setShowAddSubSectionInput(section.id);
                                       setNewSubSectionName("");
                                     }}
-                                    className="w-6 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
-                                    title="Cancel"
+                                    className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded"
+                                    title="Add Sub-Section"
                                   >
                                     <img
-                                      src="/assets/imgs/admin/commons/cross.svg"
-                                      alt="Cancel"
-                                      className="w-5 h-5"
+                                      src="/assets/imgs/admin/certifications/plus.svg"
+                                      alt="Add"
+                                      className="w-4 h-4"
+                                      style={{ filter: "brightness(0)" }}
                                     />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      deleteSection(mainSection.id, section.id)
+                                    }
+                                    disabled={isDeletingSection === section.id}
+                                    className="w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {isDeletingSection === section.id ? (
+                                      <span className="text-xs">...</span>
+                                    ) : (
+                                      <img
+                                        src="/assets/imgs/admin/certifications/delete.svg"
+                                        alt="Delete"
+                                        className="w-4 h-4"
+                                      />
+                                    )}
                                   </button>
                                 </div>
                               </div>
-                            )}
 
-                            
-                            {section.isExpanded && section.questions && section.questions.length > 0 && (
-                              <div className="pl-6 bg-white">
-                                {section.questions.map((question, idx) => (
-                                  <button
-                                    key={question.id}
-                                    onClick={() => {
-                                      if (!canNavigateQuestion(mainSection.id, section.id, null, question.id)) {
-                                        return;
+                              {showAddSubSectionInput === section.id && (
+                                <div className="pl-6 p-3 bg-white">
+                                  <div className="flex gap-2 items-center">
+                                    <input
+                                      type="text"
+                                      value={newSubSectionName}
+                                      onChange={(e) =>
+                                        setNewSubSectionName(e.target.value)
                                       }
-                                      setSelectedMainSection(mainSection.id);
-                                      setSelectedSection(section.id);
-                                      setSelectedSubSection(null);
-                                      setSelectedQuestion(question.id);
-                                    }}
-                                    className={`w-full text-left p-3 text-sm hover:bg-gray-50 ${selectedQuestion === question.id
-                                      ? ""
-                                      : ""
-                                      }`}
-                                  >
-                                    <div className="flex items-start gap-2 min-w-0">
-                                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 shrink-0"></span>
-                                      <span
-                                        className={`block min-w-0 ${selectedQuestion === question.id ? "text-black" : "text-[#999999]"}`}
-                                        style={{
-                                          display: "-webkit-box",
-                                          WebkitLineClamp: 2,
-                                          WebkitBoxOrient: "vertical",
-                                          overflow: "hidden",
-                                        }}
-                                      >
-                                        Q:{idx + 1}{" "}
-                                        {question.text ||
-                                          "Write your question..."}
-                                      </span>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-
-                            
-                            {section.isExpanded && section.subSections.length > 0 && (
-                              <div className="bg-white">
-                                {section.subSections.map((subSection) => (
-                                  <div key={subSection.id} className="pl-6">
-                                    <div
-                                      onClick={() => {
-                                        if (!canNavigateQuestion(mainSection.id, section.id, subSection.id, null)) {
-                                          return;
-                                        }
-                                        setSelectedMainSection(mainSection.id);
-                                        setSelectedSection(section.id);
-                                        setSelectedSubSection(subSection.id);
-                                        setSelectedQuestion(null);
-                                      }}
-                                      className={`flex items-center justify-between p-3 cursor-pointer ${selectedSubSection === subSection.id
-                                        ? "bg-light-gray-2"
-                                        : "hover:bg-gray-100"
-                                        }`}
+                                      placeholder="Enter Sub-Section Name"
+                                      className="flex-1 max-w-[180px] px-3 py-2 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                                      onKeyPress={(e) =>
+                                        e.key === "Enter" &&
+                                        addSubSection(
+                                          mainSection.id,
+                                          section.id,
+                                        )
+                                      }
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        addSubSection(
+                                          mainSection.id,
+                                          section.id,
+                                        )
+                                      }
+                                      disabled={isCreatingSubSection}
+                                      className="px-3 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      <div className="flex items-start gap-2 flex-1 min-w-0">
-                                        <span className={`text-sm break-words whitespace-normal ${selectedSubSection === subSection.id ? "text-black" : "text-[#999999]"
-                                          }`}>
-                                          {subSection.name}
-                                        </span>
-                                      </div>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          deleteSubSection(mainSection.id, section.id, subSection.id);
-                                        }}
-                                        disabled={isDeletingSubSection === subSection.id}
-                                        className="w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                        {isDeletingSubSection === subSection.id ? (
-                                          <span className="text-xs">...</span>
-                                        ) : (
-                                          <img
-                                            src="/assets/imgs/admin/certifications/delete.svg"
-                                            alt="Delete"
-                                            className="w-4 h-4"
-                                          />
-                                        )}
-                                      </button>
-                                    </div>
-
-                                    
-                                    {subSection.questions.length > 0 && (
-                                      <div className="pl-6 bg-white">
-                                        {subSection.questions.map((question, idx) => (
-                                          <button
-                                            key={question.id}
-                                            onClick={() => {
-                                              if (!canNavigateQuestion(mainSection.id, section.id, subSection.id, question.id)) {
-                                                return;
-                                              }
-                                              setSelectedMainSection(mainSection.id);
-                                              setSelectedSection(section.id);
-                                              setSelectedSubSection(subSection.id);
-                                              setSelectedQuestion(question.id);
-                                            }}
-                                            className={`w-full text-left p-3 text-sm hover:bg-gray-50 ${selectedQuestion === question.id
-                                              ? ""
-                                              : ""
-                                              }`}
-                                          >
-                                            <div className="flex items-start gap-2 min-w-0">
-                                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 shrink-0"></span>
-                                              <span
-                                                className={`block min-w-0 ${selectedQuestion === question.id ? "text-black" : "text-[#999999]"}`}
-                                                style={{
-                                                  display: "-webkit-box",
-                                                  WebkitLineClamp: 2,
-                                                  WebkitBoxOrient: "vertical",
-                                                  overflow: "hidden",
-                                                }}
-                                              >
-                                                Q:{idx + 1}{" "}
-                                                {question.text ||
-                                                  "Write your question..."}
-                                              </span>
-                                            </div>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
+                                      {isCreatingSubSection
+                                        ? "Adding..."
+                                        : "Add"}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setShowAddSubSectionInput(null);
+                                        setNewSubSectionName("");
+                                      }}
+                                      className="w-6 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
+                                      title="Cancel"
+                                    >
+                                      <img
+                                        src="/assets/imgs/admin/commons/cross.svg"
+                                        alt="Cancel"
+                                        className="w-5 h-5"
+                                      />
+                                    </button>
                                   </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                                </div>
+                              )}
+
+                              {section.isExpanded &&
+                                section.questions &&
+                                section.questions.length > 0 && (
+                                  <div className="pl-6 bg-white">
+                                    {section.questions.map((question, idx) => (
+                                      <button
+                                        key={question.id}
+                                        onClick={() => {
+                                          if (
+                                            !canNavigateQuestion(
+                                              mainSection.id,
+                                              section.id,
+                                              null,
+                                              question.id,
+                                            )
+                                          ) {
+                                            return;
+                                          }
+                                          setSelectedMainSection(
+                                            mainSection.id,
+                                          );
+                                          setSelectedSection(section.id);
+                                          setSelectedSubSection(null);
+                                          setSelectedQuestion(question.id);
+                                        }}
+                                        className={`w-full text-left p-3 text-sm hover:bg-gray-50 ${
+                                          selectedQuestion === question.id
+                                            ? ""
+                                            : ""
+                                        }`}
+                                      >
+                                        <div className="flex items-start gap-2 min-w-0">
+                                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 shrink-0"></span>
+                                          <span
+                                            className={`block min-w-0 ${selectedQuestion === question.id ? "text-black" : "text-[#999999]"}`}
+                                            style={{
+                                              display: "-webkit-box",
+                                              WebkitLineClamp: 2,
+                                              WebkitBoxOrient: "vertical",
+                                              overflow: "hidden",
+                                            }}
+                                          >
+                                            Q:{idx + 1}{" "}
+                                            {question.text ||
+                                              "Write your question..."}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                              {section.isExpanded &&
+                                section.subSections.length > 0 && (
+                                  <div className="bg-white">
+                                    {section.subSections.map((subSection) => (
+                                      <div key={subSection.id} className="pl-6">
+                                        <div
+                                          onClick={() => {
+                                            if (
+                                              !canNavigateQuestion(
+                                                mainSection.id,
+                                                section.id,
+                                                subSection.id,
+                                                null,
+                                              )
+                                            ) {
+                                              return;
+                                            }
+                                            setSelectedMainSection(
+                                              mainSection.id,
+                                            );
+                                            setSelectedSection(section.id);
+                                            setSelectedSubSection(
+                                              subSection.id,
+                                            );
+                                            setSelectedQuestion(null);
+                                          }}
+                                          className={`flex items-center justify-between p-3 cursor-pointer ${
+                                            selectedSubSection === subSection.id
+                                              ? "bg-light-gray-2"
+                                              : "hover:bg-gray-100"
+                                          }`}
+                                        >
+                                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                                            <span
+                                              className={`text-sm break-words whitespace-normal ${
+                                                selectedSubSection ===
+                                                subSection.id
+                                                  ? "text-black"
+                                                  : "text-[#999999]"
+                                              }`}
+                                            >
+                                              {subSection.name}
+                                            </span>
+                                          </div>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              deleteSubSection(
+                                                mainSection.id,
+                                                section.id,
+                                                subSection.id,
+                                              );
+                                            }}
+                                            disabled={
+                                              isDeletingSubSection ===
+                                              subSection.id
+                                            }
+                                            className="w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          >
+                                            {isDeletingSubSection ===
+                                            subSection.id ? (
+                                              <span className="text-xs">
+                                                ...
+                                              </span>
+                                            ) : (
+                                              <img
+                                                src="/assets/imgs/admin/certifications/delete.svg"
+                                                alt="Delete"
+                                                className="w-4 h-4"
+                                              />
+                                            )}
+                                          </button>
+                                        </div>
+
+                                        {subSection.questions.length > 0 && (
+                                          <div className="pl-6 bg-white">
+                                            {subSection.questions.map(
+                                              (question, idx) => (
+                                                <button
+                                                  key={question.id}
+                                                  onClick={() => {
+                                                    if (
+                                                      !canNavigateQuestion(
+                                                        mainSection.id,
+                                                        section.id,
+                                                        subSection.id,
+                                                        question.id,
+                                                      )
+                                                    ) {
+                                                      return;
+                                                    }
+                                                    setSelectedMainSection(
+                                                      mainSection.id,
+                                                    );
+                                                    setSelectedSection(
+                                                      section.id,
+                                                    );
+                                                    setSelectedSubSection(
+                                                      subSection.id,
+                                                    );
+                                                    setSelectedQuestion(
+                                                      question.id,
+                                                    );
+                                                  }}
+                                                  className={`w-full text-left p-3 text-sm hover:bg-gray-50 ${
+                                                    selectedQuestion ===
+                                                    question.id
+                                                      ? ""
+                                                      : ""
+                                                  }`}
+                                                >
+                                                  <div className="flex items-start gap-2 min-w-0">
+                                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 shrink-0"></span>
+                                                    <span
+                                                      className={`block min-w-0 ${selectedQuestion === question.id ? "text-black" : "text-[#999999]"}`}
+                                                      style={{
+                                                        display: "-webkit-box",
+                                                        WebkitLineClamp: 2,
+                                                        WebkitBoxOrient:
+                                                          "vertical",
+                                                        overflow: "hidden",
+                                                      }}
+                                                    >
+                                                      Q:{idx + 1}{" "}
+                                                      {question.text ||
+                                                        "Write your question..."}
+                                                    </span>
+                                                  </div>
+                                                </button>
+                                              ),
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                   </div>
                 ))}
               </div>
@@ -3097,11 +3394,8 @@ function CreateCertificationPageContent() {
           </div>
         </div>
 
-        
         <div className="flex flex-col gap-4 ">
-          
           <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden flex flex-col flex-1">
-            
             <div className="p-4 border-b border-zinc-200">
               <div
                 className={`flex items-center justify-between ${selectedSection && selectedSubSection ? "" : "py-1"}`}
@@ -3117,12 +3411,16 @@ function CreateCertificationPageContent() {
                           selectedMainSection,
                           selectedSection,
                           selectedSubSection || null,
-                          null
+                          null,
                         )
                       ) {
                         return;
                       }
-                      addQuestion(selectedMainSection, selectedSection, selectedSubSection || null);
+                      addQuestion(
+                        selectedMainSection,
+                        selectedSection,
+                        selectedSubSection || null,
+                      );
                     }}
                     className="px-4 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors inline-flex items-center gap-2"
                   >
@@ -3137,7 +3435,6 @@ function CreateCertificationPageContent() {
               </div>
             </div>
 
-            
             <div className="flex-1 overflow-y-auto">
               {!selectedMainSection || !selectedSection ? (
                 <div className="p-4 md:p-6 flex items-center justify-center h-full">
@@ -3169,7 +3466,8 @@ function CreateCertificationPageContent() {
                       className="text-sm font-semibold tracking-normal text-center align-middle"
                       style={{ color: "#999999" }}
                     >
-                      Choose a main section, section, or sub-section from the left
+                      Choose a main section, section, or sub-section from the
+                      left
                       <br />
                       panel to view and edit its details
                     </p>
@@ -3177,7 +3475,6 @@ function CreateCertificationPageContent() {
                 </div>
               ) : selectedQuestion ? (
                 <div className="p-4 md:p-6 space-y-6">
-                  
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
                       Question Text <span className="text-red-500">*</span>
@@ -3191,7 +3488,6 @@ function CreateCertificationPageContent() {
                     />
                   </div>
 
-                  
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
                       Question Type <span className="text-red-500">*</span>
@@ -3204,11 +3500,12 @@ function CreateCertificationPageContent() {
                         { value: "file", label: "File" },
                       ]}
                       value={questionType}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setQuestionType(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                        setQuestionType(e.target.value)
+                      }
                     />
                   </div>
 
-                  
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
                       Help Text / Tooltip
@@ -3224,7 +3521,8 @@ function CreateCertificationPageContent() {
 
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
-                      Criteria Information <span className="text-red-500">*</span>
+                      Criteria Information{" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       rows={4}
@@ -3235,7 +3533,6 @@ function CreateCertificationPageContent() {
                     />
                   </div>
 
-                  
                   {questionType === "boolean" && (
                     <div>
                       <div className="flex items-center justify-between mb-4">
@@ -3262,13 +3559,11 @@ function CreateCertificationPageContent() {
                           </p>
                         </div>
                       ) : (
-                        
                         <div className="border border-zinc-200 rounded-md p-4 space-y-3">
                           <h4 className="text-sm font-medium text-secondary mb-3">
                             Conditional Flow Rules
                           </h4>
 
-                          
                           <div className="bg-green-50 border border-green-200 rounded-md p-4">
                             <div className="flex items-start gap-3">
                               <div className="w-6 h-6 bg-green-500 rounded flex items-center justify-center text-white shrink-0">
@@ -3301,30 +3596,49 @@ function CreateCertificationPageContent() {
                                 </p>
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                   <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Redirect Type <span className="text-red-500">*</span></label>
+                                    <label className="block text-xs text-gray-600 mb-1">
+                                      Redirect Type{" "}
+                                      <span className="text-red-500">*</span>
+                                    </label>
                                     <Dropdown
                                       placeholder="Select level"
                                       options={[
                                         { value: "main", label: "main" },
                                         { value: "section", label: "section" },
-                                        { value: "subsection", label: "subsection" },
-                                        { value: "question", label: "question" },
+                                        {
+                                          value: "subsection",
+                                          label: "subsection",
+                                        },
+                                        {
+                                          value: "question",
+                                          label: "question",
+                                        },
                                       ]}
                                       value={yesExitLevel}
-                                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setYesExitLevel(e.target.value)}
+                                      onChange={(
+                                        e: React.ChangeEvent<HTMLSelectElement>,
+                                      ) => setYesExitLevel(e.target.value)}
                                       className="mb-0 bg-white"
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Rank <span className="text-red-500">*</span></label>
+                                    <label className="block text-xs text-gray-600 mb-1">
+                                      Rank{" "}
+                                      <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                       type="number"
                                       placeholder="Enter rank"
                                       value={yesRank}
                                       onChange={(e) => {
                                         const value = e.target.value;
-                                        
-                                        if (value === "" || (!isNaN(Number(value)) && Number(value) >= 0 && Number(value) % 1 === 0)) {
+
+                                        if (
+                                          value === "" ||
+                                          (!isNaN(Number(value)) &&
+                                            Number(value) >= 0 &&
+                                            Number(value) % 1 === 0)
+                                        ) {
                                           setYesRank(value);
                                         }
                                       }}
@@ -3335,13 +3649,13 @@ function CreateCertificationPageContent() {
                                   </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  Select option to redirect with rank as per the selected level
+                                  Select option to redirect with rank as per the
+                                  selected level
                                 </p>
                               </div>
                             </div>
                           </div>
 
-                          
                           <div className="bg-red-50 border border-red-200 rounded-md p-4">
                             <div className="flex items-start gap-3">
                               <div className="w-6 h-6 bg-red-500 rounded flex items-center justify-center text-white shrink-0">
@@ -3373,30 +3687,49 @@ function CreateCertificationPageContent() {
                                 </p>
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                   <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Redirect Type <span className="text-red-500">*</span></label>
+                                    <label className="block text-xs text-gray-600 mb-1">
+                                      Redirect Type{" "}
+                                      <span className="text-red-500">*</span>
+                                    </label>
                                     <Dropdown
                                       placeholder="Select level"
                                       options={[
                                         { value: "main", label: "main" },
                                         { value: "section", label: "section" },
-                                        { value: "subsection", label: "subsection" },
-                                        { value: "question", label: "question" },
+                                        {
+                                          value: "subsection",
+                                          label: "subsection",
+                                        },
+                                        {
+                                          value: "question",
+                                          label: "question",
+                                        },
                                       ]}
                                       value={noExitLevel}
-                                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNoExitLevel(e.target.value)}
+                                      onChange={(
+                                        e: React.ChangeEvent<HTMLSelectElement>,
+                                      ) => setNoExitLevel(e.target.value)}
                                       className="mb-0 bg-white"
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Rank <span className="text-red-500">*</span></label>
+                                    <label className="block text-xs text-gray-600 mb-1">
+                                      Rank{" "}
+                                      <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                       type="number"
                                       placeholder="Enter rank"
                                       value={noRank}
                                       onChange={(e) => {
                                         const value = e.target.value;
-                                        
-                                        if (value === "" || (!isNaN(Number(value)) && Number(value) >= 0 && Number(value) % 1 === 0)) {
+
+                                        if (
+                                          value === "" ||
+                                          (!isNaN(Number(value)) &&
+                                            Number(value) >= 0 &&
+                                            Number(value) % 1 === 0)
+                                        ) {
                                           setNoRank(value);
                                         }
                                       }}
@@ -3407,7 +3740,8 @@ function CreateCertificationPageContent() {
                                   </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  Select option to redirect with rank as per the selected level
+                                  Select option to redirect with rank as per the
+                                  selected level
                                 </p>
                               </div>
                             </div>
@@ -3450,28 +3784,38 @@ function CreateCertificationPageContent() {
             </div>
           </div>
 
-          
           {selectedQuestion && (
             <div className="bg-transparent py-4">
               <div className="flex justify-between items-center">
                 <button
                   onClick={() => {
-                    if (selectedMainSection && selectedSection && selectedQuestion) {
+                    if (
+                      selectedMainSection &&
+                      selectedSection &&
+                      selectedQuestion
+                    ) {
                       deleteQuestion(
                         selectedMainSection,
                         selectedSection,
                         selectedSubSection,
-                        selectedQuestion
+                        selectedQuestion,
                       );
                     }
                   }}
                   disabled={isDeletingQuestion === selectedQuestion}
                   className="px-6 py-2 border border-red-500 text-red-500 rounded-md text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isDeletingQuestion === selectedQuestion ? "Deleting..." : "Delete"}
+                  {isDeletingQuestion === selectedQuestion
+                    ? "Deleting..."
+                    : "Delete"}
                 </button>
                 <div className="flex gap-3">
-                  <Button variant="secondary" onClick={() => router.push("/admin/certifications")}>Save Draft</Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push("/admin/certifications")}
+                  >
+                    Save Draft
+                  </Button>
                   <button
                     onClick={handleSaveQuestion}
                     disabled={isQuestionActionDisabled}
@@ -3495,23 +3839,46 @@ function CreateCertificationPageContent() {
         onClose={closeAlertModal}
       />
 
-      
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
             <div className="text-center">
               <div className="w-[80px] h-[80px] mx-auto mb-4 flex items-center justify-center">
-                <svg width="80" height="80" viewBox="0 0 122 122" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="61" cy="61" r="61" fill="#262626" fillOpacity="0.1" />
-                  <circle cx="61" cy="61" r="53.375" fill="#262626" fillOpacity="0.1" />
+                <svg
+                  width="80"
+                  height="80"
+                  viewBox="0 0 122 122"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="61"
+                    cy="61"
+                    r="61"
+                    fill="#262626"
+                    fillOpacity="0.1"
+                  />
+                  <circle
+                    cx="61"
+                    cy="61"
+                    r="53.375"
+                    fill="#262626"
+                    fillOpacity="0.1"
+                  />
                   <circle cx="61" cy="61" r="45.75" fill="#262626" />
-                  <path d="M44.125 63.9994C44.125 63.9994 46.9375 65.25 50.6875 70.875C50.6875 70.875 51.2219 69.975 52.2269 68.5369M70.375 50.25C66.0794 52.3988 61.585 56.91 57.9775 61.1662M53.5 63.9994C53.5 63.9994 56.3125 65.25 60.0625 70.875C60.0625 70.875 70.375 54.9375 79.75 50.25" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M44.125 63.9994C44.125 63.9994 46.9375 65.25 50.6875 70.875C50.6875 70.875 51.2219 69.975 52.2269 68.5369M70.375 50.25C66.0794 52.3988 61.585 56.91 57.9775 61.1662M53.5 63.9994C53.5 63.9994 56.3125 65.25 60.0625 70.875C60.0625 70.875 70.375 54.9375 79.75 50.25"
+                    stroke="white"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </div>
               <h3
                 className="text-secondary mb-2"
                 style={{
-                  fontSize: '24px'
+                  fontSize: "24px",
                 }}
               >
                 Published
@@ -3519,7 +3886,7 @@ function CreateCertificationPageContent() {
               <p
                 className="text-gray-500 mb-6"
                 style={{
-                  fontSize: '16px'
+                  fontSize: "16px",
                 }}
               >
                 Your Certificate has been published successfully.
@@ -3540,14 +3907,17 @@ function CreateCertificationPageContent() {
 
 export default function CreateCertificationPage() {
   return (
-    <Suspense fallback={
-      <div className="bg-light-gray p-3 md:p-6">
-        <div className="flex items-center justify-center min-h-100">
-          <Loading isLoading size="lg" />
+    <Suspense
+      fallback={
+        <div className="bg-light-gray p-3 md:p-6">
+          <div className="flex items-center justify-center min-h-100">
+            <Loading isLoading size="lg" />
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <CreateCertificationPageContent />
     </Suspense>
   );
 }
+

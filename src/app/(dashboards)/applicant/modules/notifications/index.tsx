@@ -47,7 +47,9 @@ export const NotificationsPage = () => {
     void refreshNotifications();
   }, [refreshNotifications]);
 
-  const handleNotificationClick = async (notification: ApplicantNotification) => {
+  const handleNotificationClick = async (
+    notification: ApplicantNotification,
+  ) => {
     try {
       if (!notification.read) {
         await handleMarkAsRead(notification.id);

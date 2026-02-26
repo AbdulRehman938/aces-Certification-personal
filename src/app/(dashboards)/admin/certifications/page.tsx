@@ -20,14 +20,14 @@ import { useUser } from "@/contexts/UserContext";
 type Certification = {
   id: string;
   certificationName: string;
-  status: string; 
-  category: string; 
-  certificateIssued?: string; 
-  certificateAssessment?: string; 
+  status: string;
+  category: string;
+  certificateIssued?: string;
+  certificateAssessment?: string;
   totalQuestions: number;
-  createdBy?: string; 
+  createdBy?: string;
   created: string;
-  updated?: string; 
+  updated?: string;
 };
 
 type CertificateApiResponse = {
@@ -105,7 +105,8 @@ export default function CertificationsPage() {
     total: 0,
   });
   const [showActionModal, setShowActionModal] = useState(false);
-  const [selectedCertificate, setSelectedCertificate] = useState<Certification | null>(null);
+  const [selectedCertificate, setSelectedCertificate] =
+    useState<Certification | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -118,8 +119,12 @@ export default function CertificationsPage() {
   });
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [isIndustriesLoading, setIsIndustriesLoading] = useState(false);
-  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const tableLoaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const tableLoaderFinishTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const isSubadmin = profile?.role === "subadmin";
   const permissions = Array.isArray(profile?.permissions)
     ? (profile.permissions as Array<
@@ -146,11 +151,10 @@ export default function CertificationsPage() {
 
   const logActionPress = (
     action: string,
-    certificate: Certification | null
+    certificate: Certification | null,
   ) => {
     console.log(`[certifications][action] ${action}`, certificate);
   };
-
 
   useEffect(() => {
     const fetchIndustries = async () => {
@@ -158,7 +162,7 @@ export default function CertificationsPage() {
       try {
         const pageSize = 200;
         const first = await axiosInstance.get<IndustriesResponse>(
-          `/industries?page=1&limit=${pageSize}`
+          `/industries?page=1&limit=${pageSize}`,
         );
         const firstData = first.data?.data?.data ?? [];
         const totalPages = first.data?.data?.totalPages ?? 1;
@@ -167,7 +171,7 @@ export default function CertificationsPage() {
 
         for (let page = 2; page <= totalPages; page += 1) {
           const res = await axiosInstance.get<IndustriesResponse>(
-            `/industries?page=${page}&limit=${pageSize}`
+            `/industries?page=${page}&limit=${pageSize}`,
           );
           all.push(...(res.data?.data?.data ?? []));
         }
@@ -184,8 +188,11 @@ export default function CertificationsPage() {
     fetchIndustries();
   }, []);
 
-  
-  const fetchCertificates = async (page: number, limit: number, industryId: string) => {
+  const fetchCertificates = async (
+    page: number,
+    limit: number,
+    industryId: string,
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -197,30 +204,30 @@ export default function CertificationsPage() {
         params.append("industry_id", industryId);
       }
       const response = await axiosInstance.get<CertificatesApiResponse>(
-        `/certificates?${params.toString()}`
+        `/certificates?${params.toString()}`,
       );
       const apiData = response.data?.data?.data || [];
       const total = response.data?.data?.total || 0;
 
-      
       const mappedData: Certification[] = apiData.map((cert) => ({
         id: cert.id,
         certificationName: cert.name,
-        status: cert.is_published ? "Published" : "Draft", 
-        category: cert.industry_names && cert.industry_names.length > 0
-          ? cert.industry_names.join(", ")
-          : "N/A",
-        certificateIssued: undefined, 
-        certificateAssessment: undefined, 
+        status: cert.is_published ? "Published" : "Draft",
+        category:
+          cert.industry_names && cert.industry_names.length > 0
+            ? cert.industry_names.join(", ")
+            : "N/A",
+        certificateIssued: undefined,
+        certificateAssessment: undefined,
         totalQuestions: parseInt(cert.questions_count) || 0,
-        createdBy: undefined, 
+        createdBy: undefined,
         created: formatDate(cert.created_at),
         updated: cert.updated_at ? formatDate(cert.updated_at) : undefined,
       }));
 
       setData(mappedData);
       setPagination({
-        pageIndex: page - 1, 
+        pageIndex: page - 1,
         pageSize: limit,
         total,
       });
@@ -233,10 +240,12 @@ export default function CertificationsPage() {
     }
   };
 
-  
   useEffect(() => {
-    fetchCertificates(pagination.pageIndex + 1, pagination.pageSize, filters.industryId);
-    
+    fetchCertificates(
+      pagination.pageIndex + 1,
+      pagination.pageSize,
+      filters.industryId,
+    );
   }, [pagination.pageIndex, pagination.pageSize, filters.industryId]);
 
   useEffect(() => {
@@ -271,31 +280,27 @@ export default function CertificationsPage() {
     }
   }, [isLoading, showTableLoader]);
 
-  
   const handleOpenActionModal = (certificate: Certification) => {
     logActionPress("open-action-menu", certificate);
     setSelectedCertificate(certificate);
     setShowActionModal(true);
   };
 
-  
   const handleCloseActionModal = () => {
     setShowActionModal(false);
     setSelectedCertificate(null);
   };
 
-  
   const handleEdit = () => {
     if (!canEdit) return;
     if (selectedCertificate) {
       logActionPress("edit", selectedCertificate);
       handleCloseActionModal();
-      
+
       router.push(`/admin/certifications/create?id=${selectedCertificate.id}`);
     }
   };
 
-  
   const handleDelete = () => {
     if (!canDelete) return;
     if (selectedCertificate) {
@@ -305,7 +310,6 @@ export default function CertificationsPage() {
     }
   };
 
-  
   const handleConfirmDelete = async () => {
     if (!selectedCertificate) return;
     logActionPress("delete-confirm", selectedCertificate);
@@ -314,13 +318,15 @@ export default function CertificationsPage() {
     try {
       await axiosInstance.delete(`/certificates/${selectedCertificate.id}`);
       console.log("Certificate deleted successfully");
-      
-      
+
       setShowDeleteModal(false);
       setSelectedCertificate(null);
-      
-      
-      await fetchCertificates(pagination.pageIndex + 1, pagination.pageSize, filters.industryId);
+
+      await fetchCertificates(
+        pagination.pageIndex + 1,
+        pagination.pageSize,
+        filters.industryId,
+      );
     } catch (err) {
       console.error("Failed to delete certificate:", err);
       alert("Failed to delete certificate. Please try again.");
@@ -329,13 +335,11 @@ export default function CertificationsPage() {
     }
   };
 
-  
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
     setSelectedCertificate(null);
   };
 
-  
   const handlePublish = async () => {
     if (!canWrite) return;
     if (!selectedCertificate) return;
@@ -344,16 +348,21 @@ export default function CertificationsPage() {
 
     setIsPublishing(true);
     try {
-      await axiosInstance.patch(`/certificates/${selectedCertificate.id}/publish`, {
-        is_published: true,
-      });
+      await axiosInstance.patch(
+        `/certificates/${selectedCertificate.id}/publish`,
+        {
+          is_published: true,
+        },
+      );
       console.log("Certificate published successfully");
-      
-      
+
       handleCloseActionModal();
-      
-      
-      await fetchCertificates(pagination.pageIndex + 1, pagination.pageSize, filters.industryId);
+
+      await fetchCertificates(
+        pagination.pageIndex + 1,
+        pagination.pageSize,
+        filters.industryId,
+      );
     } catch (err) {
       console.error("Failed to publish certificate:", err);
       alert("Failed to publish certificate. Please try again.");
@@ -369,7 +378,9 @@ export default function CertificationsPage() {
 
     setIsDuplicating(true);
     try {
-      await axiosInstance.post(`/certificates/${selectedCertificate.id}/duplicate`);
+      await axiosInstance.post(
+        `/certificates/${selectedCertificate.id}/duplicate`,
+      );
       console.log("Certificate duplicated successfully");
 
       handleCloseActionModal();
@@ -377,7 +388,7 @@ export default function CertificationsPage() {
       await fetchCertificates(
         pagination.pageIndex + 1,
         pagination.pageSize,
-        filters.industryId
+        filters.industryId,
       );
     } catch (err) {
       console.error("Failed to duplicate certificate:", err);
@@ -387,7 +398,6 @@ export default function CertificationsPage() {
     }
   };
 
-  
   const handleUnpublish = async () => {
     if (!canWrite) return;
     if (!selectedCertificate) return;
@@ -395,16 +405,21 @@ export default function CertificationsPage() {
 
     setIsPublishing(true);
     try {
-      await axiosInstance.patch(`/certificates/${selectedCertificate.id}/publish`, {
-        is_published: false,
-      });
+      await axiosInstance.patch(
+        `/certificates/${selectedCertificate.id}/publish`,
+        {
+          is_published: false,
+        },
+      );
       console.log("Certificate unpublished successfully");
-      
-      
+
       handleCloseActionModal();
-      
-      
-      await fetchCertificates(pagination.pageIndex + 1, pagination.pageSize, filters.industryId);
+
+      await fetchCertificates(
+        pagination.pageIndex + 1,
+        pagination.pageSize,
+        filters.industryId,
+      );
     } catch (err) {
       console.error("Failed to unpublish certificate:", err);
       alert("Failed to unpublish certificate. Please try again.");
@@ -438,7 +453,7 @@ export default function CertificationsPage() {
       minSize: 240,
       maxSize: 320,
     }),
-    []
+    [],
   );
 
   const columns = useMemo<ColumnDef<Certification>[]>(
@@ -488,10 +503,14 @@ export default function CertificationsPage() {
         ),
         cell: ({ getValue }) => {
           const industries = getValue<string>();
-          const industryList = industries && industries !== "N/A" 
-            ? industries.split(",").map(item => item.trim()).filter(item => item.length > 0)
-            : [];
-          
+          const industryList =
+            industries && industries !== "N/A"
+              ? industries
+                  .split(",")
+                  .map((item) => item.trim())
+                  .filter((item) => item.length > 0)
+              : [];
+
           return (
             <div className="flex flex-wrap gap-1 max-w-full">
               {industryList.length > 0 ? (
@@ -499,15 +518,12 @@ export default function CertificationsPage() {
                   <span
                     key={idx}
                     className="px-2 py-1 rounded-md text-[9px] md:text-xs font-normal text-secondary wrap-break-word underline"
-                    
                   >
                     {industry}
                   </span>
                 ))
               ) : (
-                <span
-                  className="px-2 py-1 rounded-md text-[9px] md:text-xs font-normal text-secondary"
-                >
+                <span className="px-2 py-1 rounded-md text-[9px] md:text-xs font-normal text-secondary">
                   N/A
                 </span>
               )}
@@ -675,8 +691,17 @@ export default function CertificationsPage() {
                 }}
                 className="p-1 hover:bg-zinc-100 rounded transition-colors"
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 10.25C14 9.91848 14.1317 9.60054 14.3661 9.36612C14.6005 9.1317 14.9185 9 15.25 9C15.5815 9 15.8995 9.1317 16.1339 9.36612C16.3683 9.60054 16.5 9.91848 16.5 10.25C16.5 10.5815 16.3683 10.8995 16.1339 11.1339C15.8995 11.3683 15.5815 11.5 15.25 11.5C14.9185 11.5 14.6005 11.3683 14.3661 11.1339C14.1317 10.8995 14 10.5815 14 10.25ZM9 10.25C9 9.91848 9.1317 9.60054 9.36612 9.36612C9.60054 9.1317 9.91848 9 10.25 9C10.5815 9 10.8995 9.1317 11.1339 9.36612C11.3683 9.60054 11.5 9.91848 11.5 10.25C11.5 10.5815 11.3683 10.8995 11.1339 11.1339C10.8995 11.3683 10.5815 11.5 10.25 11.5C9.91848 11.5 9.60054 11.3683 9.36612 11.1339C9.1317 10.8995 9 10.5815 9 10.25ZM4 10.25C4 9.91848 4.1317 9.60054 4.36612 9.36612C4.60054 9.1317 4.91848 9 5.25 9C5.58152 9 5.89946 9.1317 6.13388 9.36612C6.3683 9.60054 6.5 9.91848 6.5 10.25C6.5 10.5815 6.3683 10.8995 6.13388 11.1339C5.89946 11.3683 5.58152 11.5 5.25 11.5C4.91848 11.5 4.60054 11.3683 4.36612 11.1339C4.1317 10.8995 4 10.5815 4 10.25Z" fill="black" />
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M14 10.25C14 9.91848 14.1317 9.60054 14.3661 9.36612C14.6005 9.1317 14.9185 9 15.25 9C15.5815 9 15.8995 9.1317 16.1339 9.36612C16.3683 9.60054 16.5 9.91848 16.5 10.25C16.5 10.5815 16.3683 10.8995 16.1339 11.1339C15.8995 11.3683 15.5815 11.5 15.25 11.5C14.9185 11.5 14.6005 11.3683 14.3661 11.1339C14.1317 10.8995 14 10.5815 14 10.25ZM9 10.25C9 9.91848 9.1317 9.60054 9.36612 9.36612C9.60054 9.1317 9.91848 9 10.25 9C10.5815 9 10.8995 9.1317 11.1339 9.36612C11.3683 9.60054 11.5 9.91848 11.5 10.25C11.5 10.5815 11.3683 10.8995 11.1339 11.1339C10.8995 11.3683 10.5815 11.5 10.25 11.5C9.91848 11.5 9.60054 11.3683 9.36612 11.1339C9.1317 10.8995 9 10.5815 9 10.25ZM4 10.25C4 9.91848 4.1317 9.60054 4.36612 9.36612C4.60054 9.1317 4.91848 9 5.25 9C5.58152 9 5.89946 9.1317 6.13388 9.36612C6.3683 9.60054 6.5 9.91848 6.5 10.25C6.5 10.5815 6.3683 10.8995 6.13388 11.1339C5.89946 11.3683 5.58152 11.5 5.25 11.5C4.91848 11.5 4.60054 11.3683 4.36612 11.1339C4.1317 10.8995 4 10.5815 4 10.25Z"
+                    fill="black"
+                  />
                 </svg>
               </button>
             </div>
@@ -688,7 +713,7 @@ export default function CertificationsPage() {
         maxSize: 90,
       },
     ],
-    [checkboxColumn]
+    [checkboxColumn],
   );
 
   const table = useReactTable({
@@ -712,9 +737,9 @@ export default function CertificationsPage() {
       const newPagination =
         typeof updater === "function"
           ? updater({
-            pageIndex: pagination.pageIndex,
-            pageSize: pagination.pageSize,
-          })
+              pageIndex: pagination.pageIndex,
+              pageSize: pagination.pageSize,
+            })
           : updater;
       setPagination((prev) => ({
         ...prev,
@@ -725,7 +750,7 @@ export default function CertificationsPage() {
   });
 
   const canPublishSelected = Boolean(
-    canWrite && selectedCertificate && selectedCertificate.totalQuestions > 0
+    canWrite && selectedCertificate && selectedCertificate.totalQuestions > 0,
   );
 
   return (
@@ -790,13 +815,19 @@ export default function CertificationsPage() {
                   setFilters((prev) => ({ ...prev, industryId: next }));
                   setPagination((prev) => ({ ...prev, pageIndex: 0 }));
                 }}
-                placeholder={isIndustriesLoading ? "Loading industries..." : "All Industries"}
+                placeholder={
+                  isIndustriesLoading
+                    ? "Loading industries..."
+                    : "All Industries"
+                }
                 disabled={isIndustriesLoading}
                 className="w-full sm:w-[320px]"
                 options={[
                   {
                     value: "all",
-                    label: isIndustriesLoading ? "Loading industries..." : "All Industries",
+                    label: isIndustriesLoading
+                      ? "Loading industries..."
+                      : "All Industries",
                   },
                   ...industries.map((ind) => ({
                     value: ind.id,
@@ -841,26 +872,31 @@ export default function CertificationsPage() {
                     {headerGroup.headers.map((header) => (
                       <th
                         key={header.id}
-                        className={`px-2 md:px-4 py-2 md:py-4 ${header.id === "certificateIssued" ||
-                            header.id === "certificateAssessment" ||
-                            header.id === "totalQuestions" ||
-                            header.id === "action"
+                        className={`px-2 md:px-4 py-2 md:py-4 ${
+                          header.id === "certificateIssued" ||
+                          header.id === "certificateAssessment" ||
+                          header.id === "totalQuestions" ||
+                          header.id === "action"
                             ? "text-center"
                             : "text-left"
-                          } ${header.id === "action" ? "md:px-6" : ""
-                          }`}
+                        } ${header.id === "action" ? "md:px-6" : ""}`}
                         style={{
-                          width: header.column.getSize() !== 150 ? `${header.column.getSize()}px` : undefined,
+                          width:
+                            header.column.getSize() !== 150
+                              ? `${header.column.getSize()}px`
+                              : undefined,
                           minWidth: `${header.column.columnDef.minSize || 100}px`,
-                          maxWidth: header.column.columnDef.maxSize ? `${header.column.columnDef.maxSize}px` : undefined,
+                          maxWidth: header.column.columnDef.maxSize
+                            ? `${header.column.columnDef.maxSize}px`
+                            : undefined,
                         }}
                       >
                         {header.isPlaceholder
                           ? null
                           : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
                       </th>
                     ))}
                   </tr>
@@ -894,24 +930,30 @@ export default function CertificationsPage() {
                       {row.getVisibleCells().map((cell) => (
                         <td
                           key={cell.id}
-                          className={`px-2 md:px-4 py-2 md:py-4 ${cell.column.id === "certificateIssued" ||
-                              cell.column.id === "certificateAssessment" ||
-                              cell.column.id === "totalQuestions" ||
-                              cell.column.id === "action"
+                          className={`px-2 md:px-4 py-2 md:py-4 ${
+                            cell.column.id === "certificateIssued" ||
+                            cell.column.id === "certificateAssessment" ||
+                            cell.column.id === "totalQuestions" ||
+                            cell.column.id === "action"
                               ? "text-center"
                               : cell.column.id === "action"
                                 ? "px-2 md:px-8"
                                 : ""
-                            }`}
+                          }`}
                           style={{
-                            width: cell.column.getSize() !== 150 ? `${cell.column.getSize()}px` : undefined,
+                            width:
+                              cell.column.getSize() !== 150
+                                ? `${cell.column.getSize()}px`
+                                : undefined,
                             minWidth: `${cell.column.columnDef.minSize || 100}px`,
-                            maxWidth: cell.column.columnDef.maxSize ? `${cell.column.columnDef.maxSize}px` : undefined,
+                            maxWidth: cell.column.columnDef.maxSize
+                              ? `${cell.column.columnDef.maxSize}px`
+                              : undefined,
                           }}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
-                            cell.getContext()
+                            cell.getContext(),
                           )}
                         </td>
                       ))}
@@ -966,7 +1008,7 @@ export default function CertificationsPage() {
                   startPage = currentPage;
                   endPage = Math.min(
                     currentPage + maxPagesToShow - 1,
-                    totalPages - 1
+                    totalPages - 1,
                   );
                 }
                 const pages = [];
@@ -977,7 +1019,7 @@ export default function CertificationsPage() {
                       className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
                     >
                       ...
-                    </span>
+                    </span>,
                   );
                 }
                 for (let i = startPage; i <= endPage; i++) {
@@ -986,10 +1028,11 @@ export default function CertificationsPage() {
                       key={i}
                       onClick={() => table.setPageIndex(i)}
                       disabled={isLoading}
-                      className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${currentPage === i
+                      className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        currentPage === i
                           ? "bg-dull-gray text-primary"
-                          : "bg-primary text-secondary border hover:bg-zinc-100"
-                        }`}
+                          : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
+                      }`}
                       style={
                         currentPage !== i
                           ? { borderColor: "#E6E6E6" }
@@ -997,7 +1040,7 @@ export default function CertificationsPage() {
                       }
                     >
                       {i + 1}
-                    </button>
+                    </button>,
                   );
                 }
                 if (endPage < totalPages - 1) {
@@ -1007,17 +1050,18 @@ export default function CertificationsPage() {
                       className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
                     >
                       ...
-                    </span>
+                    </span>,
                   );
                   pages.push(
                     <button
                       key={totalPages - 1}
                       onClick={() => table.setPageIndex(totalPages - 1)}
                       disabled={isLoading}
-                      className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${currentPage === totalPages - 1
+                      className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        currentPage === totalPages - 1
                           ? "bg-dull-gray text-primary"
-                          : "bg-primary text-secondary border hover:bg-zinc-100"
-                        }`}
+                          : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
+                      }`}
                       style={
                         currentPage !== totalPages - 1
                           ? { borderColor: "#E6E6E6" }
@@ -1025,7 +1069,7 @@ export default function CertificationsPage() {
                       }
                     >
                       {totalPages}
-                    </button>
+                    </button>,
                   );
                 }
                 return pages;
@@ -1057,17 +1101,15 @@ export default function CertificationsPage() {
         </div>
       </div>
 
-      
       {showActionModal && selectedCertificate && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={handleCloseActionModal}
         >
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            
             <div className="bg-linear-to-r from-zinc-50 to-zinc-100 px-6 py-4 border-b border-zinc-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -1102,7 +1144,6 @@ export default function CertificationsPage() {
               </div>
             </div>
 
-            
             <div className="p-6">
               <div className="space-y-3">
                 <button
@@ -1116,7 +1157,9 @@ export default function CertificationsPage() {
                 >
                   <div
                     className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                      canWrite ? "bg-blue-50 group-hover:bg-blue-100" : "bg-zinc-100"
+                      canWrite
+                        ? "bg-blue-50 group-hover:bg-blue-100"
+                        : "bg-zinc-100"
                     }`}
                   >
                     <svg
@@ -1153,7 +1196,9 @@ export default function CertificationsPage() {
                         canWrite ? "text-blue-700" : "text-gray-400"
                       }`}
                     >
-                      {isDuplicating ? "Duplicating..." : "Create Duplicate Certificate"}
+                      {isDuplicating
+                        ? "Duplicating..."
+                        : "Create Duplicate Certificate"}
                     </div>
                     <div
                       className={`text-xs mt-0.5 ${
@@ -1208,7 +1253,6 @@ export default function CertificationsPage() {
                   )}
                 </button>
 
-                
                 <button
                   onClick={canEdit ? handleEdit : undefined}
                   disabled={!canEdit}
@@ -1220,7 +1264,9 @@ export default function CertificationsPage() {
                 >
                   <div
                     className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                      canEdit ? "bg-blue-50 group-hover:bg-blue-100" : "bg-zinc-100"
+                      canEdit
+                        ? "bg-blue-50 group-hover:bg-blue-100"
+                        : "bg-zinc-100"
                     }`}
                   >
                     <svg
@@ -1278,7 +1324,6 @@ export default function CertificationsPage() {
                   </svg>
                 </button>
 
-                
                 <button
                   onClick={canDelete ? handleDelete : undefined}
                   disabled={!canDelete}
@@ -1290,7 +1335,9 @@ export default function CertificationsPage() {
                 >
                   <div
                     className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                      canDelete ? "bg-red-50 group-hover:bg-red-100" : "bg-zinc-100"
+                      canDelete
+                        ? "bg-red-50 group-hover:bg-red-100"
+                        : "bg-zinc-100"
                     }`}
                   >
                     <svg
@@ -1348,7 +1395,6 @@ export default function CertificationsPage() {
                   </svg>
                 </button>
 
-                
                 {selectedCertificate.status === "Draft" ? (
                   <button
                     onClick={canPublishSelected ? handlePublish : undefined}
@@ -1361,7 +1407,9 @@ export default function CertificationsPage() {
                   >
                     <div
                       className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                        canPublishSelected ? "bg-green-50 group-hover:bg-green-100" : "bg-zinc-100"
+                        canPublishSelected
+                          ? "bg-green-50 group-hover:bg-green-100"
+                          : "bg-zinc-100"
                       }`}
                     >
                       <svg
@@ -1370,7 +1418,11 @@ export default function CertificationsPage() {
                         viewBox="0 0 16 16"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
-                        className={canPublishSelected ? "text-green-600" : "text-gray-400"}
+                        className={
+                          canPublishSelected
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }
                       >
                         <path
                           d="M13.3333 4L6 11.3333L2.66667 8"
@@ -1384,14 +1436,18 @@ export default function CertificationsPage() {
                     <div className="flex-1">
                       <div
                         className={`font-semibold ${
-                          canPublishSelected ? "text-green-700" : "text-gray-400"
+                          canPublishSelected
+                            ? "text-green-700"
+                            : "text-gray-400"
                         }`}
                       >
                         {isPublishing ? "Publishing..." : "Publish Certificate"}
                       </div>
                       <div
                         className={`text-xs mt-0.5 ${
-                          canPublishSelected ? "text-green-600" : "text-gray-400"
+                          canPublishSelected
+                            ? "text-green-600"
+                            : "text-gray-400"
                         }`}
                       >
                         {selectedCertificate.totalQuestions > 0
@@ -1455,7 +1511,9 @@ export default function CertificationsPage() {
                   >
                     <div
                       className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                        canWrite ? "bg-orange-50 group-hover:bg-orange-100" : "bg-zinc-100"
+                        canWrite
+                          ? "bg-orange-50 group-hover:bg-orange-100"
+                          : "bg-zinc-100"
                       }`}
                     >
                       <svg
@@ -1464,7 +1522,9 @@ export default function CertificationsPage() {
                         viewBox="0 0 16 16"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
-                        className={canWrite ? "text-orange-600" : "text-gray-400"}
+                        className={
+                          canWrite ? "text-orange-600" : "text-gray-400"
+                        }
                       >
                         <path
                           d="M12 4L4 12M4 4L12 12"
@@ -1481,7 +1541,9 @@ export default function CertificationsPage() {
                           canWrite ? "text-orange-700" : "text-gray-400"
                         }`}
                       >
-                        {isPublishing ? "Unpublishing..." : "Unpublish Certificate"}
+                        {isPublishing
+                          ? "Unpublishing..."
+                          : "Unpublish Certificate"}
                       </div>
                       <div
                         className={`text-xs mt-0.5 ${
@@ -1539,7 +1601,6 @@ export default function CertificationsPage() {
               </div>
             </div>
 
-            
             <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200">
               <button
                 onClick={handleCloseActionModal}
@@ -1552,17 +1613,15 @@ export default function CertificationsPage() {
         </div>
       )}
 
-      
       {showDeleteModal && selectedCertificate && (
-        <div 
+        <div
           className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={handleCancelDelete}
         >
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            
             <div className="px-6 py-5 border-b border-zinc-200">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center shrink-0">
@@ -1594,7 +1653,6 @@ export default function CertificationsPage() {
               </div>
             </div>
 
-            
             <div className="px-6 py-5">
               <p className="text-sm text-gray-700 mb-1">
                 Are you sure you want to delete the certificate:
@@ -1603,11 +1661,11 @@ export default function CertificationsPage() {
                 &quot;{selectedCertificate.certificationName}&quot;?
               </p>
               <p className="text-xs text-gray-500">
-                All associated data, sections, and questions will be permanently removed.
+                All associated data, sections, and questions will be permanently
+                removed.
               </p>
             </div>
 
-            
             <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200 flex items-center justify-end gap-3">
               <button
                 onClick={handleCancelDelete}
@@ -1656,3 +1714,4 @@ export default function CertificationsPage() {
     </div>
   );
 }
+

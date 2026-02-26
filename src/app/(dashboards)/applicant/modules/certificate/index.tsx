@@ -8,6 +8,8 @@ import { CertificateDetails } from "./details";
 import { axiosInstance } from "@/lib/axios";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { LoadingScreen } from "../../common/loading-screen";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { Lock } from "lucide-react";
 
 interface ApiCertificate {
   id: string;
@@ -73,7 +75,7 @@ const FilterDropdown = ({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className={`absolute top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)] ${align === "right" ? "right-0" : "left-0"} min-w-45`}
+            className={`absolute top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] ${align === "right" ? "right-0" : "left-0"} min-w-45`}
             onMouseEnter={() => {
               document.body.style.overflow = "hidden";
             }}
@@ -115,10 +117,47 @@ export function CertificatePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
   const pathname = usePathname();
-  const isEmployee = pathname.startsWith("/employee");
-  const base = isEmployee ? "/employee" : "/applicant";
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") || "";
+
+  const [profileData, setProfileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const {
+    isEmployee: isEmployeeRole,
+    hasAccess,
+    hasWrite,
+  } = useEmployeePermissions(profileData);
+  const isEmployee = pathname.startsWith("/employee");
+  const base = isEmployee ? "/employee" : "/applicant";
+  const canAccess = !isEmployeeRole || hasAccess("certificates");
+  const canInitiate = !isEmployeeRole || hasWrite("certificates");
+
+  useEffect(() => {
+    const loadProfile = () => {
+      const stored = localStorage.getItem("organization_profile");
+      if (stored) {
+        try {
+          setProfileData(JSON.parse(stored));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("storage", loadProfile);
+    window.addEventListener("profile-updated", loadProfile);
+    return () => {
+      window.removeEventListener("storage", loadProfile);
+      window.removeEventListener("profile-updated", loadProfile);
+    };
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -245,6 +284,32 @@ export function CertificatePage() {
     setCategoryFilter(val);
     setCurrentPage(1);
   };
+
+  if (!canAccess) {
+    return (
+      <div className="p-6 lg:p-10 bg-dull-white/10 min-h-[80vh] flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm border border-zinc-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-secondary mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray text-sm mb-6">
+            You do not have permission to view this page. Please contact your
+            administrator to request access.
+          </p>
+          <Button
+            variant="secondary"
+            className="w-full h-12 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl"
+            onClick={() => router.push(base)}
+          >
+            Go Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedCertificate) {
     return (
@@ -414,12 +479,18 @@ export function CertificatePage() {
                   <div className="flex justify-end w-full md:max-w-[30%] ml-auto mt-5 md:mt-0">
                     <Button
                       variant="secondary"
-                      className="bg-[#1A1A1A] hover:bg-black text-white px-6 h-12 md:h-10 rounded-lg text-sm font-semibold transition-all w-full md:w-auto whitespace-nowrap shadow-md md:shadow-none"
+                      disabled={!canInitiate}
+                      className="bg-[#1A1A1A] hover:bg-black text-white px-6 h-12 md:h-10 rounded-lg text-sm font-semibold transition-all w-full md:w-auto whitespace-nowrap shadow-md md:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() =>
                         setSelectedCertificate({
                           id: item.id,
                           certificateCode: item.certificate_id,
                         })
+                      }
+                      title={
+                        !canInitiate
+                          ? "You do not have permission to initiate this process."
+                          : ""
                       }
                     >
                       Get Started

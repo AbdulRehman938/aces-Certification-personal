@@ -80,12 +80,14 @@ const assignedAuditsData: AssignedAudit[] = [
 
 export default function AssignAudits() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'reviewer' | 'admin'>('reviewer');
+  const [activeTab, setActiveTab] = useState<"reviewer" | "admin">("reviewer");
 
   useEffect(() => {
     const fetchAssignedAssessments = async () => {
       try {
-        const response = await axiosInstance.get("/auditors/assigned-assessments");
+        const response = await axiosInstance.get(
+          "/auditors/assigned-assessments",
+        );
         console.log("assigned assessments response:", response);
         console.log("assigned assessments data:", response.data);
       } catch (error) {
@@ -254,7 +256,8 @@ export default function AssignAudits() {
         ),
         cell: (info: any) => {
           const row = info.row.original as AssignedAudit;
-          const showViewButton = row.status === "Overdue" || row.status === "Submitted";
+          const showViewButton =
+            row.status === "Overdue" || row.status === "Submitted";
           return (
             <div className="flex items-center justify-end">
               <button
@@ -276,7 +279,7 @@ export default function AssignAudits() {
         maxSize: 120,
       },
     ],
-    []
+    [],
   );
 
   const table = useReactTable({
@@ -288,7 +291,6 @@ export default function AssignAudits() {
 
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
-      
       <div className="mb-4 md:mb-6">
         <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
           Assigned Audits
@@ -298,35 +300,38 @@ export default function AssignAudits() {
         </p>
       </div>
 
-      
       <div className="bg-white rounded-xl p-2 md:p-3 inline-flex gap-1.5 mb-3 md:mb-4">
         <button
-          onClick={() => setActiveTab('reviewer')}
-          className={`px-7 py-1.5 md:px-10 md:py-2 rounded-lg text-sm md:text-base font-medium transition-colors ${activeTab === 'reviewer'
-              ? 'bg-black text-white shadow-lg'
-              : 'bg-white text-secondary hover:bg-zinc-50'
-            }`}
+          onClick={() => setActiveTab("reviewer")}
+          className={`px-7 py-1.5 md:px-10 md:py-2 rounded-lg text-sm md:text-base font-medium transition-colors ${
+            activeTab === "reviewer"
+              ? "bg-black text-white shadow-lg"
+              : "bg-white text-secondary hover:bg-primary"
+          }`}
           style={
-            activeTab === 'reviewer'
+            activeTab === "reviewer"
               ? {
-                boxShadow: '0px 3.91px 5.11px 0px rgba(142, 142, 142, 0.15), 0px 10.82px 14.12px 0px rgba(142, 142, 142, 0.22), 0px 26.06px 34px 0px rgba(142, 142, 142, 0.19), 0px 44.27px 112.79px 0px rgba(142, 142, 142, 0.34), inset 0px 1.05px 4.22px 2.11px rgba(142, 142, 142, 0.55), inset 0px 1.05px 18.97px 2.11px rgba(142, 142, 142, 0.55)'
-              }
+                  boxShadow:
+                    "0px 3.91px 5.11px 0px rgba(142, 142, 142, 0.15), 0px 10.82px 14.12px 0px rgba(142, 142, 142, 0.22), 0px 26.06px 34px 0px rgba(142, 142, 142, 0.19), 0px 44.27px 112.79px 0px rgba(142, 142, 142, 0.34), inset 0px 1.05px 4.22px 2.11px rgba(142, 142, 142, 0.55), inset 0px 1.05px 18.97px 2.11px rgba(142, 142, 142, 0.55)",
+                }
               : undefined
           }
         >
           Reviewer
         </button>
         <button
-          onClick={() => setActiveTab('admin')}
-          className={`px-7 py-1.5 md:px-10 md:py-2 rounded-lg text-sm md:text-base font-medium transition-colors ${activeTab === 'admin'
-              ? 'bg-black text-white shadow-lg'
-              : 'bg-white text-secondary hover:bg-zinc-50'
-            }`}
+          onClick={() => setActiveTab("admin")}
+          className={`px-7 py-1.5 md:px-10 md:py-2 rounded-lg text-sm md:text-base font-medium transition-colors ${
+            activeTab === "admin"
+              ? "bg-black text-white shadow-lg"
+              : "bg-white text-secondary hover:bg-primary"
+          }`}
           style={
-            activeTab === 'admin'
+            activeTab === "admin"
               ? {
-                boxShadow: '0px 3.91px 5.11px 0px rgba(142, 142, 142, 0.15), 0px 10.82px 14.12px 0px rgba(142, 142, 142, 0.22), 0px 26.06px 34px 0px rgba(142, 142, 142, 0.19), 0px 44.27px 112.79px 0px rgba(142, 142, 142, 0.34), inset 0px 1.05px 4.22px 2.11px rgba(142, 142, 142, 0.55), inset 0px 1.05px 18.97px 2.11px rgba(142, 142, 142, 0.55)'
-              }
+                  boxShadow:
+                    "0px 3.91px 5.11px 0px rgba(142, 142, 142, 0.15), 0px 10.82px 14.12px 0px rgba(142, 142, 142, 0.22), 0px 26.06px 34px 0px rgba(142, 142, 142, 0.19), 0px 44.27px 112.79px 0px rgba(142, 142, 142, 0.34), inset 0px 1.05px 4.22px 2.11px rgba(142, 142, 142, 0.55), inset 0px 1.05px 18.97px 2.11px rgba(142, 142, 142, 0.55)",
+                }
               : undefined
           }
         >
@@ -334,11 +339,13 @@ export default function AssignAudits() {
         </button>
       </div>
 
-      
-      {activeTab === 'reviewer' && (
+      {activeTab === "reviewer" && (
         <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
+            <table
+              className="w-full min-w-250"
+              style={{ tableLayout: "fixed" }}
+            >
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -346,14 +353,16 @@ export default function AssignAudits() {
                       <th
                         key={header.id}
                         className={`px-2 md:px-4 py-2 md:py-4 text-left`}
-                        style={{ width: `${100 / table.getAllColumns().length}%` }}
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
                       >
                         {header.isPlaceholder
                           ? null
                           : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
                       </th>
                     ))}
                   </tr>
@@ -379,11 +388,13 @@ export default function AssignAudits() {
                         <td
                           key={cell.id}
                           className="px-2 md:px-4 py-2 md:py-4"
-                          style={{ width: `${100 / table.getAllColumns().length}%` }}
+                          style={{
+                            width: `${100 / table.getAllColumns().length}%`,
+                          }}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
-                            cell.getContext()
+                            cell.getContext(),
                           )}
                         </td>
                       ))}
@@ -396,10 +407,13 @@ export default function AssignAudits() {
         </div>
       )}
 
-      {activeTab === 'admin' && (
+      {activeTab === "admin" && (
         <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
+            <table
+              className="w-full min-w-250"
+              style={{ tableLayout: "fixed" }}
+            >
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -407,14 +421,16 @@ export default function AssignAudits() {
                       <th
                         key={header.id}
                         className={`px-2 md:px-4 py-2 md:py-4 text-left`}
-                        style={{ width: `${100 / table.getAllColumns().length}%` }}
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
                       >
                         {header.isPlaceholder
                           ? null
                           : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
                       </th>
                     ))}
                   </tr>
@@ -440,11 +456,13 @@ export default function AssignAudits() {
                         <td
                           key={cell.id}
                           className="px-2 md:px-4 py-2 md:py-4"
-                          style={{ width: `${100 / table.getAllColumns().length}%` }}
+                          style={{
+                            width: `${100 / table.getAllColumns().length}%`,
+                          }}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
-                            cell.getContext()
+                            cell.getContext(),
                           )}
                         </td>
                       ))}
@@ -459,3 +477,4 @@ export default function AssignAudits() {
     </div>
   );
 }
+

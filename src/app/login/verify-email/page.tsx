@@ -350,7 +350,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <div className="w-full max-w-xl mx-auto bg-primary rounded-[50px] px-6 py-10 md:p-14 short-laptop:p-6 shadow-2xl flex flex-col items-center">
+    <div className="w-full max-w-xl mx-auto bg-zinc-50 rounded-[50px] px-6 py-10 md:p-14 short-laptop:p-6 shadow-2xl flex flex-col items-center">
       <Suspense fallback={<div>Loading...</div>}>
         <VerifyEmailContent />
       </Suspense>
@@ -364,3 +364,4 @@ export default function VerifyEmailPage() {
     </div>
   );
 }
+

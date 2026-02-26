@@ -61,8 +61,8 @@ function ResetPasswordContent() {
   });
 
   return (
-    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(32rem,45vw)] mx-auto bg-primary rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center">
-     <div className="relative w-full h-[clamp(7rem,18vh,10rem)] flex items-center justify-center mb-[clamp(0.75rem,2vh,1.5rem)]">
+    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(32rem,45vw)] mx-auto bg-zinc-50 rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center">
+      <div className="relative w-full h-[clamp(7rem,18vh,10rem)] flex items-center justify-center mb-[clamp(0.75rem,2vh,1.5rem)]">
         <img
           src="/assets/imgs/login/login2.svg"
           alt="vector1"
@@ -180,7 +180,7 @@ function ResetPasswordContent() {
               <li
                 className={`flex items-center gap-2 ${/[A-Z]/.test(formik.values.password) ? "text-secondary font-medium" : ""}`}
               >
-                • One  letter
+                • One letter
               </li>
               <li
                 className={`flex items-center gap-2 ${/[0-9]/.test(formik.values.password) ? "text-secondary font-medium" : ""}`}
