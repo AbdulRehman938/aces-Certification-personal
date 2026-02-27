@@ -272,7 +272,17 @@ export function OrganisationUsersPage() {
   };
 
   const validationSchema = Yup.object({
-    name: Yup.string().required("Name is required"),
+    name: Yup.string()
+      .required("Name is required")
+      .test(
+        "is-full-name",
+        "Please enter both first and last name",
+        (value) => {
+          if (!value) return false;
+          const parts = value.trim().split(/\s+/);
+          return parts.length >= 2 && parts.every((part) => part.length >= 2);
+        },
+      ),
     email: Yup.string()
       .email("Invalid email address")
       .required("Email is required"),
@@ -1131,7 +1141,6 @@ export function OrganisationUsersPage() {
                         </td>
                         <td className="px-4 py-4 pr-4 md:px-6 md:py-5 md:pr-8 align-middle">
                           <div className="flex items-center justify-start gap-2 md:gap-3">
-                            
                             {canWriteOrgUsers ? (
                               <>
                                 <Button
