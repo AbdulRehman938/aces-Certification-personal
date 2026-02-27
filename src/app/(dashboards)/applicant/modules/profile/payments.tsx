@@ -39,7 +39,7 @@ const Card = ({
 }) => (
   <div
     className={cn(
-      "bg-primary rounded-4xl border border-dull-white/50 shadow-sm p-5 lg:p-8",
+      "bg-zinc-50 rounded-4xl border border-dull-white/50 shadow-sm p-5 lg:p-8",
       className,
     )}
   >
@@ -770,7 +770,7 @@ export function PaymentsPage() {
                 <LoadingScreen isLoading={true} size="lg" />
               </div>
             ) : payments.length === 0 ? (
-              <div className="bg-zinc-50/50 border border-zinc-100/50 rounded-2xl p-8 flex items-center justify-between">
+              <div className="bg-primary/50 border border-zinc-100/50 rounded-2xl p-8 flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="font-semibold text-secondary text-base">
                     No payments recorded yet
@@ -1432,7 +1432,7 @@ export function PaymentsPage() {
                       className={`form-dropdown-item flex items-center justify-between h-auto ${
                         selectedSavedMethod === method.stripe_payment_method_id
                           ? "form-dropdown-item-active ring-2 ring-secondary/10"
-                          : "form-dropdown-item-inactive bg-zinc-50/50"
+                          : "form-dropdown-item-inactive bg-primary/50"
                       }`}
                     >
                       <div className="flex items-center gap-4">
@@ -1629,3 +1629,4 @@ export function PaymentsPage() {
     </div>
   );
 }
+

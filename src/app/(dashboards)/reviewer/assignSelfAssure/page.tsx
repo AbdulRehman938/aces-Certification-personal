@@ -208,7 +208,8 @@ export default function AssignSelfAssure() {
         ),
         cell: (info: any) => {
           const row = info.row.original as AssignedAudit;
-          const isView = row.status === "Audit Completed" || row.status === "Approved";
+          const isView =
+            row.status === "Audit Completed" || row.status === "Approved";
           return (
             <div className="flex items-center justify-end">
               <button
@@ -227,7 +228,7 @@ export default function AssignSelfAssure() {
         enableSorting: false,
       },
     ],
-    []
+    [],
   );
 
   const table = useReactTable({
@@ -245,20 +246,19 @@ export default function AssignSelfAssure() {
 
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
-      
       <div className="mb-4 md:mb-6">
         <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
-        Self-assured Certificates
+          Self-assured Certificates
         </h1>
         <p className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px] align-middle">
-        View and manage all Assigned Assurance to you
+          View and manage all Assigned Assurance to you
         </p>
       </div>
 
-      <h2 className="text-[20px] font-semibold text-secondary mb-4 leading-[21.6px] align-middle">Assigned Self-assured Certificates</h2>
+      <h2 className="text-[20px] font-semibold text-secondary mb-4 leading-[21.6px] align-middle">
+        Assigned Self-assured Certificates
+      </h2>
 
-
-      
       <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
@@ -269,14 +269,16 @@ export default function AssignSelfAssure() {
                     <th
                       key={header.id}
                       className={`px-2 md:px-4 py-2 md:py-4 text-left`}
-                      style={{ width: `${100 / table.getAllColumns().length}%` }}
+                      style={{
+                        width: `${100 / table.getAllColumns().length}%`,
+                      }}
                     >
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
                     </th>
                   ))}
                 </tr>
@@ -302,11 +304,13 @@ export default function AssignSelfAssure() {
                       <td
                         key={cell.id}
                         className="px-2 md:px-4 py-2 md:py-4"
-                        style={{ width: `${100 / table.getAllColumns().length}%` }}
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
-                          cell.getContext()
+                          cell.getContext(),
                         )}
                       </td>
                     ))}
@@ -348,14 +352,20 @@ export default function AssignSelfAssure() {
               let endPage = Math.min(maxPagesToShow - 1, totalPages - 1);
               if (currentPage >= maxPagesToShow) {
                 startPage = currentPage;
-                endPage = Math.min(currentPage + maxPagesToShow - 1, totalPages - 1);
+                endPage = Math.min(
+                  currentPage + maxPagesToShow - 1,
+                  totalPages - 1,
+                );
               }
               const pages = [];
               if (startPage > 0) {
                 pages.push(
-                  <span key="dots-before" className="px-1 md:px-2 text-[10px] md:text-xs text-gray">
+                  <span
+                    key="dots-before"
+                    className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
+                  >
                     ...
-                  </span>
+                  </span>,
                 );
               }
               for (let i = startPage; i <= endPage; i++) {
@@ -365,24 +375,25 @@ export default function AssignSelfAssure() {
                     onClick={() => table.setPageIndex(i)}
                     className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
                       currentPage === i
-                        ? 'bg-dull-gray text-primary'
-                        : 'bg-primary text-secondary border hover:bg-zinc-100'
+                        ? "bg-dull-gray text-primary"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     }`}
                     style={
-                      currentPage !== i
-                        ? { borderColor: '#E6E6E6' }
-                        : undefined
+                      currentPage !== i ? { borderColor: "#E6E6E6" } : undefined
                     }
                   >
                     {i + 1}
-                  </button>
+                  </button>,
                 );
               }
               if (endPage < totalPages - 1) {
                 pages.push(
-                  <span key="dots-after" className="px-1 md:px-2 text-[10px] md:text-xs text-gray">
+                  <span
+                    key="dots-after"
+                    className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
+                  >
                     ...
-                  </span>
+                  </span>,
                 );
                 pages.push(
                   <button
@@ -390,17 +401,17 @@ export default function AssignSelfAssure() {
                     onClick={() => table.setPageIndex(totalPages - 1)}
                     className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
                       currentPage === totalPages - 1
-                        ? 'bg-dull-gray text-primary'
-                        : 'bg-primary text-secondary border hover:bg-zinc-100'
+                        ? "bg-dull-gray text-primary"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     }`}
                     style={
                       currentPage !== totalPages - 1
-                        ? { borderColor: '#E6E6E6' }
+                        ? { borderColor: "#E6E6E6" }
                         : undefined
                     }
                   >
                     {totalPages}
-                  </button>
+                  </button>,
                 );
               }
               return pages;

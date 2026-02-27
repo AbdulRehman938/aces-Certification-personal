@@ -39,7 +39,9 @@ export default function IndustryPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingIndustry, setEditingIndustry] = useState<Industry | null>(null);
-  const [deletingIndustry, setDeletingIndustry] = useState<Industry | null>(null);
+  const [deletingIndustry, setDeletingIndustry] = useState<Industry | null>(
+    null,
+  );
   const [industryName, setIndustryName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showTableLoader, setShowTableLoader] = useState(false);
@@ -58,11 +60,16 @@ export default function IndustryPage() {
     total: 0,
     totalPages: 0,
   });
-  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const tableLoaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const tableLoaderFinishTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isListLoading = isLoading && !isModalOpen && !isEditModalOpen && !isDeleteModalOpen;
+  const isListLoading =
+    isLoading && !isModalOpen && !isEditModalOpen && !isDeleteModalOpen;
   const isSubadmin = profile?.role === "subadmin";
   const permissions = Array.isArray(profile?.permissions)
     ? (profile.permissions as Array<
@@ -169,22 +176,20 @@ export default function IndustryPage() {
         enableSorting: false,
       },
     ],
-    [CheckboxColumn, canDelete, canEdit]
+    [CheckboxColumn, canDelete, canEdit],
   );
 
-  
   const fetchIndustries = async (pageIndex: number, pageSize: number) => {
     setIsLoading(true);
     setError("");
     try {
-      
       const apiPage = pageIndex + 1;
       const response = await axiosInstance.get<IndustriesResponse>(
-        `/industries?page=${apiPage}&limit=${pageSize}`
-      );      
+        `/industries?page=${apiPage}&limit=${pageSize}`,
+      );
       const industriesData = response.data?.data?.data || [];
       const meta = response.data?.data || { total: 0, totalPages: 0 };
-      
+
       setData(industriesData);
       setPaginationMeta({
         total: meta.total,
@@ -203,11 +208,9 @@ export default function IndustryPage() {
     }
   };
 
-  
   useEffect(() => {
     if (searchQuery.trim().length >= 2) return;
     fetchIndustries(pagination.pageIndex, pagination.pageSize);
-    
   }, [pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   useEffect(() => {
@@ -230,7 +233,9 @@ export default function IndustryPage() {
 
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const response = await axiosInstance.get(`/industries/search?q=${encodeURIComponent(query)}`);
+        const response = await axiosInstance.get(
+          `/industries/search?q=${encodeURIComponent(query)}`,
+        );
         if (isCancelled) return;
         const results = response.data?.data || [];
         setData(results);
@@ -291,7 +296,7 @@ export default function IndustryPage() {
       }, 300);
     }
   }, [isListLoading, showTableLoader]);
-  
+
   const handleCreate = async () => {
     if (!industryName.trim()) {
       setModalError("Industry name is required");
@@ -304,11 +309,11 @@ export default function IndustryPage() {
       await axiosInstance.post(`/industries`, {
         name: industryName.trim(),
       });
-      
+
       setIsModalOpen(false);
       setIndustryName("");
       setModalError("");
-      
+
       await fetchIndustries(pagination.pageIndex, pagination.pageSize);
     } catch (err) {
       console.error("Failed to create industry:", err);
@@ -322,7 +327,6 @@ export default function IndustryPage() {
     }
   };
 
-  
   const handleUpdate = async () => {
     if (!industryName.trim() || !editingIndustry) {
       setEditModalError("Industry name is required");
@@ -335,12 +339,12 @@ export default function IndustryPage() {
       await axiosInstance.put(`/industries/${editingIndustry.id}`, {
         name: industryName.trim(),
       });
-      
+
       setIsEditModalOpen(false);
       setEditingIndustry(null);
       setIndustryName("");
       setEditModalError("");
-      
+
       await fetchIndustries(pagination.pageIndex, pagination.pageSize);
     } catch (err) {
       console.error("Failed to update industry:", err);
@@ -354,7 +358,6 @@ export default function IndustryPage() {
     }
   };
 
-  
   const handleDeleteConfirm = async () => {
     if (!deletingIndustry) {
       return;
@@ -364,10 +367,10 @@ export default function IndustryPage() {
     setError("");
     try {
       await axiosInstance.delete(`/industries/${deletingIndustry.id}`);
-      
+
       setIsDeleteModalOpen(false);
       setDeletingIndustry(null);
-      
+
       await fetchIndustries(pagination.pageIndex, pagination.pageSize);
     } catch (err) {
       console.error("Failed to delete industry:", err);
@@ -451,9 +454,13 @@ export default function IndustryPage() {
           />
         </div>
         {searchQuery.trim().length > 0 && searchQuery.trim().length < 2 && (
-          <p className="text-xs text-gray-500 mt-2">Type at least 2 characters to search.</p>
+          <p className="text-xs text-gray-500 mt-2">
+            Type at least 2 characters to search.
+          </p>
         )}
-        {searchError && <p className="text-xs text-red-500 mt-2">{searchError}</p>}
+        {searchError && (
+          <p className="text-xs text-red-500 mt-2">{searchError}</p>
+        )}
       </div>
 
       {error && (
@@ -495,7 +502,7 @@ export default function IndustryPage() {
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
-                            header.getContext()
+                            header.getContext(),
                           )}
                     </th>
                   ))}
@@ -503,7 +510,8 @@ export default function IndustryPage() {
               ))}
             </thead>
             <tbody className={showTableLoader ? "h-full" : ""}>
-              {showTableLoader ? null : table.getRowModel().rows.length === 0 ? (
+              {showTableLoader ? null : table.getRowModel().rows.length ===
+                0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -536,7 +544,7 @@ export default function IndustryPage() {
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
-                          cell.getContext()
+                          cell.getContext(),
                         )}
                       </td>
                     ))}
@@ -595,7 +603,7 @@ export default function IndustryPage() {
                 startPage = currentPage;
                 endPage = Math.min(
                   currentPage + maxPagesToShow - 1,
-                  totalPages - 1
+                  totalPages - 1,
                 );
               }
 
@@ -608,7 +616,7 @@ export default function IndustryPage() {
                     className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
                   >
                     ...
-                  </span>
+                  </span>,
                 );
               }
 
@@ -621,14 +629,14 @@ export default function IndustryPage() {
                     className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       currentPage === i
                         ? "bg-dull-gray text-primary"
-                        : "bg-primary text-secondary border hover:bg-zinc-100"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     }`}
                     style={
                       currentPage !== i ? { borderColor: "#E6E6E6" } : undefined
                     }
                   >
                     {i + 1}
-                  </button>
+                  </button>,
                 );
               }
 
@@ -639,7 +647,7 @@ export default function IndustryPage() {
                     className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
                   >
                     ...
-                  </span>
+                  </span>,
                 );
                 pages.push(
                   <button
@@ -649,7 +657,7 @@ export default function IndustryPage() {
                     className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       currentPage === totalPages - 1
                         ? "bg-dull-gray text-primary"
-                        : "bg-primary text-secondary border hover:bg-zinc-100"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     }`}
                     style={
                       currentPage !== totalPages - 1
@@ -658,7 +666,7 @@ export default function IndustryPage() {
                     }
                   >
                     {totalPages}
-                  </button>
+                  </button>,
                 );
               }
 
@@ -789,7 +797,9 @@ export default function IndustryPage() {
                 }}
                 placeholder="Enter Industry Name"
                 className={`w-full px-3 md:px-4 py-2 md:py-3 border rounded-lg text-secondary placeholder:text-gray focus:outline-none focus:ring-2 focus:border-transparent text-[13px] md:text-[14px] ${
-                  modalError ? "border-red focus:ring-red/20" : "border-zinc-200 focus:ring-zinc-200"
+                  modalError
+                    ? "border-red focus:ring-red/20"
+                    : "border-zinc-200 focus:ring-zinc-200"
                 }`}
                 style={{
                   fontWeight: 400,
@@ -832,7 +842,6 @@ export default function IndustryPage() {
         </div>
       )}
 
-      
       {isEditModalOpen && editingIndustry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -933,7 +942,9 @@ export default function IndustryPage() {
                 }}
                 placeholder="Enter Industry Name"
                 className={`w-full px-3 md:px-4 py-2 md:py-3 border rounded-lg text-secondary placeholder:text-gray focus:outline-none focus:ring-2 focus:border-transparent text-[13px] md:text-[14px] ${
-                  editModalError ? "border-red focus:ring-red/20" : "border-zinc-200 focus:ring-zinc-200"
+                  editModalError
+                    ? "border-red focus:ring-red/20"
+                    : "border-zinc-200 focus:ring-zinc-200"
                 }`}
                 style={{
                   fontWeight: 400,
@@ -977,7 +988,6 @@ export default function IndustryPage() {
         </div>
       )}
 
-      
       {isDeleteModalOpen && deletingIndustry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -1047,10 +1057,12 @@ export default function IndustryPage() {
             <div className="px-4 md:px-6 py-4 md:py-6">
               <div className="mb-4">
                 <p className="text-[13px] md:text-[15px] font-normal text-secondary leading-[21.6px] align-middle mb-2">
-                  You are about to delete <strong>&quot;{deletingIndustry.name}&quot;</strong>
+                  You are about to delete{" "}
+                  <strong>&quot;{deletingIndustry.name}&quot;</strong>
                 </p>
                 <p className="text-[12px] md:text-[14px] font-normal text-red leading-[21.6px] align-middle">
-                  Deleting this industry will unpublish certificates related to this.
+                  Deleting this industry will unpublish certificates related to
+                  this.
                 </p>
               </div>
             </div>

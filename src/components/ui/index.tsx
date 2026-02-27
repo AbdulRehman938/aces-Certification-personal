@@ -64,7 +64,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const variants = {
-      primary: "bg-primary text-secondary border border-zinc-200",
+      primary: "bg-zinc-50 text-secondary border border-zinc-200",
       secondary:
         "bg-secondary text-primary shadow-[inset_0_0_20px_6px_rgba(255,255,255,0.40),0_10px_20px_rgba(0,0,0,0.2)]",
     };

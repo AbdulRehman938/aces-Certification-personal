@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { axiosInstance } from '@/lib/axios';
-import Dropdown from '../common/dropdown';
+import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { axiosInstance } from "@/lib/axios";
+import Dropdown from "../common/dropdown";
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,7 +11,7 @@ import {
   getPaginationRowModel,
   flexRender,
   type ColumnDef,
-} from '@tanstack/react-table';
+} from "@tanstack/react-table";
 
 type AIFlag = {
   id: string;
@@ -59,31 +59,31 @@ export default function AIFlagsPage() {
     total: 0,
   });
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'Open':
-        return 'bg-red-50 text-red-600 border-red-300';
-      case 'Pending':
-        return 'bg-yellow-50 text-yellow-600 border-yellow-300';
-      case 'Escalated':
-        return 'bg-zinc-100 text-secondary border-black';
-      case 'Resolved':
-        return 'bg-green-50 text-green-600 border-green-300';
+      case "Open":
+        return "bg-red-50 text-red-600 border-red-300";
+      case "Pending":
+        return "bg-yellow-50 text-yellow-600 border-yellow-300";
+      case "Escalated":
+        return "bg-zinc-100 text-secondary border-black";
+      case "Resolved":
+        return "bg-green-50 text-green-600 border-green-300";
       default:
-        return 'bg-zinc-100 text-secondary border-zinc-300';
+        return "bg-zinc-100 text-secondary border-zinc-300";
     }
   };
 
   const columns = useMemo<ColumnDef<AIFlag>[]>(
     () => [
       {
-        accessorKey: 'organisation',
+        accessorKey: "organisation",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Organization
           </span>
@@ -91,18 +91,18 @@ export default function AIFlagsPage() {
         cell: ({ getValue }) => (
           <span
             className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray underline cursor-pointer"
-            style={{ letterSpacing: '1%' }}
+            style={{ letterSpacing: "1%" }}
           >
             {getValue<string>()}
           </span>
         ),
       },
       {
-        accessorKey: 'certification',
+        accessorKey: "certification",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Certification
           </span>
@@ -110,18 +110,18 @@ export default function AIFlagsPage() {
         cell: ({ getValue }) => (
           <span
             className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray underline cursor-pointer"
-            style={{ letterSpacing: '1%' }}
+            style={{ letterSpacing: "1%" }}
           >
             {getValue<string>()}
           </span>
         ),
       },
       {
-        accessorKey: 'type',
+        accessorKey: "type",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Type
           </span>
@@ -133,11 +133,11 @@ export default function AIFlagsPage() {
         ),
       },
       {
-        accessorKey: 'status',
+        accessorKey: "status",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Status
           </span>
@@ -147,7 +147,7 @@ export default function AIFlagsPage() {
           return (
             <span
               className={`inline-flex items-center justify-center px-2 py-1.5 rounded-md text-[9px] md:text-xs font-medium leading-[100%] align-middle border min-w-[70px] md:min-w-[90px] text-center ${getStatusBadgeClass(
-                status
+                status,
               )}`}
             >
               {status}
@@ -156,11 +156,11 @@ export default function AIFlagsPage() {
         },
       },
       {
-        accessorKey: 'summary',
+        accessorKey: "summary",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Summary
           </span>
@@ -170,18 +170,18 @@ export default function AIFlagsPage() {
             <span
               className="text-[11px] md:text-xs font-normal leading-[100%] align-middle text-black"
               style={{
-                letterSpacing: '1%',
-                display: '-webkit-box',
-                WebkitBoxOrient: 'vertical',
+                letterSpacing: "1%",
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
                 WebkitLineClamp: 2,
-                overflow: 'hidden',
+                overflow: "hidden",
               }}
             >
               {row.original.summary}
             </span>
             <span
               className="text-[9px] md:text-[10px] font-normal leading-[100%] align-middle text-gray-500 mt-1"
-              style={{ letterSpacing: '1%' }}
+              style={{ letterSpacing: "1%" }}
             >
               {row.original.summarySubtext}
             </span>
@@ -189,11 +189,11 @@ export default function AIFlagsPage() {
         ),
       },
       {
-        accessorKey: 'flagged',
+        accessorKey: "flagged",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Flagged
           </span>
@@ -201,26 +201,28 @@ export default function AIFlagsPage() {
         cell: ({ getValue }) => (
           <span
             className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray"
-            style={{ letterSpacing: '1%' }}
+            style={{ letterSpacing: "1%" }}
           >
             {getValue<string>()}
           </span>
         ),
       },
       {
-        id: 'action',
+        id: "action",
         header: () => (
           <span
             className="text-[10px] md:text-[12.2px] font-medium leading-[100%] align-middle text-center block"
-            style={{ color: '#9B9B9B', letterSpacing: '1%' }}
+            style={{ color: "#9B9B9B", letterSpacing: "1%" }}
           >
             Actions
           </span>
         ),
         cell: ({ row }) => (
           <div className="flex items-center justify-center">
-            <button 
-              onClick={() => router.push(`/admin/ai-flags/review?id=${row.original.id}`)}
+            <button
+              onClick={() =>
+                router.push(`/admin/ai-flags/review?id=${row.original.id}`)
+              }
               className="px-3 py-1.5 border border-black rounded-lg text-[10px] md:text-xs font-normal text-secondary hover:bg-zinc-50 transition-colors"
             >
               Review
@@ -230,7 +232,7 @@ export default function AIFlagsPage() {
         enableSorting: false,
       },
     ],
-    [router]
+    [router],
   );
 
   const table = useReactTable({
@@ -254,7 +256,7 @@ export default function AIFlagsPage() {
     },
     onPaginationChange: (updater) => {
       const next =
-        typeof updater === 'function'
+        typeof updater === "function"
           ? updater({
               pageIndex: pagination.pageIndex,
               pageSize: pagination.pageSize,
@@ -281,11 +283,11 @@ export default function AIFlagsPage() {
           pageNumber: String(pageIndex),
           limit: String(pageSize),
         });
-        if (statusFilter !== 'all') {
-          params.append('status', statusFilter);
+        if (statusFilter !== "all") {
+          params.append("status", statusFilter);
         }
         const response = await axiosInstance.get<AiFlagsApiResponse>(
-          `/ai-flags?${params.toString()}`
+          `/ai-flags?${params.toString()}`,
         );
         if (isCancelled) return;
 
@@ -294,19 +296,21 @@ export default function AIFlagsPage() {
 
         const mapped: AIFlag[] = flags.map((flag) => ({
           id: flag.id,
-          organisation: flag.organization_name || 'N/A',
-          certification: flag.certificate_name || 'N/A',
-          type: flag.assessment_type || 'N/A',
-          status: flag.status ? flag.status.charAt(0).toUpperCase() + flag.status.slice(1) : 'N/A',
-          summary: flag.summary || 'N/A',
-          summarySubtext: flag.risk_level ? `Risk: ${flag.risk_level}` : '',
+          organisation: flag.organization_name || "N/A",
+          certification: flag.certificate_name || "N/A",
+          type: flag.assessment_type || "N/A",
+          status: flag.status
+            ? flag.status.charAt(0).toUpperCase() + flag.status.slice(1)
+            : "N/A",
+          summary: flag.summary || "N/A",
+          summarySubtext: flag.risk_level ? `Risk: ${flag.risk_level}` : "",
           flagged: flag.flagged_at
-            ? new Intl.DateTimeFormat('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
+            ? new Intl.DateTimeFormat("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
               }).format(new Date(flag.flagged_at))
-            : 'N/A',
+            : "N/A",
         }));
 
         setData(mapped);
@@ -316,8 +320,10 @@ export default function AIFlagsPage() {
         }));
       } catch (error: any) {
         if (!isCancelled) {
-          console.error('Failed to fetch AI flags:', error);
-          setLoadError(error.response?.data?.message || 'Failed to load AI flags');
+          console.error("Failed to fetch AI flags:", error);
+          setLoadError(
+            error.response?.data?.message || "Failed to load AI flags",
+          );
           setData([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
         }
@@ -338,10 +344,10 @@ export default function AIFlagsPage() {
       <div className="flex flex-row items-start justify-between mb-4 md:mb-6 gap-3">
         <div>
           <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
-          AI Flags
+            AI Flags
           </h1>
           <p className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px] align-middle">
-          Assessments requiring admin attention
+            Assessments requiring admin attention
           </p>
         </div>
         {!isFilterOpen && (
@@ -371,17 +377,17 @@ export default function AIFlagsPage() {
               placeholder="All Status"
               className="w-full sm:w-[260px]"
               options={[
-                { value: 'all', label: '--' },
-                { value: 'open', label: 'Open' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'escalated', label: 'Escalated' },
-                { value: 'resolved', label: 'Resolved' },
+                { value: "all", label: "--" },
+                { value: "open", label: "Open" },
+                { value: "pending", label: "Pending" },
+                { value: "escalated", label: "Escalated" },
+                { value: "resolved", label: "Resolved" },
               ]}
             />
           </div>
           <button
             onClick={() => {
-              setStatusFilter('all');
+              setStatusFilter("all");
               setPagination((prev) => ({ ...prev, pageIndex: 0 }));
               setIsFilterOpen(false);
             }}
@@ -397,20 +403,17 @@ export default function AIFlagsPage() {
           </button>
         </div>
       )}
-      
+
       <div className="mb-4 md:mb-6">
         <p className="text-sm md:text-base font-medium text-secondary">
           Showing {data.length} of {pagination.total} flags
         </p>
-        {loadError && (
-          <p className="text-xs text-red-500 mt-1">{loadError}</p>
-        )}
+        {loadError && <p className="text-xs text-red-500 mt-1">{loadError}</p>}
       </div>
 
-      
       <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-250" style={{ tableLayout: 'fixed' }}>
+          <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -418,14 +421,14 @@ export default function AIFlagsPage() {
                     <th
                       key={header.id}
                       className={`px-2 md:px-4 py-2 md:py-4 ${
-                        header.id === 'action' ? 'text-center' : 'text-left'
+                        header.id === "action" ? "text-center" : "text-left"
                       }`}
                     >
                       {header.isPlaceholder
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
-                            header.getContext()
+                            header.getContext(),
                           )}
                     </th>
                   ))}
@@ -439,7 +442,7 @@ export default function AIFlagsPage() {
                     colSpan={columns.length}
                     className="px-4 py-8 text-center text-gray text-sm"
                   >
-                    {isLoading ? 'Loading...' : 'No flags found'}
+                    {isLoading ? "Loading..." : "No flags found"}
                   </td>
                 </tr>
               ) : (
@@ -452,12 +455,12 @@ export default function AIFlagsPage() {
                       <td
                         key={cell.id}
                         className={`px-2 md:px-4 py-2 md:py-4 ${
-                          cell.column.id === 'action' ? 'text-center' : ''
+                          cell.column.id === "action" ? "text-center" : ""
                         }`}
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
-                          cell.getContext()
+                          cell.getContext(),
                         )}
                       </td>
                     ))}
@@ -499,14 +502,20 @@ export default function AIFlagsPage() {
               let endPage = Math.min(maxPagesToShow - 1, totalPages - 1);
               if (currentPage >= maxPagesToShow) {
                 startPage = currentPage;
-                endPage = Math.min(currentPage + maxPagesToShow - 1, totalPages - 1);
+                endPage = Math.min(
+                  currentPage + maxPagesToShow - 1,
+                  totalPages - 1,
+                );
               }
               const pages = [];
               if (startPage > 0) {
                 pages.push(
-                  <span key="dots-before" className="px-1 md:px-2 text-[10px] md:text-xs text-gray">
+                  <span
+                    key="dots-before"
+                    className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
+                  >
                     ...
-                  </span>
+                  </span>,
                 );
               }
               for (let i = startPage; i <= endPage; i++) {
@@ -516,24 +525,25 @@ export default function AIFlagsPage() {
                     onClick={() => table.setPageIndex(i)}
                     className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
                       currentPage === i
-                        ? 'bg-dull-gray text-primary'
-                        : 'bg-primary text-secondary border hover:bg-zinc-100'
+                        ? "bg-dull-gray text-primary"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     }`}
                     style={
-                      currentPage !== i
-                        ? { borderColor: '#E6E6E6' }
-                        : undefined
+                      currentPage !== i ? { borderColor: "#E6E6E6" } : undefined
                     }
                   >
                     {i + 1}
-                  </button>
+                  </button>,
                 );
               }
               if (endPage < totalPages - 1) {
                 pages.push(
-                  <span key="dots-after" className="px-1 md:px-2 text-[10px] md:text-xs text-gray">
+                  <span
+                    key="dots-after"
+                    className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
+                  >
                     ...
-                  </span>
+                  </span>,
                 );
                 pages.push(
                   <button
@@ -541,17 +551,17 @@ export default function AIFlagsPage() {
                     onClick={() => table.setPageIndex(totalPages - 1)}
                     className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
                       currentPage === totalPages - 1
-                        ? 'bg-dull-gray text-primary'
-                        : 'bg-primary text-secondary border hover:bg-zinc-100'
+                        ? "bg-dull-gray text-primary"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     }`}
                     style={
                       currentPage !== totalPages - 1
-                        ? { borderColor: '#E6E6E6' }
+                        ? { borderColor: "#E6E6E6" }
                         : undefined
                     }
                   >
                     {totalPages}
-                  </button>
+                  </button>,
                 );
               }
               return pages;

@@ -31,6 +31,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
 import { persistOrganizationId } from "@/lib/auth-utils";
 import Link from "next/link";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
 
 export default function Header() {
   const { toggleSidebar, toggleMobileMenu, closeMobileMenu, isMobileMenuOpen } =
@@ -61,12 +62,10 @@ export default function Header() {
   const isEmployee = pathname.startsWith("/employee");
   const base = isEmployee ? "/employee" : "/applicant";
 
-  const canAccessProfile = useMemo(() => {
-    if (profileData?._type !== "employee") return true;
-    const perms: { resource: string; action: string[] | string }[] =
-      profileData?.permissions ?? [];
-    return perms.some((p) => p.resource === "profile");
-  }, [profileData]);
+  const { isEmployee: isEmployeeRole, hasAccess } =
+    useEmployeePermissions(profileData);
+  const canAccessProfile = !isEmployeeRole || hasAccess("profile");
+  const canAccessCertificates = !isEmployeeRole || hasAccess("certificates");
   const [lastPathname, setLastPathname] = useState(pathname);
   const {
     isOnline,
@@ -398,69 +397,71 @@ export default function Header() {
         </div>
 
         <div className="hidden lg:flex items-center gap-2">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="relative flex items-center gap-2 bg-zinc-50 border border-zinc-200 px-2.5 py-1.5 rounded-lg w-56"
-          >
-            <Search className="w-3.5 h-3.5 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setIsSearchOpen(true)}
-              className="bg-transparent border-none outline-none text-sm w-full placeholder:text-zinc-400"
-            />
+          {canAccessCertificates && (
+            <form
+              onSubmit={handleSearchSubmit}
+              className="relative flex items-center gap-2 bg-zinc-50 border border-zinc-200 px-2.5 py-1.5 rounded-lg w-56"
+            >
+              <Search className="w-3.5 h-3.5 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchOpen(true)}
+                className="bg-transparent border-none outline-none text-sm w-full placeholder:text-zinc-400"
+              />
 
-            {isSearchOpen && searchQuery && (
-              <div className="search-container absolute top-full left-0 mt-2 w-80 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden">
-                <div className="p-4 space-y-3">
-                  <h3 className="text-xs font-semibold text-zinc-400  tracking-wider">
-                    Certificate Results
-                  </h3>
-                  <div className="space-y-2">
-                    {filteredSearchCertificates.length > 0 ? (
-                      filteredSearchCertificates.map((cert) => (
-                        <div
-                          key={cert.id}
-                          onClick={() => {
-                            router.push(`${base}/certificate?q=${cert.name}`);
-                            setIsSearchOpen(false);
-                          }}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-50 cursor-pointer transition-colors border border-transparent hover:border-zinc-100"
-                        >
-                          <div className="w-8 h-8 rounded bg-dull-white/20 flex items-center justify-center">
-                            <Search className="w-4 h-4 text-secondary" />
+              {isSearchOpen && searchQuery && (
+                <div className="search-container absolute top-full left-0 mt-2 w-80 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="p-4 space-y-3">
+                    <h3 className="text-xs font-semibold text-zinc-400  tracking-wider">
+                      Certificate Results
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredSearchCertificates.length > 0 ? (
+                        filteredSearchCertificates.map((cert) => (
+                          <div
+                            key={cert.id}
+                            onClick={() => {
+                              router.push(`${base}/certificate?q=${cert.name}`);
+                              setIsSearchOpen(false);
+                            }}
+                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-50 cursor-pointer transition-colors border border-transparent hover:border-zinc-100"
+                          >
+                            <div className="w-8 h-8 rounded bg-dull-white/20 flex items-center justify-center">
+                              <Search className="w-4 h-4 text-secondary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-secondary truncate">
+                                {cert.name}
+                              </p>
+                              <p className="text-[10px] text-zinc-400">
+                                {cert.certificate_id}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-secondary truncate">
-                              {cert.name}
-                            </p>
-                            <p className="text-[10px] text-zinc-400">
-                              {cert.certificate_id}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-zinc-400 py-2">
-                        No certificates found...
-                      </p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="text-sm text-zinc-400 py-2">
+                          No certificates found...
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        router.push(`${base}/certificate`);
+                        setIsSearchOpen(false);
+                      }}
+                      className="w-full mt-2 py-2 text-sm font-semibold text-secondary bg-zinc-50 hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-200"
+                    >
+                      See All Results
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      router.push(`${base}/certificate`);
-                      setIsSearchOpen(false);
-                    }}
-                    className="w-full mt-2 py-2 text-sm font-semibold text-secondary bg-zinc-50 hover:bg-zinc-100 rounded-lg transition-colors border border-zinc-200"
-                  >
-                    See All Results
-                  </button>
                 </div>
-              </div>
-            )}
-          </form>
+              )}
+            </form>
+          )}
 
           <div className="relative">
             <button

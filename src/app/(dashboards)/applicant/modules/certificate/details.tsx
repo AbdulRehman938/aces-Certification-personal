@@ -25,6 +25,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import "@/styles/scrollbar-invisible.css";
 import { StripePaymentModal } from "@/components/StripePaymentModal";
 import { Country, State, City } from "country-state-city";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   FaBuilding,
   FaCheckCircle,
@@ -100,9 +102,9 @@ const SearchableDropdown = ({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute z-50 w-full mt-1 max-h-56 overflow-y-auto rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)] scrollbar-hide"
+            className="absolute z-50 w-full mt-1 max-h-56 overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] scrollbar-hide"
           >
-            <div className="sticky top-0 z-10 bg-primary px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+            <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray/40" />
                 <input
@@ -230,6 +232,22 @@ export function CertificateDetails({
   const pathname = usePathname();
   const isEmployee = pathname.startsWith("/employee");
   const base = isEmployee ? "/employee" : "/applicant";
+
+  const [profileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const { isEmployee: isEmployeeRole, hasWrite } =
+    useEmployeePermissions(profileData);
+  const canInitiate = !isEmployeeRole || hasWrite("certificates");
 
   useEffect(() => {
     if (orgProfile) {
@@ -725,8 +743,7 @@ export function CertificateDetails({
                           </div>
                         ),
                       )
-                    :
-                      [
+                    : [
                         "Governance Framework",
                         "Risk Management Policy",
                         "Code of Conduct",
@@ -777,15 +794,21 @@ export function CertificateDetails({
                 </div>
 
                 <div className="flex justify-end w-full md:max-w-[25%] ml-auto mt-4 md:mt-0">
-                  <Button
-                    variant="secondary"
-                    className="bg-[#1A1A1A] hover:bg-black text-white px-8 h-12 md:h-auto py-3 rounded-lg text-sm font-semibold transition-all w-full md:w-auto shadow-md md:shadow-none whitespace-nowrap"
-                    onClick={() => {
-                      setShowModal(true);
-                    }}
+                  <Tooltip
+                    content="Read-only access. You do not have permission to initiate a certification."
+                    disabled={canInitiate}
                   >
-                    Get Started
-                  </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={!canInitiate}
+                      className="bg-[#1A1A1A] hover:bg-black text-white px-8 h-12 md:h-auto py-3 rounded-lg text-sm font-semibold transition-all w-full md:w-auto shadow-md md:shadow-none whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => {
+                        setShowModal(true);
+                      }}
+                    >
+                      Get Started
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
             </div>

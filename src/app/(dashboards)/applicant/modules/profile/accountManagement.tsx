@@ -26,7 +26,7 @@ const Card = ({
 }) => (
   <div
     className={cn(
-      "bg-primary rounded-3xl border border-dull-white/50 shadow-sm p-6",
+      "bg-zinc-50 rounded-3xl border border-dull-white/50 shadow-sm p-6",
       className,
     )}
   >
@@ -357,8 +357,7 @@ export function AccountManagementPage() {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-    }
+    } catch {}
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("access_token");
       window.localStorage.removeItem("refresh_token");
@@ -538,7 +537,7 @@ export function AccountManagementPage() {
               {activities.map((act, i) => (
                 <div
                   key={i}
-                  className="bg-zinc-50/50 border border-zinc-100/50 rounded-xl p-4 flex justify-between items-center group transition-all hover:bg-zinc-50 hover:border-zinc-200"
+                  className="bg-primary/50 border border-zinc-100/50 rounded-xl p-4 flex justify-between items-center group transition-all hover:bg-zinc-50 hover:border-zinc-200"
                 >
                   <div className="space-y-0.5">
                     <p className="font-semibold text-secondary text-sm">
@@ -625,7 +624,7 @@ export function AccountManagementPage() {
               {activities.slice(0, 3).map((act, i) => (
                 <div
                   key={i}
-                  className="bg-zinc-50/50 border border-dull-white/30 rounded-xl p-4 flex justify-between items-center group hover:border-dull-white transition-colors"
+                  className="bg-primary/50 border border-dull-white/30 rounded-xl p-4 flex justify-between items-center group hover:border-dull-white transition-colors"
                 >
                   <div className="space-y-0.5 text-xs font-sans">
                     <p className="font-semibold text-secondary">{act.title}</p>
@@ -1452,3 +1451,4 @@ export function AccountManagementPage() {
     </div>
   );
 }
+

@@ -11,8 +11,9 @@ const publicSans = localFont({
 
 const archivo = localFont({
   src: "../fonts/Archivo/Archivo-VariableFont_wdth,wght.ttf",
-  variable: "--font-sans",
+  variable: "--font-archivo",
   weight: "100 900",
+  preload: false,
 });
 
 const plusJakartaSans = localFont({

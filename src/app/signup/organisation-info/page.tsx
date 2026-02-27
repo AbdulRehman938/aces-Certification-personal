@@ -344,7 +344,14 @@ export default function OrganisationInfoPage() {
     } else {
       setStates([]);
     }
-  }, [formik, isHydrated, countries]);
+  }, [
+    formik.values.country,
+    isHydrated,
+    countries,
+    formik.setFieldValue,
+    formik.values.state,
+    formik.values.city,
+  ]);
 
   useEffect(() => {
     if (
@@ -405,7 +412,14 @@ export default function OrganisationInfoPage() {
     } else {
       setCities([]);
     }
-  }, [formik, countries, states]);
+  }, [
+    formik.values.country,
+    formik.values.state,
+    countries,
+    states,
+    formik.setFieldValue,
+    formik.values.city,
+  ]);
 
   const toggleIndustry = (industry: string) => {
     const current = formik.values.industries;
@@ -544,7 +558,7 @@ export default function OrganisationInfoPage() {
                 </div>
                 <div
                   onClick={() => setShowOrgTypeList(!showOrgTypeList)}
-                  className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border-2 ${formik.touched.organisationType && formik.errors.organisationType ? "border-red" : "border-gray-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm transition-all`}
+                  className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border-2 ${formik.touched.organisationType && formik.errors.organisationType ? "border-red" : "border-gray-100"} bg-primary/30 font-medium text-secondary shadow-sm transition-all`}
                 >
                   <span
                     className={`text-base short-laptop:text-base truncate flex-1 ${!formik.values.organisationType ? "text-zinc-300" : ""}`}
@@ -679,7 +693,7 @@ export default function OrganisationInfoPage() {
                   </div>
                   <div
                     onClick={() => setShowIndustryList(!showIndustryList)}
-                    className={`h-12 w-full cursor-pointer flex flex-nowrap items-center gap-2 px-3 rounded-xl border-2 ${formik.touched.industries && formik.errors.industries ? "border-red" : "border-gray-100"} bg-zinc-50/30 transition-all shadow-sm overflow-hidden`}
+                    className={`h-12 w-full cursor-pointer flex flex-nowrap items-center gap-2 px-3 rounded-xl border-2 ${formik.touched.industries && formik.errors.industries ? "border-red" : "border-gray-100"} bg-primary/30 transition-all shadow-sm overflow-hidden`}
                   >
                     {formik.values.industries.length === 0 ? (
                       <span className="text-zinc-300 text-base">
@@ -771,7 +785,7 @@ export default function OrganisationInfoPage() {
                   </div>
                   <div
                     onClick={() => setShowCountryList(!showCountryList)}
-                    className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border-2 ${formik.touched.country && formik.errors.country ? "border-red" : "border-gray-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm`}
+                    className={`h-12 w-full cursor-pointer flex items-center px-4 rounded-xl border-2 ${formik.touched.country && formik.errors.country ? "border-red" : "border-gray-100"} bg-primary/30 font-medium text-secondary shadow-sm`}
                   >
                     {selectedCountryData && (
                       <div className="relative w-6 h-4 mr-2 overflow-hidden rounded-sm shadow-sm ring-1 ring-zinc-200">
@@ -879,7 +893,7 @@ export default function OrganisationInfoPage() {
                     onBlur={(e) => {
                       if (showValidation) formik.handleBlur(e);
                     }}
-                    className={`h-14 short-laptop:h-10 w-full cursor-pointer flex items-center px-4 short-laptop:px-3 rounded-xl border ${formik.touched.state && formik.errors.state ? "border-red" : "border-zinc-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm ${!formik.values.country || states.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`h-14 short-laptop:h-10 w-full cursor-pointer flex items-center px-4 short-laptop:px-3 rounded-xl border ${formik.touched.state && formik.errors.state ? "border-red" : "border-zinc-100"} bg-primary/30 font-medium text-secondary shadow-sm ${!formik.values.country || states.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     <span
                       className={`text-base short-laptop:text-base truncate ${!formik.values.state ? "text-zinc-300" : ""}`}
@@ -964,7 +978,7 @@ export default function OrganisationInfoPage() {
                     onBlur={(e) => {
                       if (showValidation) formik.handleBlur(e);
                     }}
-                    className={`h-14 short-laptop:h-10 w-full cursor-pointer flex items-center px-4 short-laptop:px-3 rounded-xl border ${formik.touched.city && formik.errors.city ? "border-red" : "border-zinc-100"} bg-zinc-50/30 font-medium text-secondary shadow-sm ${!formik.values.state || cities.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`h-14 short-laptop:h-10 w-full cursor-pointer flex items-center px-4 short-laptop:px-3 rounded-xl border ${formik.touched.city && formik.errors.city ? "border-red" : "border-zinc-100"} bg-primary/30 font-medium text-secondary shadow-sm ${!formik.values.state || cities.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     <span
                       className={`text-base short-laptop:text-base truncate ${!formik.values.city ? "text-zinc-300" : ""}`}
@@ -1039,7 +1053,7 @@ export default function OrganisationInfoPage() {
                   )}
                 </div>
                 <textarea
-                  className={`w-full min-h-30 p-3 rounded-xl border-2 ${formik.touched.description && formik.errors.description ? "border-red" : "border-gray-100"} bg-zinc-50/30 text-base font-medium text-secondary shadow-sm outline-none resize-none transition-all focus:gray-300`}
+                  className={`w-full min-h-30 p-3 rounded-xl border-2 ${formik.touched.description && formik.errors.description ? "border-red" : "border-gray-100"} bg-primary/30 text-base font-medium text-secondary shadow-sm outline-none resize-none transition-all focus:gray-300`}
                   placeholder="Enter a brief description of your organization..."
                   {...formik.getFieldProps("description")}
                 />
@@ -1095,3 +1109,4 @@ export default function OrganisationInfoPage() {
     </div>
   );
 }
+

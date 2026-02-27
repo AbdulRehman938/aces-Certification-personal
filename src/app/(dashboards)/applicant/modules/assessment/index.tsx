@@ -909,7 +909,7 @@ export function AssessmentPage() {
                   key={gIdx}
                   className={`rounded-xl border transition-all duration-200 ${
                     isOpen
-                      ? "border-[#F0F0F0] bg-zinc-50/50 shadow-sm"
+                      ? "border-[#F0F0F0] bg-primary/50 shadow-sm"
                       : "border-transparent bg-transparent"
                   }`}
                 >
@@ -1266,7 +1266,7 @@ export function AssessmentPage() {
               exit={{ opacity: 0, scale: 0.9, y: 30 }}
               className="bg-white rounded-4xl w-full max-w-2xl h-125 shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="p-8 pb-0 text-center space-y-3 bg-zinc-50/50 shrink-0">
+              <div className="p-8 pb-0 text-center space-y-3 bg-primary/50 shrink-0">
                 <h2 className="text-2xl font-semibold text-zinc-900 tracking-tight">
                   AI Suggestions
                 </h2>
@@ -1342,7 +1342,7 @@ export function AssessmentPage() {
               className="bg-white rounded-[56px] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="p-8 pb-6 text-center border-b border-gray-100 bg-zinc-50/50">
+              <div className="p-8 pb-6 text-center border-b border-gray-100 bg-primary/50">
                 <div className="space-y-4">
                   {assessmentScoreResult && (
                     <div className="flex flex-col items-center justify-center">
@@ -1416,7 +1416,7 @@ export function AssessmentPage() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mt-4">
-                          <div className="p-3 bg-zinc-50/50 border border-gray-100 rounded-xl">
+                          <div className="p-3 bg-primary/50 border border-gray-100 rounded-xl">
                             <p className="text-[8px] font-semibold text-gray-400 tracking-widest mb-1 uppercase">
                               Your Answer
                             </p>
@@ -1425,7 +1425,7 @@ export function AssessmentPage() {
                             </p>
                           </div>
                           <div
-                            className={`p-3 border rounded-xl ${resp.is_flagged ? "border-red-100 bg-red-50/30" : "border-gray-100 bg-zinc-50/30"}`}
+                            className={`p-3 border rounded-xl ${resp.is_flagged ? "border-red-100 bg-red-50/30" : "border-gray-100 bg-primary/30"}`}
                           >
                             <p className="text-[8px] font-semibold text-gray-400 tracking-widest mb-1 uppercase">
                               AI Feedback
@@ -1447,7 +1447,7 @@ export function AssessmentPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 border-t border-gray-100 flex gap-3 bg-zinc-50/50">
+              <div className="p-6 border-t border-gray-100 flex gap-3 bg-primary/50">
                 <Button
                   onClick={() => router.push(`${base}`)}
                   className="flex-1 h-12 bg-white border border-gray-200 text-zinc-800 font-semibold rounded-xl hover:bg-gray-50 transition-all text-xs"
@@ -1655,3 +1655,4 @@ export function AssessmentPage() {
     </div>
   );
 }
+

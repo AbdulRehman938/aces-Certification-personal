@@ -27,7 +27,6 @@ type SubadminProfileResponse = {
   data: SubadminProfile;
 };
 
-
 type PermissionRow = {
   resource: string;
   pageName: string;
@@ -111,9 +110,8 @@ const PermissionsContent = () => {
   const [userName, setUserName] = useState("User");
   const [permissions, setPermissions] =
     useState<PermissionRow[]>(initialPermissions);
-  const [originalPermissions, setOriginalPermissions] = useState<
-    PermissionRow[]
-  >(initialPermissions);
+  const [originalPermissions, setOriginalPermissions] =
+    useState<PermissionRow[]>(initialPermissions);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [showSaveLoader, setShowSaveLoader] = useState(false);
@@ -121,9 +119,9 @@ const PermissionsContent = () => {
   const saveLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
-  const saveLoaderFinishTimeoutRef = useRef<
-    ReturnType<typeof setTimeout> | null
-  >(null);
+  const saveLoaderFinishTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   useEffect(() => {
     if (!subadminId) return;
@@ -137,7 +135,8 @@ const PermissionsContent = () => {
         const profile = response.data?.data;
         if (!profile) return;
 
-        const fullName = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+        const fullName =
+          `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
         setUserName(fullName || "User");
 
         const permissionMap = new Map<string, Set<string>>();
@@ -187,15 +186,23 @@ const PermissionsContent = () => {
               ...row,
               read: key === "read" ? !row.read : row.read || !row[key],
               write:
-                key === "read" && row.read ? false : key === "write" ? !row.write : row.write,
+                key === "read" && row.read
+                  ? false
+                  : key === "write"
+                    ? !row.write
+                    : row.write,
               edit:
-                key === "read" && row.read ? false : key === "edit" ? !row.edit : row.edit,
+                key === "read" && row.read
+                  ? false
+                  : key === "edit"
+                    ? !row.edit
+                    : row.edit,
               delete:
                 key === "read" && row.read
                   ? false
                   : key === "delete"
-                  ? !row.delete
-                  : row.delete,
+                    ? !row.delete
+                    : row.delete,
             }
           : row,
       ),
@@ -362,7 +369,8 @@ const PermissionsContent = () => {
       </div>
 
       <h1 className="text-[16px] md:text-[20px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
-        Manage permissions for <span className="text-secondary">{userName}</span>
+        Manage permissions for{" "}
+        <span className="text-secondary">{userName}</span>
       </h1>
 
       <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
@@ -439,3 +447,4 @@ export default function PermissionsPage() {
     </Suspense>
   );
 }
+

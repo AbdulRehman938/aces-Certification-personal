@@ -47,8 +47,8 @@ const formatDate = (dateString: string): string => {
 };
 
 const getInitials = (firstName: string, lastName: string): string => {
-  const first = firstName?.charAt(0).toUpperCase() || '';
-  const last = lastName?.charAt(0).toUpperCase() || '';
+  const first = firstName?.charAt(0).toUpperCase() || "";
+  const last = lastName?.charAt(0).toUpperCase() || "";
   return first + last;
 };
 
@@ -64,7 +64,7 @@ const splitName = (name: string): { first_name: string; last_name: string } => {
 export default function TeamPage() {
   const router = useRouter();
   const [data, setData] = useState<Subadmin[]>([]);
-  const {profile} = useUser();
+  const { profile } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingSubadmin, setEditingSubadmin] = useState<Subadmin | null>(null);
@@ -94,9 +94,9 @@ export default function TeamPage() {
   const modalLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
-  const modalLoaderFinishTimeoutRef = useRef<
-    ReturnType<typeof setTimeout> | null
-  >(null);
+  const modalLoaderFinishTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   const [pageNumber, setPageNumber] = useState(1);
   const [limit] = useState(25);
@@ -699,7 +699,7 @@ export default function TeamPage() {
                       className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
                         currentPage === i
                           ? "bg-dull-gray text-primary"
-                          : "bg-primary text-secondary border hover:bg-zinc-100"
+                          : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                       }`}
                       style={
                         currentPage !== i
@@ -727,7 +727,7 @@ export default function TeamPage() {
                       className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
                         currentPage === totalPages - 1
                           ? "bg-dull-gray text-primary"
-                          : "bg-primary text-secondary border hover:bg-zinc-100"
+                          : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                       }`}
                       style={
                         currentPage !== totalPages - 1

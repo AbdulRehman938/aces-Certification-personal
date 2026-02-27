@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { axiosInstance } from "@/lib/axios";
 import { persistOrganizationId } from "@/lib/auth-utils";
@@ -19,6 +19,8 @@ import {
   SubmissionCertificate,
 } from "../certificate/submission-details";
 import { LoadingScreen } from "../../common/loading-screen";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface DashboardCertificate extends SubmissionCertificate {
   id: string | number;
@@ -39,6 +41,7 @@ interface DashboardCertificate extends SubmissionCertificate {
   certificateId?: string;
   paymentId?: string;
   assessmentType?: string;
+  isPending?: boolean;
 }
 
 interface Recommendation {
@@ -113,9 +116,8 @@ const CircularProgress = ({
 
 export function DashboardPage() {
   const router = useRouter();
-  const pathname = usePathname();
-  const isEmployee = pathname.startsWith("/employee");
-  const base = isEmployee ? "/employee" : "/applicant";
+  const isEmployee = false;
+  const base = "/applicant";
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") || "";
   const notificationActionParam = searchParams.get("notification_action");
@@ -134,6 +136,22 @@ export function DashboardPage() {
   const itemsPerPage = 2;
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [profileData, setProfileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const { isEmployee: isEmployeeRole, hasAccess } =
+    useEmployeePermissions(profileData);
+  const canAccessCertificates = !isEmployeeRole || hasAccess("certificates");
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [totalRecommendations, setTotalRecommendations] = useState(0);
   const [certificates, setCertificates] = useState<DashboardCertificate[]>([]);
@@ -260,6 +278,7 @@ export function DashboardPage() {
                 if (orgId && orgId !== "undefined" && orgId !== "null") {
                   persistOrganizationId(orgId);
                 }
+                setProfileData(processed);
                 window.dispatchEvent(new Event("storage"));
                 window.dispatchEvent(new Event("profile-updated"));
               }
@@ -729,13 +748,19 @@ export function DashboardPage() {
                 documents.
               </p>
             </div>
-            <Button
-              variant="secondary"
-              className="w-full text-sm md:w-auto px-6 h-10 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl md:rounded-lg"
-              onClick={() => router.push(`${base}/certificate`)}
+            <Tooltip
+              content="Access denied. You do not have permission to view certificates."
+              disabled={canAccessCertificates}
             >
-              Explore Certificates
-            </Button>
+              <Button
+                variant="secondary"
+                disabled={!canAccessCertificates}
+                className="w-full text-sm md:w-auto px-6 h-10 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl md:rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => router.push(`${base}/certificate`)}
+              >
+                Explore Certificates
+              </Button>
+            </Tooltip>
           </header>
 
           {/* Stats Row */}
@@ -746,7 +771,7 @@ export function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-primary p-5 md:p-4 rounded-2xl md:rounded-xl border border-dull-white/50 shadow-sm transition-all hover:shadow-md"
+                className="bg-zinc-50 p-5 md:p-4 rounded-2xl md:rounded-xl border border-dull-white/50 shadow-sm transition-all hover:shadow-md"
               >
                 <div className="flex justify-between items-center">
                   <span className="text-[14px] md:text-[16px] lg:text-[18px] font-semibold text-secondary leading-tight">
@@ -794,12 +819,18 @@ export function DashboardPage() {
                   You haven&apos;t started any certifications yet. Explore
                   available certifications to begin your ESG journey.
                 </p>
-                <Button
-                  onClick={() => router.push(`${base}/certificate`)}
-                  className="bg-[#232323] hover:bg-black text-white px-10 h-12 rounded-xl text-[14px] font-semibold transition-all shadow-md active:scale-95 w-fit"
+                <Tooltip
+                  content="Access denied. You do not have permission to view certificates."
+                  disabled={canAccessCertificates}
                 >
-                  Find a Certification
-                </Button>
+                  <Button
+                    onClick={() => router.push(`${base}/certificate`)}
+                    disabled={!canAccessCertificates}
+                    className="bg-[#232323] hover:bg-black text-white px-10 h-12 rounded-xl text-[14px] font-semibold transition-all shadow-md active:scale-95 w-fit disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Find a Certification
+                  </Button>
+                </Tooltip>
               </motion.div>
             ) : (
               <>
@@ -823,7 +854,7 @@ export function DashboardPage() {
 
                 <div className="space-y-6">
                   {/* Tabs */}
-                  <div className="flex bg-primary rounded-2xl p-1.5 border border-dull-white/40 shadow-sm overflow-x-auto w-full max-w-[33%] no-scrollbar">
+                  <div className="flex bg-zinc-50 rounded-2xl p-1.5 border border-dull-white/40 shadow-sm overflow-x-auto w-full max-w-[33%] no-scrollbar">
                     <div className="flex min-w-max gap-1">
                       {["In Progress", "Active", "Expired"].map((tab) => (
                         <button
@@ -844,9 +875,9 @@ export function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-6 relative min-h-[16rem] pb-2">
+                  <div className="space-y-6 relative min-h-64 pb-2">
                     {isLoading ? (
-                      <div className="flex h-[26rem] items-center justify-center">
+                      <div className="flex h-104 items-center justify-center">
                         <LoadingScreen
                           isLoading={true}
                           progress={loadingProgress}
@@ -863,7 +894,7 @@ export function DashboardPage() {
                               animate={{ opacity: 1, x: 0 }}
                               exit={{ opacity: 0, x: 20 }}
                               transition={{ delay: i * 0.1 }}
-                              className="bg-primary rounded-3xl md:rounded-4xl border border-dull-white/40 shadow-sm p-5 md:p-5 min-h-[14rem]"
+                              className="bg-zinc-50 rounded-3xl md:rounded-4xl border border-dull-white/40 shadow-sm p-5 md:p-5 min-h-56"
                             >
                               {cert.status === "Active" ? (
                                 <div className="flex flex-col gap-2 overflow-visible">

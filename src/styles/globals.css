@@ -10,6 +10,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
+  --font-archivo: var(--font-archivo);
 
   --color-primary: #ffffff;
   --color-secondary: #000000;
@@ -36,10 +37,22 @@
   body {
     background: var(--background);
     color: var(--foreground);
-    font-family: var(--font-public-sans), ui-sans-serif, system-ui, -apple-system,
-      BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-      "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-      "Segoe UI Symbol", "Noto Color Emoji";
+    font-family:
+      var(--font-public-sans),
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Roboto,
+      "Helvetica Neue",
+      Arial,
+      "Noto Sans",
+      sans-serif,
+      "Apple Color Emoji",
+      "Segoe UI Emoji",
+      "Segoe UI Symbol",
+      "Noto Color Emoji";
   }
 }
 
@@ -66,7 +79,7 @@
   }
 
   .form-input {
-    @apply w-full rounded-xl border border-light-gray-2 bg-primary px-3 py-2.5 text-sm outline-none transition-all placeholder:text-gray/50 focus:border-secondary;
+    @apply w-full rounded-xl border border-light-gray-2 bg-zinc-50 px-3 py-2.5 text-sm outline-none transition-all placeholder:text-gray/50 focus:border-secondary;
   }
 
   .form-input-error {
@@ -78,7 +91,7 @@
   }
 
   .form-dropdown-trigger {
-    @apply flex h-10 w-full items-center justify-between rounded-xl border border-light-gray-2 bg-primary px-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-secondary/10;
+    @apply flex h-10 w-full items-center justify-between rounded-xl border border-light-gray-2 bg-zinc-50 px-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-secondary/10;
   }
 
   .form-dropdown-trigger-error {
@@ -90,7 +103,7 @@
   }
 
   .form-select-search {
-    @apply w-full rounded-lg border border-light-gray-2 bg-primary px-2.5 py-1.5 text-xs text-secondary placeholder:text-gray/60 focus:outline-none focus:ring-1 focus:ring-secondary/20;
+    @apply w-full rounded-lg border border-light-gray-2 bg-zinc-50 px-2.5 py-1.5 text-xs text-secondary placeholder:text-gray/60 focus:outline-none focus:ring-1 focus:ring-secondary/20;
   }
 
   .form-dropdown-item {

@@ -59,7 +59,7 @@ export default function Error({
           <Button
             variant="primary"
             onClick={() => router.back()}
-            className="h-16 flex-1 text-base border-2 hover:bg-zinc-50"
+            className="h-16 flex-1 text-base border-2 hover:bg-primary"
           >
             Go back
           </Button>
@@ -75,3 +75,4 @@ export default function Error({
     </div>
   );
 }
+

@@ -78,8 +78,7 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-    }
+    } catch {}
 
     if (typeof window !== "undefined") {
       localStorage.removeItem("access_token");
@@ -146,10 +145,10 @@ export default function Sidebar() {
     const nameToResourceMap: Record<string, string> = {
       Dashboard: "dashboard",
       Certificate: "certificates",
-      Branch: "branch",
+      Branch: "branches",
       Profile: "profile",
-      "Organization Users": "organisation-users",
-      "Support Center": "support",
+      "Organization Users": "organization_users",
+      "Support Center": "support_center",
       Legal: "legal",
     };
 
@@ -302,9 +301,7 @@ const SidebarContent = ({
                   {item.isCustom ? (
                     <div
                       className={`w-4 h-4 shrink-0 transition-colors duration-200  ${
-                        isActive
-                          ? "bg-black"
-                          : "bg-zinc-500 group-hover:bg-zinc-600"
+                        isActive ? "bg-black" : "bg-zinc-600"
                       }`}
                       style={{
                         maskImage: `url(${item.icon})`,

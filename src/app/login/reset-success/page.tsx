@@ -7,7 +7,7 @@ export default function ResetSuccessPage() {
   const router = useRouter();
 
   return (
-    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(32rem,45vw)] mx-auto bg-primary rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center min-h-[clamp(28rem,70vh,31.25rem)] justify-center text-center">
+    <div className="w-full max-w-[95vw] sm:max-w-[80vw] md:max-w-[65vw] lg:max-w-[min(32rem,45vw)] mx-auto bg-zinc-50 rounded-[clamp(1.5rem,4vw,3.125rem)] px-[clamp(1rem,3vw,1.5rem)] py-[clamp(1.5rem,4vh,2.5rem)] md:px-[clamp(2rem,4vw,3.5rem)] md:py-[clamp(2rem,5vh,3.5rem)] shadow-2xl flex flex-col items-center min-h-[clamp(28rem,70vh,31.25rem)] justify-center text-center">
       <div className="relative mb-[clamp(1.5rem,4vh,2.5rem)] flex items-center justify-center">
         <div className="w-[clamp(8rem,22vw,10rem)] h-[clamp(8rem,22vw,10rem)] bg-zinc-100 rounded-full flex items-center justify-center">
           <div className="w-[clamp(6.5rem,18vw,8rem)] h-[clamp(6.5rem,18vw,8rem)] bg-zinc-200 rounded-full flex items-center justify-center">
@@ -37,3 +37,4 @@ export default function ResetSuccessPage() {
     </div>
   );
 }
+

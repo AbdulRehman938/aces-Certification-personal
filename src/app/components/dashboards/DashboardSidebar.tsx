@@ -79,7 +79,7 @@ export default function DashboardSidebar({
           top-0 left-0
           ${isCollapsed ? "w-20" : expandedWidthClass}
           h-screen lg:h-[calc(100vh-60px)]
-          bg-primary border-r border-zinc-100
+          bg-zinc-50 border-r border-zinc-100
           flex flex-col
           z-50
           transform transition-all duration-300 ease-in-out
@@ -119,7 +119,8 @@ export default function DashboardSidebar({
               const isActive =
                 pathname === item.href ||
                 (item.href !== rootPath && pathname?.startsWith(item.href));
-              const isDisabled = isSubadmin && !hasReadAccess(item.resources || []);
+              const isDisabled =
+                isSubadmin && !hasReadAccess(item.resources || []);
 
               return (
                 <li key={item.href}>
@@ -141,7 +142,9 @@ export default function DashboardSidebar({
                         className={isCollapsed ? "w-6 h-6" : "w-5 h-5"}
                       />
                       {!isCollapsed && (
-                        <span className="text-sm font-medium">{item.label}</span>
+                        <span className="text-sm font-medium">
+                          {item.label}
+                        </span>
                       )}
                     </div>
                   ) : (
@@ -172,7 +175,9 @@ export default function DashboardSidebar({
                         className={isCollapsed ? "w-6 h-6" : "w-5 h-5"}
                       />
                       {!isCollapsed && (
-                        <span className="text-sm font-medium">{item.label}</span>
+                        <span className="text-sm font-medium">
+                          {item.label}
+                        </span>
                       )}
                     </Link>
                   )}
@@ -209,3 +214,4 @@ export default function DashboardSidebar({
     </>
   );
 }
+

@@ -5,11 +5,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { Button } from "@/components/ui";
-import { Tag, FileText, Calendar, Eye, Search } from "lucide-react";
+import { Tag, FileText, Calendar, Eye, Search, Lock } from "lucide-react";
 import { RxCross2 } from "react-icons/rx";
 import { MdKeyboardArrowDown, MdUpload, MdClose } from "react-icons/md";
 import { GrUpload } from "react-icons/gr";
 import { axiosInstance } from "@/lib/axios";
+import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
+import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 type TicketStatus = "pending" | "inProgress" | "completed";
 
@@ -26,6 +29,43 @@ interface Attachment {
   file: File;
   url?: string;
 }
+
+type TicketType = "support" | "dispute" | "other";
+type TargetType = "certificate" | "assessment" | "billing" | "other";
+
+interface TicketTypeOption {
+  id: TargetType;
+  label: string;
+  description: string;
+  ticket_type: TicketType;
+}
+
+const TICKET_TYPE_OPTIONS: TicketTypeOption[] = [
+  {
+    id: "certificate",
+    label: "Certificate support ticket",
+    description: "Issues related to certification renewal or documentation.",
+    ticket_type: "support",
+  },
+  {
+    id: "assessment",
+    label: "Assessment dispute ticket",
+    description: "Dispute assessment scores or request manual reviews.",
+    ticket_type: "dispute",
+  },
+  {
+    id: "billing",
+    label: "Billing ticket",
+    description: "Inquiries regarding payments, invoices, or subscriptions.",
+    ticket_type: "dispute",
+  },
+  {
+    id: "other",
+    label: "Generic / Other tickets",
+    description: "General questions or platform-related help.",
+    ticket_type: "other",
+  },
+];
 
 type FilterKey = "all" | TicketStatus;
 
@@ -64,10 +104,17 @@ export function SupportCenterPage() {
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSelectionOpen, setIsSelectionOpen] = useState(false);
+  const [selectedTypeOption, setSelectedTypeOption] =
+    useState<TicketTypeOption | null>(null);
+  const [tempCertificateId, setTempCertificateId] = useState("");
+  const [tempCertificateName, setTempCertificateName] = useState("");
+
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isCertificationOpen, setIsCertificationOpen] = useState(false);
+  const [isSelectionCertOpen, setIsSelectionCertOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [selectedPreviewUrl, setSelectedPreviewUrl] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>(
@@ -77,44 +124,41 @@ export function SupportCenterPage() {
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
   const [hasAnyTickets, setHasAnyTickets] = useState(false);
   const [certSearchTerm, setCertSearchTerm] = useState("");
+  const [selectionCertSearch, setSelectionCertSearch] = useState("");
 
-  const isAnyUploading = useMemo(
-    () => Object.values(uploadingFiles).some((v) => v === true),
-    [uploadingFiles],
-  );
-
-  const filteredCertificates = useMemo(() => {
-    if (!certSearchTerm.trim()) return availableCertificates;
-    const term = certSearchTerm.toLowerCase();
-    return availableCertificates.filter((cert) => {
-      const name = (cert.name || "").toLowerCase();
-      return name.includes(term);
-    });
-  }, [availableCertificates, certSearchTerm]);
-
-  const canWriteSupport = useMemo(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const raw = localStorage.getItem("organization_profile");
-      if (!raw) return true;
-      const profile = JSON.parse(raw);
-      if (profile?._type !== "employee") return true;
-      const perms: { resource: string; action: string[] | string }[] =
-        profile?.permissions ?? [];
-      return perms.some((p) => {
-        const actions = Array.isArray(p.action)
-          ? p.action
-          : typeof p.action === "string"
-            ? [p.action]
-            : [];
-        return (
-          p.resource === "support" &&
-          actions.some((a) => a.toLowerCase() === "write")
-        );
-      });
-    } catch {
-      return true;
+  const router = useRouter();
+  const [profileData, setProfileData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("organization_profile");
+      try {
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        return null;
+      }
     }
+    return null;
+  });
+
+  const { isEmployee, hasAccess, hasWrite } =
+    useEmployeePermissions(profileData);
+  const canAccess = !isEmployee || hasAccess("support_center");
+  const canWriteSupport = !isEmployee || hasWrite("support_center");
+
+  useEffect(() => {
+    const loadProfile = () => {
+      const stored = localStorage.getItem("organization_profile");
+      if (stored) {
+        try {
+          setProfileData(JSON.parse(stored));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("storage", loadProfile);
+    window.addEventListener("profile-updated", loadProfile);
+    return () => {
+      window.removeEventListener("storage", loadProfile);
+      window.removeEventListener("profile-updated", loadProfile);
+    };
   }, []);
 
   const PAGE_SIZE = 12;
@@ -123,6 +167,166 @@ export function SupportCenterPage() {
   const startIndex = (currentPage - 1) * PAGE_SIZE;
   const paginatedTickets = tickets;
 
+  const isAnyUploading = useMemo(
+    () => Object.values(uploadingFiles).some((v) => v === true),
+    [uploadingFiles],
+  );
+
+  const fetchCertificates = async () => {
+    if (isLoadingCerts) return;
+
+    setIsLoadingCerts(true);
+    try {
+      const response = await axiosInstance.get("/certificates", {
+        params: { limit: 100 },
+      });
+
+      const rawData = response.data;
+      let items: any[] = [];
+
+      // Prioritize data.data, then data, then raw array
+      if (rawData?.data?.data && Array.isArray(rawData.data.data)) {
+        items = rawData.data.data;
+      } else if (rawData?.data && Array.isArray(rawData.data)) {
+        items = rawData.data;
+      } else if (Array.isArray(rawData)) {
+        items = rawData;
+      }
+
+      setAvailableCertificates(
+        items
+          .map((c: any) => ({
+            id: c.id || c.certificate_id || "",
+            name:
+              c.name ||
+              c.certificate_name ||
+              c.certificate_id ||
+              "Unknown Certificate",
+          }))
+          .filter((c: any) => c.id !== ""),
+      );
+    } catch (error) {
+      console.error("SupportCenter: Failed to fetch certificates", error);
+    } finally {
+      setIsLoadingCerts(false);
+    }
+  };
+
+  const fetchTickets = async () => {
+    setIsLoadingTickets(true);
+    try {
+      const params = {
+        page: currentPage,
+        limit: PAGE_SIZE,
+        status:
+          activeFilter === "all"
+            ? ""
+            : activeFilter === "inProgress"
+              ? "in-progress"
+              : activeFilter,
+      };
+      const response = await axiosInstance.get("/support-tickets", {
+        params,
+      });
+      if (response.data.success) {
+        const apiTickets = (response.data.data || []).map((t: any) => {
+          let status: TicketStatus = "pending";
+          if (t.status === "in-progress" || t.status === "inProgress")
+            status = "inProgress";
+          else if (t.status === "completed" || t.status === "completd")
+            status = "completed";
+          else if (t.status === "pending") status = "pending";
+
+          return {
+            id: t.id,
+            title: t.subject,
+            category: t.category,
+            standard: t.certificate_name || "N/A",
+            date: new Date(t.created_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }),
+            status,
+          };
+        });
+        setTickets(apiTickets);
+        const total = response.data.total || 0;
+        setTotalTickets(total);
+        if (activeFilter === "all" && !searchTerm) {
+          setHasAnyTickets(total > 0);
+        } else if (total > 0) {
+          setHasAnyTickets(true);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch tickets", error);
+    } finally {
+      setIsLoadingTickets(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadData = async () => {
+      if (!isMounted) return;
+      await Promise.all([fetchCertificates(), fetchTickets()]);
+    };
+
+    const orgId =
+      typeof window !== "undefined"
+        ? localStorage.getItem("organization_id")
+        : null;
+    if (orgId && orgId !== "undefined") {
+      loadData();
+    } else {
+      const handleProfileUpdate = () => {
+        if (isMounted) loadData();
+      };
+      window.addEventListener("profile-updated", handleProfileUpdate);
+      // Also try to load anyway after a short delay if no event comes
+      const timer = setTimeout(() => {
+        if (isMounted) loadData();
+      }, 2000);
+      return () => {
+        window.removeEventListener("profile-updated", handleProfileUpdate);
+        clearTimeout(timer);
+      };
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeFilter, currentPage]);
+
+  const mainFormFilteredCertificates = useMemo(() => {
+    if (!certSearchTerm.trim()) return availableCertificates;
+    const term = certSearchTerm.toLowerCase();
+    return availableCertificates.filter((cert) => {
+      const name = (cert.name || "").toLowerCase();
+      return name.includes(term);
+    });
+  }, [availableCertificates, certSearchTerm]);
+
+  const selectionModalFilteredCertificates = useMemo(() => {
+    if (!selectionCertSearch.trim()) return availableCertificates;
+    const term = selectionCertSearch.toLowerCase();
+    return availableCertificates.filter((cert) => {
+      const name = (cert.name || "").toLowerCase();
+      return name.includes(term);
+    });
+  }, [availableCertificates, selectionCertSearch]);
+
+  useEffect(() => {
+    if (isSelectionOpen) {
+      fetchCertificates();
+    }
+  }, [isSelectionOpen]);
+
+  useEffect(() => {
+    fetchCertificates();
+  }, []);
+
   const emptyTicketValues = {
     subject: "",
     category: "",
@@ -130,14 +334,20 @@ export function SupportCenterPage() {
     certificateId: "",
     description: "",
     attachments: [] as Attachment[],
+    ticket_type: "support" as TicketType,
+    target_type: "other" as TargetType,
+    target_id: "",
+    metadata: {} as any,
   };
 
   const ticketValidationSchema = Yup.object({
     subject: Yup.string().required("Subject is required"),
     category: Yup.string().required("Category is required"),
-    relatedCertification: Yup.string().required(
-      "Related certification is required",
-    ),
+    relatedCertification: Yup.string().when("target_type", {
+      is: (val: string) => val !== "other",
+      then: (schema) => schema.required("Related certification is required"),
+      otherwise: (schema) => schema.optional(),
+    }),
     description: Yup.string().required("Description is required"),
     attachments: Yup.array()
       .of(Yup.mixed())
@@ -152,6 +362,10 @@ export function SupportCenterPage() {
     certificateId: string;
     description: string;
     attachments: Attachment[];
+    ticket_type: TicketType;
+    target_type: TargetType;
+    target_id: string;
+    metadata: any;
   }>({
     initialValues: emptyTicketValues,
     validationSchema: ticketValidationSchema,
@@ -160,7 +374,6 @@ export function SupportCenterPage() {
     onSubmit: async (values, { setSubmitting, resetForm }) => {
       const pendingUploads = values.attachments.filter((a) => !a.url);
       if (pendingUploads.length > 0) {
-        console.warn("Some attachments are still uploading or failed");
         setSubmitting(false);
         return;
       }
@@ -169,9 +382,13 @@ export function SupportCenterPage() {
         const payload = {
           subject: values.subject,
           category: values.category.toLowerCase().trim().replace(/\s+/g, "-"),
-          certificate_id: values.certificateId,
+          certificate_id: values.certificateId || undefined,
           description: values.description,
           supporting_document: values.attachments[0]?.url || "",
+          ticket_type: values.ticket_type,
+          target_type: values.target_type,
+          target_id: values.target_id || values.certificateId,
+          metadata: values.metadata || {},
         };
 
         const response = await axiosInstance.post("/support-tickets", payload);
@@ -211,95 +428,6 @@ export function SupportCenterPage() {
       }
     },
   });
-
-  useEffect(() => {
-    const fetchCertificates = async () => {
-      setIsLoadingCerts(true);
-      try {
-        const response = await axiosInstance.get("/certificates");
-        const responseData = response.data;
-        const items =
-          responseData?.data?.data || responseData?.data || responseData || [];
-
-        setAvailableCertificates(
-          (Array.isArray(items) ? items : [])
-            .map((c: any) => ({
-              id: c.id || c.certificate_id || "",
-              name:
-                c.name ||
-                c.certificate_name ||
-                c.certificate_id ||
-                "Unknown Certificate",
-            }))
-            .filter((c) => c.id !== ""),
-        );
-      } catch (error) {
-        console.error("Failed to fetch certificates", error);
-      } finally {
-        setIsLoadingCerts(false);
-      }
-    };
-
-    fetchCertificates();
-  }, []);
-
-  useEffect(() => {
-    const fetchTickets = async () => {
-      setIsLoadingTickets(true);
-      try {
-        const params = {
-          page: currentPage,
-          limit: PAGE_SIZE,
-          status:
-            activeFilter === "all"
-              ? ""
-              : activeFilter === "inProgress"
-                ? "in-progress"
-                : activeFilter,
-        };
-        const response = await axiosInstance.get("/support-tickets", {
-          params,
-        });
-        if (response.data.success) {
-          const apiTickets = (response.data.data || []).map((t: any) => {
-            let status: TicketStatus = "pending";
-            if (t.status === "in-progress" || t.status === "inProgress")
-              status = "inProgress";
-            else if (t.status === "completed" || t.status === "completd")
-              status = "completed";
-            else if (t.status === "pending") status = "pending";
-
-            return {
-              id: t.id,
-              title: t.subject,
-              category: t.category,
-              standard: t.certificate_name || "N/A",
-              date: new Date(t.created_at).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              }),
-              status,
-            };
-          });
-          setTickets(apiTickets);
-          const total = response.data.total || 0;
-          setTotalTickets(total);
-          if (activeFilter === "all" && !searchTerm) {
-            setHasAnyTickets(total > 0);
-          } else if (total > 0) {
-            setHasAnyTickets(true);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch tickets", error);
-      } finally {
-        setIsLoadingTickets(false);
-      }
-    };
-
-    fetchTickets();
-  }, [activeFilter, currentPage]);
 
   const handleUpload = async (file: File) => {
     const formData = new FormData();
@@ -347,10 +475,12 @@ export function SupportCenterPage() {
                 variant="secondary"
                 className="h-10 w-full rounded-md px-4 text-base font-semibold md:w-auto"
                 onClick={() => {
-                  ticketFormik.resetForm({ values: emptyTicketValues });
-                  setIsCategoryOpen(false);
-                  setIsCertificationOpen(false);
-                  setIsCreateOpen(true);
+                  fetchCertificates();
+                  setSelectedTypeOption(null);
+                  setTempCertificateId("");
+                  setTempCertificateName("");
+                  setIsSelectionCertOpen(false);
+                  setIsSelectionOpen(true);
                 }}
               >
                 Create New Ticket
@@ -361,7 +491,7 @@ export function SupportCenterPage() {
 
         {hasAnyTickets && (
           <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="inline-flex w-full max-w-md items-center justify-between rounded-2xl border border-light-gray-2 bg-primary p-1 shadow-sm">
+            <div className="inline-flex w-full max-w-md items-center justify-between rounded-2xl border border-light-gray-2 bg-zinc-50 p-1 shadow-sm">
               {filters.map((filter) => {
                 const isActive = activeFilter === filter.key;
                 return (
@@ -372,7 +502,7 @@ export function SupportCenterPage() {
                     className={`flex-1 cursor-pointer rounded-xl px-3 py-1.5 text-sm font-semibold transition-all ${
                       isActive
                         ? "bg-secondary text-primary shadow-md"
-                        : "bg-primary text-dull-gray hover:bg-light-gray"
+                        : "bg-zinc-50 text-dull-gray hover:bg-light-gray"
                     }`}
                   >
                     {filter.label}
@@ -403,13 +533,13 @@ export function SupportCenterPage() {
 
         <div className="mt-6 space-y-4">
           {isLoadingTickets ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-light-gray-2 bg-primary px-6 py-10 text-center shadow-sm sm:px-10">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-light-gray-2 bg-zinc-50 px-6 py-10 text-center shadow-sm sm:px-10">
               <p className="text-xl font-semibold text-secondary animate-pulse">
                 Loading tickets...
               </p>
             </div>
           ) : tickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-light-gray-2 bg-primary px-6 py-10 text-center shadow-sm sm:px-10">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-light-gray-2 bg-zinc-50 px-6 py-10 text-center shadow-sm sm:px-10">
               <p className="text-xl font-semibold text-secondary">
                 {activeFilter === "all" && !searchTerm
                   ? "No tickets yet"
@@ -433,7 +563,7 @@ export function SupportCenterPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="flex flex-col gap-3 rounded-2xl border border-light-gray-2 bg-primary px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 hover:shadow-md transition-shadow"
+                  className="flex flex-col gap-3 rounded-2xl border border-light-gray-2 bg-zinc-50 px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 hover:shadow-md transition-shadow"
                 >
                   <div className="space-y-2">
                     <h3 className="text-base font-semibold text-secondary sm:text-lg">
@@ -515,7 +645,7 @@ export function SupportCenterPage() {
                       className={`h-8 min-w-8 rounded-xl px-2 text-base font-semibold transition-colors ${
                         isActive
                           ? "bg-secondary text-primary"
-                          : "bg-primary text-dull-gray border border-light-gray-2 hover:bg-light-gray"
+                          : "bg-zinc-50 text-dull-gray border border-light-gray-2 hover:bg-light-gray"
                       }`}
                     >
                       {page}
@@ -556,7 +686,7 @@ export function SupportCenterPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.98, y: 12 }}
                 transition={{ duration: 0.2 }}
-                className="relative w-full max-w-xl rounded-2xl bg-primary border border-light-gray-2 shadow-[0_20px_40px_rgba(0,0,0,0.15)] overflow-hidden"
+                className="relative w-full max-w-xl rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_20px_40px_rgba(0,0,0,0.15)] overflow-hidden"
               >
                 <form
                   onSubmit={ticketFormik.handleSubmit}
@@ -565,7 +695,7 @@ export function SupportCenterPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-0.5">
                       <h2 className="text-xl font-semibold text-secondary">
-                        Create New Support Ticket
+                        Create {selectedTypeOption?.label || "Support Ticket"}
                       </h2>
                       <p className="text-xs text-gray">
                         Submit a formal support or compliance ticket. Our team
@@ -576,9 +706,9 @@ export function SupportCenterPage() {
                       type="button"
                       disabled={isAnyUploading}
                       onClick={handleRequestCloseCreate}
-                      className={`-mt-3 -mr-2 h-8 w-8 hover:text-secondary flex items-center justify-center rounded-full text-dull-gray transition-colors ${isAnyUploading ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                      className={`-mt-3 -mr-2 h-8 w-8 hover:text-secondary flex items-center justify-center rounded-full text-zinc-400 transition-colors ${isAnyUploading ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
                     >
-                      <RxCross2 className="h-4 w-4" />
+                      <RxCross2 className="h-5 w-5" />
                     </button>
                   </div>
 
@@ -648,7 +778,7 @@ export function SupportCenterPage() {
                                   animate={{ opacity: 1, y: 0 }}
                                   exit={{ opacity: 0, y: 8 }}
                                   transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                                  className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
                                 >
                                   {[
                                     "Documentation Issue",
@@ -693,124 +823,135 @@ export function SupportCenterPage() {
                           )}
                       </div>
 
-                      <div className="form-field-wrapper">
-                        <label className="form-label">
-                          Related Certification
-                        </label>
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsCertificationOpen((prev) => !prev);
-                              setCertSearchTerm("");
-                            }}
-                            className={`form-dropdown-trigger ${
-                              ticketFormik.touched.relatedCertification &&
-                              ticketFormik.errors.relatedCertification
-                                ? "form-dropdown-trigger-error"
-                                : ""
-                            }`}
-                          >
-                            <span
-                              className={
-                                ticketFormik.values.relatedCertification
-                                  ? "text-secondary font-medium"
-                                  : "text-gray/50"
-                              }
+                      {ticketFormik.values.target_type !== "other" && (
+                        <div className="form-field-wrapper">
+                          <label className="form-label">
+                            Related Certification
+                          </label>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCertificationOpen((prev) => !prev);
+                                setCertSearchTerm("");
+                              }}
+                              className={`form-dropdown-trigger ${
+                                ticketFormik.touched.relatedCertification &&
+                                ticketFormik.errors.relatedCertification
+                                  ? "form-dropdown-trigger-error"
+                                  : ""
+                              }`}
                             >
-                              {ticketFormik.values.relatedCertification ||
-                                "Select certification"}
-                            </span>
-                            <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray" />
-                          </button>
+                              <span
+                                className={
+                                  ticketFormik.values.relatedCertification
+                                    ? "text-secondary font-medium"
+                                    : "text-gray/50"
+                                }
+                              >
+                                {ticketFormik.values.relatedCertification ||
+                                  "Select certification"}
+                              </span>
+                              <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray" />
+                            </button>
 
-                          <AnimatePresence>
-                            {isCertificationOpen && (
-                              <>
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  className="fixed inset-0 z-10"
-                                  onClick={() => setIsCertificationOpen(false)}
-                                />
-                                <motion.div
-                                  initial={{ opacity: 0, y: 8 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: 8 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-primary shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
-                                >
-                                  {availableCertificates.length > 10 && (
-                                    <div className="p-2 border-b border-light-gray-2 bg-primary/95 sticky top-0 backdrop-blur-sm z-30">
-                                      <div className="relative">
-                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray" />
-                                        <input
-                                          type="text"
-                                          value={certSearchTerm}
-                                          onChange={(e) =>
-                                            setCertSearchTerm(e.target.value)
-                                          }
-                                          placeholder="Search certificates..."
-                                          className="form-select-search h-8 pl-8 text-xs w-full"
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className="max-h-60 overflow-y-auto">
-                                    {filteredCertificates.map((cert) => (
-                                      <button
-                                        key={cert.id}
-                                        type="button"
-                                        onClick={() => {
-                                          ticketFormik.setValues({
-                                            ...ticketFormik.values,
-                                            relatedCertification: cert.name,
-                                            certificateId: cert.id,
-                                          });
-                                          setTimeout(() => {
-                                            ticketFormik.setFieldTouched(
-                                              "relatedCertification",
-                                              true,
-                                              true,
-                                            );
-                                            ticketFormik.validateForm();
-                                          }, 0);
-                                          setIsCertificationOpen(false);
-                                        }}
-                                        className={`form-dropdown-item ${
-                                          ticketFormik.values.certificateId ===
-                                          cert.id
-                                            ? "form-dropdown-item-active"
-                                            : "form-dropdown-item-inactive"
-                                        }`}
-                                      >
-                                        {cert.name}
-                                      </button>
-                                    ))}
-                                    {filteredCertificates.length === 0 && (
-                                      <div className="p-4 text-center text-xs text-gray">
-                                        {isLoadingCerts
-                                          ? "Loading..."
-                                          : certSearchTerm
-                                            ? "No certificates match your search"
-                                            : "No certifications found"}
+                            <AnimatePresence>
+                              {isCertificationOpen && (
+                                <>
+                                  <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="fixed inset-0 z-10"
+                                    onClick={() =>
+                                      setIsCertificationOpen(false)
+                                    }
+                                  />
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 8 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                                  >
+                                    {availableCertificates.length > 5 && (
+                                      <div className="p-2 border-b border-light-gray-2 bg-primary/95 sticky top-0 backdrop-blur-sm z-30">
+                                        <div className="relative">
+                                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray" />
+                                          <input
+                                            type="text"
+                                            value={certSearchTerm}
+                                            onChange={(e) =>
+                                              setCertSearchTerm(e.target.value)
+                                            }
+                                            placeholder="Search..."
+                                            className="w-full h-8 pl-8 text-xs bg-light-gray/20 border-none rounded-lg focus:outline-none"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        </div>
                                       </div>
                                     )}
-                                  </div>
-                                </motion.div>
-                              </>
+                                    <div className="max-h-60 overflow-y-auto">
+                                      {isLoadingCerts ? (
+                                        <div className="p-4 text-center text-xs text-secondary animate-pulse font-medium">
+                                          Loading certificates...
+                                        </div>
+                                      ) : mainFormFilteredCertificates.length ===
+                                        0 ? (
+                                        <div className="p-4 text-center text-xs text-gray">
+                                          {certSearchTerm
+                                            ? "No certificates match your search"
+                                            : "No certificates found"}
+                                        </div>
+                                      ) : (
+                                        mainFormFilteredCertificates.map(
+                                          (cert) => (
+                                            <button
+                                              key={cert.id}
+                                              type="button"
+                                              onClick={() => {
+                                                ticketFormik.setFieldValue(
+                                                  "relatedCertification",
+                                                  cert.name,
+                                                );
+                                                ticketFormik.setFieldValue(
+                                                  "certificateId",
+                                                  cert.id,
+                                                );
+                                                ticketFormik.setFieldValue(
+                                                  "target_id",
+                                                  cert.id,
+                                                );
+                                                setIsCertificationOpen(false);
+                                              }}
+                                              className={`w-full text-left px-4 py-2 text-sm transition-colors overflow-hidden ${
+                                                ticketFormik.values
+                                                  .certificateId === cert.id
+                                                  ? "bg-secondary text-primary font-semibold"
+                                                  : "text-secondary font-medium hover:text-secondary/80"
+                                              }`}
+                                            >
+                                              <span className="block truncate">
+                                                {cert.name}
+                                              </span>
+                                            </button>
+                                          ),
+                                        )
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                          {ticketFormik.touched.relatedCertification &&
+                            ticketFormik.errors.relatedCertification && (
+                              <p className="form-error-message">
+                                {ticketFormik.errors.relatedCertification}
+                              </p>
                             )}
-                          </AnimatePresence>
                         </div>
-                        {ticketFormik.touched.relatedCertification &&
-                          ticketFormik.errors.relatedCertification && (
-                            <p className="form-error-message">
-                              {ticketFormik.errors.relatedCertification}
-                            </p>
-                          )}
-                      </div>
+                      )}
                     </div>
 
                     <div className="form-field-wrapper">
@@ -968,7 +1109,7 @@ export function SupportCenterPage() {
                       type="button"
                       disabled={isAnyUploading}
                       onClick={handleRequestCloseCreate}
-                      className={`h-10 rounded-xl border border-light-gray-2 bg-primary px-5 text-sm font-semibold text-dull-gray transition-colors ${isAnyUploading ? "cursor-not-allowed opacity-50" : "hover:bg-light-gray"}`}
+                      className="h-10 rounded-xl border border-light-gray-2 bg-zinc-50 px-5 text-sm font-semibold text-dull-gray transition-colors hover:bg-light-gray disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -1002,7 +1143,7 @@ export function SupportCenterPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 10 }}
                 transition={{ duration: 0.18 }}
-                className="relative w-full max-w-sm rounded-2xl bg-primary border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
+                className="relative w-full max-w-sm rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
               >
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-secondary">
@@ -1041,7 +1182,7 @@ export function SupportCenterPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 10 }}
                 transition={{ duration: 0.18 }}
-                className="relative w-full max-w-sm rounded-2xl bg-primary border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
+                className="relative w-full max-w-sm rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-6 space-y-4"
               >
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-secondary">
@@ -1056,7 +1197,7 @@ export function SupportCenterPage() {
                   <button
                     type="button"
                     onClick={() => setIsCloseConfirmOpen(false)}
-                    className="h-9 px-4 rounded-lg border border-light-gray-2 bg-primary text-base font-semibold text-dull-gray hover:bg-light-gray transition-colors"
+                    className="h-9 px-4 rounded-lg border border-light-gray-2 bg-zinc-50 text-base font-semibold text-dull-gray hover:bg-light-gray transition-colors"
                   >
                     Cancel
                   </button>
@@ -1097,7 +1238,7 @@ export function SupportCenterPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 10 }}
                 transition={{ duration: 0.18 }}
-                className="relative w-full max-w-4xl h-[80vh] rounded-2xl bg-primary border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden"
+                className="relative w-full max-w-4xl h-[80vh] rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden"
               >
                 <div className="flex items-center justify-between p-4 border-b border-light-gray-2">
                   <h3 className="text-base font-semibold text-secondary">
@@ -1116,6 +1257,288 @@ export function SupportCenterPage() {
                     className="w-full h-full rounded-xl border border-light-gray-2"
                     title="Document Preview"
                   />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {/* Ticket Type Selection Modal */}
+        <AnimatePresence>
+          {isSelectionOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            >
+              <div
+                className="absolute inset-0 bg-secondary/30 backdrop-blur-sm"
+                onClick={() => setIsSelectionOpen(false)}
+              />
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: 12 }}
+                transition={{ duration: 0.2 }}
+                className="relative w-full max-w-lg rounded-2xl bg-zinc-50 border border-light-gray-2 shadow-[0_20px_40px_rgba(0,0,0,0.15)]"
+              >
+                <div className="px-6 py-6 space-y-6">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <h2 className="text-xl font-semibold text-secondary">
+                        Choose Ticket Type
+                      </h2>
+                      <p className="text-sm text-gray">
+                        Select the category that best fits your inquiry.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsSelectionOpen(false)}
+                      className="h-8 w-8 flex items-center justify-center rounded-full text-zinc-400 hover:text-secondary transition-colors hover:bg-light-gray"
+                    >
+                      <RxCross2 className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {TICKET_TYPE_OPTIONS.map((option) => (
+                      <div key={option.id} className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTypeOption(option);
+                            if (option.id === "other") {
+                              setTempCertificateId("");
+                              setTempCertificateName("");
+                            }
+                          }}
+                          className={`w-full flex items-start p-4 rounded-xl border-2 transition-all text-left ${
+                            selectedTypeOption?.id === option.id
+                              ? "border-secondary bg-secondary/5 shadow-sm"
+                              : "border-zinc-100 hover:border-zinc-200 bg-white"
+                          }`}
+                        >
+                          <div className="mt-1">
+                            <div
+                              className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                                selectedTypeOption?.id === option.id
+                                  ? "border-secondary"
+                                  : "border-zinc-300"
+                              }`}
+                            >
+                              {selectedTypeOption?.id === option.id && (
+                                <div className="h-2 w-2 rounded-full bg-secondary" />
+                              )}
+                            </div>
+                          </div>
+                          <div className="ml-3">
+                            <p
+                              className={`text-sm font-semibold ${
+                                selectedTypeOption?.id === option.id
+                                  ? "text-secondary"
+                                  : "text-zinc-900"
+                              }`}
+                            >
+                              {option.label}
+                            </p>
+                            <p className="text-xs text-zinc-500 mt-0.5">
+                              {option.description}
+                            </p>
+                          </div>
+                        </button>
+
+                        {/* Certificate Selection inside option when selected */}
+                        {option.id !== "other" &&
+                          selectedTypeOption?.id === option.id && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="ml-7 space-y-2"
+                            >
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setIsSelectionCertOpen((prev) => !prev)
+                                  }
+                                  className={`w-full h-10 px-4 rounded-xl border flex items-center justify-between text-sm transition-all ${
+                                    isSelectionCertOpen
+                                      ? "border-secondary ring-2 ring-secondary/5 bg-white"
+                                      : "border-zinc-200 bg-primary/50"
+                                  }`}
+                                >
+                                  <span
+                                    className={
+                                      tempCertificateName
+                                        ? "text-zinc-900 font-medium"
+                                        : "text-zinc-400"
+                                    }
+                                  >
+                                    {tempCertificateName ||
+                                      "Select Certificate"}
+                                  </span>
+                                  <MdKeyboardArrowDown
+                                    className={`h-5 w-5 text-zinc-400 transition-transform ${isSelectionCertOpen ? "rotate-180" : ""}`}
+                                  />
+                                </button>
+
+                                <AnimatePresence>
+                                  {isSelectionCertOpen && (
+                                    <>
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -4 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -4 }}
+                                        className="absolute z-100 mt-1 w-full rounded-xl border border-zinc-100 bg-white shadow-2xl overflow-hidden"
+                                      >
+                                        <div className="p-2 border-b border-zinc-50 bg-white sticky top-0 z-10">
+                                          <div className="relative">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                                            <input
+                                              type="text"
+                                              value={selectionCertSearch}
+                                              onChange={(e) =>
+                                                setSelectionCertSearch(
+                                                  e.target.value,
+                                                )
+                                              }
+                                              placeholder="Search certificates..."
+                                              className="w-full h-8 pl-8 text-xs bg-zinc-50 border-none rounded-lg focus:outline-none focus:ring-1 focus:ring-secondary/20"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto">
+                                          {isLoadingCerts ? (
+                                            <div className="p-4 text-center text-xs text-secondary animate-pulse font-medium">
+                                              Loading certificates...
+                                            </div>
+                                          ) : selectionModalFilteredCertificates.length ===
+                                            0 ? (
+                                            <div className="p-4 text-center text-xs text-zinc-400">
+                                              {selectionCertSearch
+                                                ? "No certificates match your search."
+                                                : "No certificates found."}
+                                            </div>
+                                          ) : (
+                                            selectionModalFilteredCertificates.map(
+                                              (cert) => (
+                                                <button
+                                                  key={cert.id}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setTempCertificateId(
+                                                      cert.id,
+                                                    );
+                                                    setTempCertificateName(
+                                                      cert.name,
+                                                    );
+                                                    setIsSelectionCertOpen(
+                                                      false,
+                                                    );
+                                                  }}
+                                                  className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-zinc-50 ${
+                                                    tempCertificateId ===
+                                                    cert.id
+                                                      ? "bg-secondary/5 text-secondary font-semibold"
+                                                      : "text-zinc-600"
+                                                  }`}
+                                                >
+                                                  {cert.name}
+                                                </button>
+                                              ),
+                                            )
+                                          )}
+                                        </div>
+                                      </motion.div>
+                                    </>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </motion.div>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsSelectionOpen(false)}
+                      className="flex-1 h-12 rounded-xl text-gray font-semibold text-sm hover:bg-light-gray transition-colors border border-light-gray-2"
+                    >
+                      Cancel
+                    </button>
+                    <Button
+                      variant="secondary"
+                      className="flex-1 h-12 rounded-xl text-sm font-semibold shadow-lg shadow-secondary/10"
+                      disabled={
+                        !selectedTypeOption ||
+                        (selectedTypeOption.id !== "other" &&
+                          !tempCertificateId)
+                      }
+                      onClick={() => {
+                        const type = selectedTypeOption?.id || "other";
+                        let initialCategory = "general";
+                        let initialSubject = "";
+                        let metadata = {};
+
+                        if (type === "certificate") {
+                          initialCategory = "renewal";
+                          initialSubject = "Certificate renewal issue";
+                        } else if (type === "assessment") {
+                          initialCategory = "assessment-review";
+                          initialSubject = "Assessment score dispute";
+                          metadata = {
+                            assessment_id:
+                              "880e8400-e29b-41d4-a716-446655440003",
+                            ai_review_id:
+                              "990e8400-e29b-41d4-a716-446655440004",
+                            source: "notification",
+                          };
+                        } else if (type === "billing") {
+                          initialCategory = "billing";
+                          initialSubject = "Billing inquiry";
+                        }
+
+                        ticketFormik.resetForm({
+                          values: {
+                            ...emptyTicketValues,
+                            subject: initialSubject,
+                            category:
+                              initialCategory === "renewal"
+                                ? "Renewal"
+                                : initialCategory === "assessment-review"
+                                  ? "Compliance Query"
+                                  : initialCategory === "billing"
+                                    ? "Documentation Issue"
+                                    : "General inquiry",
+                            ticket_type:
+                              selectedTypeOption?.ticket_type || "support",
+                            target_type: type,
+                            target_id:
+                              type === "certificate"
+                                ? tempCertificateId
+                                : type === "assessment"
+                                  ? "880e8400-e29b-41d4-a716-446655440003"
+                                  : "",
+                            metadata: metadata,
+                            relatedCertification: tempCertificateName,
+                            certificateId: tempCertificateId,
+                          },
+                        });
+
+                        setIsSelectionOpen(false);
+                        setIsCreateOpen(true);
+                      }}
+                    >
+                      Continue
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             </motion.div>
