@@ -7,6 +7,7 @@ import Button from "../../common/button";
 import { Loading } from "../../common/Loading";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 type AssessmentDetails = {
   assessmentId: string;
@@ -33,6 +34,7 @@ type AssessmentDetails = {
   aiReview: AiReview | null;
   assignedReviewer: NamedAssignee | string | null;
   assignedAuditor: NamedAssignee | string | null;
+  auditorInvited?: boolean;
   isCertificateBlocked?: boolean;
   certificateBlockReason?: string | null;
 };
@@ -180,15 +182,12 @@ function AssessmentDetailsContent() {
 
         if (isCancelled) return;
         const details = response.data?.data ?? null;
+        console.log("assessment details by id:", {
+          assessmentId,
+          data: details,
+        });
         setAssessmentDetails(details);
-      } catch (err) {
-        console.error("Failed to fetch assessment details:", err);
-        if (axios.isAxiosError(err)) {
-          console.error(
-            "assessment details error response:",
-            err.response?.data,
-          );
-        }
+      } catch {
         if (!isCancelled) setAssessmentDetails(null);
       } finally {
         if (!isCancelled) setIsLoading(false);
@@ -253,11 +252,9 @@ function AssessmentDetailsContent() {
           );
         if (isCancelled) return;
         const questions = response.data?.data ?? [];
-        console.log("assessment questions response:", response.data.data);
         setAssessmentQuestions(questions);
-      } catch (err) {
+      } catch {
         if (!isCancelled) {
-          console.error("Failed to fetch assessment questions:", err);
           setAssessmentQuestions([]);
         }
       }
@@ -315,15 +312,8 @@ function AssessmentDetailsContent() {
 
         setAiFlaggedAnswerIds(flaggedIds);
         setAiFlagReasonsById(reasonMap);
-      } catch (err) {
+      } catch {
         if (!isCancelled) {
-          console.error("Failed to fetch AI review flags:", err);
-          if (axios.isAxiosError(err)) {
-            console.error(
-              "ai review flags error response:",
-              err.response?.data,
-            );
-          }
           setAiFlaggedAnswerIds(new Set());
           setAiFlagReasonsById({});
         }
@@ -423,6 +413,7 @@ function AssessmentDetailsContent() {
   const hasAssignedAuditor = !!getDisplayName(
     assessmentDetails?.assignedAuditor,
   );
+  const isAuditorInvitePending = Boolean(assessmentDetails?.auditorInvited);
   const hasAssignedReviewer = !!getDisplayName(
     assessmentDetails?.assignedReviewer,
   );
@@ -863,7 +854,6 @@ function AssessmentDetailsContent() {
         setAuditorVisibleCount(AUDITOR_PAGE_SIZE);
       } catch (err) {
         if (!isCancelled) {
-          console.error("Failed to fetch auditors list:", err);
           if (axios.isAxiosError(err)) {
             setAuditorsError(
               err.response?.data?.message || "Failed to load auditors",
@@ -916,10 +906,8 @@ function AssessmentDetailsContent() {
 
         setReviewerOptions(mappedData);
         setReviewerVisibleCount(REVIEWER_PAGE_SIZE);
-        console.log("reviewers list response:", response.data);
       } catch (err) {
         if (!isCancelled) {
-          console.error("Failed to fetch reviewers list:", err);
           if (axios.isAxiosError(err)) {
             setReviewersError(
               err.response?.data?.message || "Failed to load reviewers",
@@ -1004,25 +992,16 @@ function AssessmentDetailsContent() {
         payload.auditDate = new Date(auditDate).toISOString();
       }
 
-      const response = await axiosInstance.post(
-        "/auditors/assign-assessment",
-        payload,
-      );
-      console.log("assign auditor response:", response.data);
+      await axiosInstance.post("/auditors/assign-assessment", payload);
 
       setIsAssignAuditorModalOpen(false);
       setSelectedAuditor(null);
       setAuditDate("");
       setAssessmentRefreshKey((prev) => prev + 1);
     } catch (err) {
-      console.error("Failed to assign auditor:", err);
-      if (axios.isAxiosError(err)) {
-        setAssignAuditorError(
-          err.response?.data?.message || "Failed to assign auditor",
-        );
-      } else {
-        setAssignAuditorError("Failed to assign auditor");
-      }
+      setAssignAuditorError(
+        getApiErrorMessage(err, "Failed to assign auditor"),
+      );
     } finally {
       setIsAssigningAuditor(false);
     }
@@ -1041,17 +1020,12 @@ function AssessmentDetailsContent() {
         reviewerId: selectedReviewer,
       };
 
-      const response = await axiosInstance.post(
-        "/reviewers/assign-assessment",
-        payload,
-      );
-      console.log("assign reviewer response:", response.data);
+      await axiosInstance.post("/reviewers/assign-assessment", payload);
 
       setIsAssignReviewerModalOpen(false);
       setSelectedReviewer(null);
       setAssessmentRefreshKey((prev) => prev + 1);
     } catch (err) {
-      console.error("Failed to assign reviewer:", err);
       if (axios.isAxiosError(err)) {
         setAssignReviewerError(
           err.response?.data?.message || "Failed to assign reviewer",
@@ -1092,7 +1066,6 @@ function AssessmentDetailsContent() {
       closeBlockCertificationModal();
       setAssessmentRefreshKey((prev) => prev + 1);
     } catch (err) {
-      console.error("Failed to block certification:", err);
       if (axios.isAxiosError(err)) {
         setBlockCertificationError(
           err.response?.data?.message || "Failed to block certification",
@@ -1444,6 +1417,11 @@ function AssessmentDetailsContent() {
           <h3 className="text-lg md:text-xl font-semibold text-secondary mb-4 md:mb-6">
             Admin Actions
           </h3>
+          {!isCertificateBlocked && !hasAssignedAuditor && isAuditorInvitePending && (
+            <p className="text-xs font-medium text-[#FAAB00] mb-4 md:mb-6">
+              Request already sent for this assessment.
+            </p>
+          )}
           {isCertificateBlocked && (
             <div className="mb-4 md:mb-6 p-3 rounded-lg border border-red-200 bg-red-50">
               <p className="text-xs font-semibold text-red-600 mb-1">
@@ -1508,21 +1486,32 @@ function AssessmentDetailsContent() {
             )}
 
             {!isCertificateBlocked && !hasAssignedAuditor && (
-              <Button
-                onClick={() => setIsAssignAuditorModalOpen(true)}
-                className="px-3 py-1.5 md:px-8 md:py-3 rounded-xl shrink-0"
-                style={{
-                  fontFamily: "Public Sans",
-                  fontWeight: 600,
-                  fontStyle: "normal",
-                  fontSize: "16px",
-                  lineHeight: "24px",
-                  letterSpacing: "0%",
-                  verticalAlign: "middle",
-                }}
-              >
-                Assign Auditor
-              </Button>
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  onClick={
+                    isAuditorInvitePending
+                      ? undefined
+                      : () => setIsAssignAuditorModalOpen(true)
+                  }
+                  disabled={isAuditorInvitePending}
+                  className={`px-3 py-1.5 md:px-8 md:py-3 rounded-xl shrink-0 ${
+                    isAuditorInvitePending
+                      ? "cursor-not-allowed opacity-70"
+                      : ""
+                  }`}
+                  style={{
+                    fontFamily: "Public Sans",
+                    fontWeight: 600,
+                    fontStyle: "normal",
+                    fontSize: "16px",
+                    lineHeight: "24px",
+                    letterSpacing: "0%",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  Assign Auditor
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -2084,4 +2073,3 @@ export default function AssessmentDetailsPage() {
     </Suspense>
   );
 }
-
