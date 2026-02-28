@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUser } from "@/contexts/UserContext";
 
 interface SupportTicketCardProps {
   title: string;
@@ -9,6 +10,7 @@ interface SupportTicketCardProps {
   date: string;
   status: string;
   onStatusChange?: (newStatus: string) => void;
+  canUpdateStatus?: boolean;
 }
 
 function SupportTicketCard({
@@ -18,6 +20,7 @@ function SupportTicketCard({
   date,
   status,
   onStatusChange,
+  canUpdateStatus = true,
 }: SupportTicketCardProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
@@ -119,8 +122,14 @@ function SupportTicketCard({
 
         <div className="relative">
           <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className={`flex items-center justify-center gap-2 px-4 py-1 border rounded-lg text-sm font-medium transition-colors min-w-[140px] ${getStatusButtonClass(currentStatus)}`}
+            onClick={() => {
+              if (!canUpdateStatus) return;
+              setIsDropdownOpen(!isDropdownOpen);
+            }}
+            disabled={!canUpdateStatus}
+            className={`flex items-center justify-center gap-2 px-4 py-1 border rounded-lg text-sm font-medium transition-colors min-w-[140px] ${getStatusButtonClass(currentStatus)} ${
+              canUpdateStatus ? "" : "opacity-60 cursor-not-allowed"
+            }`}
           >
             <span>{currentStatus}</span>
             <svg
@@ -141,7 +150,7 @@ function SupportTicketCard({
             </svg>
           </button>
 
-          {isDropdownOpen && (
+          {isDropdownOpen && canUpdateStatus && (
             <>
               <div
                 className="fixed inset-0 z-10"
@@ -169,6 +178,33 @@ function SupportTicketCard({
 }
 
 export default function SupportPage() {
+  const { profile } = useUser();
+  const isSubadmin = profile?.role === "subadmin";
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: "read" | "write" | "edit" | "delete",
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === "string") {
+        return action === "read" && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? "") && actions.includes(action)
+      );
+    });
+  };
+  const canManageTicketStatus =
+    hasActionPermission(["supportCenter"], "write") ||
+    hasActionPermission(["supportCenter"], "edit");
+
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
       <div className="mb-4 md:mb-6">
@@ -195,6 +231,7 @@ export default function SupportPage() {
           certification="ISO 14064-1 Carbon Footprint"
           date="Jan 15, 2024"
           status="In progress"
+          canUpdateStatus={canManageTicketStatus}
         />
         <SupportTicketCard
           title="Missing documentation for carbon emissions reporting"
@@ -202,6 +239,7 @@ export default function SupportPage() {
           certification="ISO 14064-1 Carbon Footprint"
           date="Jan 15, 2024"
           status="In progress"
+          canUpdateStatus={canManageTicketStatus}
         />
         <SupportTicketCard
           title="Missing documentation for carbon emissions reporting"
@@ -209,6 +247,7 @@ export default function SupportPage() {
           certification="ISO 14064-1 Carbon Footprint"
           date="Jan 15, 2024"
           status="Pending"
+          canUpdateStatus={canManageTicketStatus}
         />
         <SupportTicketCard
           title="Missing documentation for carbon emissions reporting"
@@ -216,6 +255,7 @@ export default function SupportPage() {
           certification="ISO 14064-1 Carbon Footprint"
           date="Jan 15, 2024"
           status="Pending"
+          canUpdateStatus={canManageTicketStatus}
         />
         <SupportTicketCard
           title="Question about GRI Standards compliance requirements"
@@ -223,6 +263,7 @@ export default function SupportPage() {
           certification="ISO 14064-1 Carbon Footprint"
           date="Jan 15, 2024"
           status="Completed"
+          canUpdateStatus={canManageTicketStatus}
         />
         <SupportTicketCard
           title="Question about GRI Standards compliance requirements"
@@ -230,9 +271,9 @@ export default function SupportPage() {
           certification="ISO 14064-1 Carbon Footprint"
           date="Jan 15, 2024"
           status="Completed"
+          canUpdateStatus={canManageTicketStatus}
         />
       </div>
     </div>
   );
 }
-

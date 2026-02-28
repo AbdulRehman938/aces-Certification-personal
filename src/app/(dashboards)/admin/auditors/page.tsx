@@ -26,6 +26,7 @@ import {
 } from "country-state-city";
 import Image from "next/image";
 import { Search, ChevronDown } from "lucide-react";
+import { useUser } from "@/contexts/UserContext";
 
 type AssignedTask = {
   id: number;
@@ -96,6 +97,7 @@ const getInitials = (name: string): string => {
 };
 
 export default function AuditorsPage() {
+  const { profile } = useUser();
   const [activeTab, setActiveTab] = useState<"reviewers" | "auditors">(
     "reviewers",
   );
@@ -263,6 +265,30 @@ export default function AuditorsPage() {
   const certificatesListRef = useRef<HTMLDivElement>(null);
   const editCertificatesDropdownRef = useRef<HTMLDivElement>(null);
   const editCertificatesListRef = useRef<HTMLDivElement>(null);
+  const isSubadmin = profile?.role === "subadmin";
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: "read" | "write" | "edit" | "delete",
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === "string") {
+        return action === "read" && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? "") && actions.includes(action)
+      );
+    });
+  };
+  const canWrite = hasActionPermission(["auditor", "auditors"], "write");
+  const canEdit = hasActionPermission(["auditor", "auditors"], "edit");
 
   const columns = useMemo<ColumnDef<Reviewer>[]>(
     () => [
@@ -423,35 +449,46 @@ export default function AuditorsPage() {
             </button>
 
             <button
-              onClick={() => {
-                const reviewer = row.original;
+              onClick={
+                canEdit
+                  ? () => {
+                      const reviewer = row.original;
 
-                const nameParts = reviewer.name.trim().split(/\s+/);
-                const firstName =
-                  nameParts.length > 1
-                    ? nameParts.slice(0, -1).join(" ")
-                    : nameParts[0] || "";
-                const lastName =
-                  nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+                      const nameParts = reviewer.name.trim().split(/\s+/);
+                      const firstName =
+                        nameParts.length > 1
+                          ? nameParts.slice(0, -1).join(" ")
+                          : nameParts[0] || "";
+                      const lastName =
+                        nameParts.length > 1
+                          ? nameParts[nameParts.length - 1]
+                          : "";
 
-                setEditReviewerFirstName(firstName);
-                setEditReviewerLastName(lastName);
-                setEditReviewerEmail(reviewer.email);
-                setEditReviewerExpertiseTags(reviewer.expertise || []);
-                setEditReviewerIsActive(reviewer.accountStatus === "Active");
+                      setEditReviewerFirstName(firstName);
+                      setEditReviewerLastName(lastName);
+                      setEditReviewerEmail(reviewer.email);
+                      setEditReviewerExpertiseTags(reviewer.expertise || []);
+                      setEditReviewerIsActive(reviewer.accountStatus === "Active");
 
-                setOriginalReviewerValues({
-                  firstName,
-                  lastName,
-                  email: reviewer.email,
-                  tags: reviewer.expertise || [],
-                  accountStatus: reviewer.accountStatus === "Active",
-                });
+                      setOriginalReviewerValues({
+                        firstName,
+                        lastName,
+                        email: reviewer.email,
+                        tags: reviewer.expertise || [],
+                        accountStatus: reviewer.accountStatus === "Active",
+                      });
 
-                setEditingReviewerId(reviewer.id);
-                setIsEditReviewerModalOpen(true);
-              }}
-              className="w-8 h-8 bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors rounded-lg"
+                      setEditingReviewerId(reviewer.id);
+                      setIsEditReviewerModalOpen(true);
+                    }
+                  : undefined
+              }
+              disabled={!canEdit}
+              className={`w-8 h-8 bg-zinc-100 flex items-center justify-center transition-colors rounded-lg ${
+                canEdit
+                  ? "hover:bg-zinc-200"
+                  : "opacity-50 cursor-not-allowed"
+              }`}
             >
               <svg
                 width="20"
@@ -471,7 +508,7 @@ export default function AuditorsPage() {
         enableSorting: false,
       },
     ],
-    [],
+    [canEdit],
   );
 
   const auditorColumns = useMemo<ColumnDef<Auditor>[]>(
@@ -683,46 +720,57 @@ export default function AuditorsPage() {
               </svg>
             </button>
             <button
-              onClick={() => {
-                const auditor = row.original;
+              onClick={
+                canEdit
+                  ? () => {
+                      const auditor = row.original;
 
-                const nameParts = auditor.name.trim().split(/\s+/);
-                const firstName =
-                  nameParts.length > 1
-                    ? nameParts.slice(0, -1).join(" ")
-                    : nameParts[0] || "";
-                const lastName =
-                  nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+                      const nameParts = auditor.name.trim().split(/\s+/);
+                      const firstName =
+                        nameParts.length > 1
+                          ? nameParts.slice(0, -1).join(" ")
+                          : nameParts[0] || "";
+                      const lastName =
+                        nameParts.length > 1
+                          ? nameParts[nameParts.length - 1]
+                          : "";
 
-                const certTags = auditor.certifications.map((cert, idx) => ({
-                  id: `cert-${idx}`,
-                  name: cert,
-                }));
+                      const certTags = auditor.certifications.map((cert, idx) => ({
+                        id: `cert-${idx}`,
+                        name: cert,
+                      }));
 
-                setEditAuditorFirstName(firstName);
-                setEditAuditorLastName(lastName);
-                setEditAuditorEmail(auditor.email);
-                setEditSelectedCountry(auditor.country || "");
-                setEditSelectedState("");
-                setEditSelectedCity("");
-                setEditCertificationTags(certTags);
-                setEditIsAuditorActive(auditor.accountStatus === "Active");
+                      setEditAuditorFirstName(firstName);
+                      setEditAuditorLastName(lastName);
+                      setEditAuditorEmail(auditor.email);
+                      setEditSelectedCountry(auditor.country || "");
+                      setEditSelectedState("");
+                      setEditSelectedCity("");
+                      setEditCertificationTags(certTags);
+                      setEditIsAuditorActive(auditor.accountStatus === "Active");
 
-                setOriginalAuditorValues({
-                  firstName,
-                  lastName,
-                  email: auditor.email,
-                  country: auditor.country || "",
-                  state: "",
-                  city: "",
-                  assigned_certificates: auditor.certifications || [],
-                  accountStatus: auditor.accountStatus === "Active",
-                });
+                      setOriginalAuditorValues({
+                        firstName,
+                        lastName,
+                        email: auditor.email,
+                        country: auditor.country || "",
+                        state: "",
+                        city: "",
+                        assigned_certificates: auditor.certifications || [],
+                        accountStatus: auditor.accountStatus === "Active",
+                      });
 
-                setEditingAuditorId(auditor.id);
-                setIsEditAuditorModalOpen(true);
-              }}
-              className="w-8 h-8 bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors rounded-lg"
+                      setEditingAuditorId(auditor.id);
+                      setIsEditAuditorModalOpen(true);
+                    }
+                  : undefined
+              }
+              disabled={!canEdit}
+              className={`w-8 h-8 bg-zinc-100 flex items-center justify-center transition-colors rounded-lg ${
+                canEdit
+                  ? "hover:bg-zinc-200"
+                  : "opacity-50 cursor-not-allowed"
+              }`}
             >
               <svg
                 width="20"
@@ -742,7 +790,7 @@ export default function AuditorsPage() {
         enableSorting: false,
       },
     ],
-    [],
+    [canEdit],
   );
 
   const table = useReactTable({
@@ -1263,6 +1311,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveReviewer = async () => {
+    if (!canWrite) return;
     const errors: typeof reviewerErrors = {};
 
     if (!reviewerFirstName.trim()) {
@@ -1332,6 +1381,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveAuditor = async () => {
+    if (!canWrite) return;
     const errors: typeof auditorErrors = {};
 
     if (!auditorFirstName.trim()) {
@@ -1433,6 +1483,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveEditReviewer = async () => {
+    if (!canEdit) return;
     if (!editingReviewerId || !originalReviewerValues) {
       alert("Error: Missing reviewer information");
       return;
@@ -1531,6 +1582,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveEditAuditor = async () => {
+    if (!canEdit) return;
     if (!editingAuditorId || !originalAuditorValues) {
       alert("Error: Missing auditor information");
       return;
@@ -1671,8 +1723,13 @@ export default function AuditorsPage() {
         </div>
         {activeTab === "reviewers" && (
           <button
-            onClick={() => setIsAddReviewerModalOpen(true)}
-            className="px-4 py-2 md:px-6 md:py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0"
+            onClick={canWrite ? () => setIsAddReviewerModalOpen(true) : undefined}
+            disabled={!canWrite}
+            className={`px-4 py-2 md:px-6 md:py-3 rounded-lg transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0 ${
+              canWrite
+                ? "bg-black text-white hover:bg-gray-800"
+                : "bg-black/50 text-white/70 cursor-not-allowed"
+            }`}
           >
             Add Reviewer
             <span className="w-5 h-5 inline-flex items-center justify-center">
@@ -1693,8 +1750,13 @@ export default function AuditorsPage() {
         )}
         {activeTab === "auditors" && (
           <button
-            onClick={() => setIsAddAuditorModalOpen(true)}
-            className="px-4 py-2 md:px-6 md:py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0"
+            onClick={canWrite ? () => setIsAddAuditorModalOpen(true) : undefined}
+            disabled={!canWrite}
+            className={`px-4 py-2 md:px-6 md:py-3 rounded-lg transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0 ${
+              canWrite
+                ? "bg-black text-white hover:bg-gray-800"
+                : "bg-black/50 text-white/70 cursor-not-allowed"
+            }`}
           >
             Add Auditor
             <span className="w-5 h-5 inline-flex items-center justify-center">
@@ -2339,7 +2401,7 @@ export default function AuditorsPage() {
         )}
       </div>
 
-      {isAddReviewerModalOpen && (
+      {isAddReviewerModalOpen && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2592,7 +2654,7 @@ export default function AuditorsPage() {
               >
                 Cancel
               </button>
-              <Button onClick={handleSaveReviewer} disabled={isSavingReviewer}>
+              <Button onClick={handleSaveReviewer} disabled={isSavingReviewer || !canWrite}>
                 {isSavingReviewer ? "Saving..." : "Save Reviewer"}
               </Button>
             </div>
@@ -2600,7 +2662,7 @@ export default function AuditorsPage() {
         </div>
       )}
 
-      {isEditReviewerModalOpen && (
+      {isEditReviewerModalOpen && canEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2852,7 +2914,7 @@ export default function AuditorsPage() {
               </button>
               <Button
                 onClick={handleSaveEditReviewer}
-                disabled={isSavingEditReviewer}
+                disabled={isSavingEditReviewer || !canEdit}
               >
                 {isSavingEditReviewer ? "Saving..." : "Update Reviewer"}
               </Button>
@@ -2861,7 +2923,7 @@ export default function AuditorsPage() {
         </div>
       )}
 
-      {isAddAuditorModalOpen && (
+      {isAddAuditorModalOpen && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -3505,7 +3567,7 @@ export default function AuditorsPage() {
               >
                 Cancel
               </button>
-              <Button onClick={handleSaveAuditor} disabled={isSavingAuditor}>
+              <Button onClick={handleSaveAuditor} disabled={isSavingAuditor || !canWrite}>
                 {isSavingAuditor ? "Saving..." : "Save Auditor"}
               </Button>
             </div>
@@ -3513,7 +3575,7 @@ export default function AuditorsPage() {
         </div>
       )}
 
-      {isEditAuditorModalOpen && (
+      {isEditAuditorModalOpen && canEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -4092,7 +4154,7 @@ export default function AuditorsPage() {
               </button>
               <Button
                 onClick={handleSaveEditAuditor}
-                disabled={isSavingEditAuditor}
+                disabled={isSavingEditAuditor || !canEdit}
               >
                 {isSavingEditAuditor ? "Saving..." : "Update Auditor"}
               </Button>
@@ -4406,4 +4468,3 @@ export default function AuditorsPage() {
     </div>
   );
 }
-

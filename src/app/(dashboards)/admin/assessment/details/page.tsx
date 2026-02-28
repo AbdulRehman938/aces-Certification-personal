@@ -8,6 +8,7 @@ import { Loading } from "../../common/Loading";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { useUser } from "@/contexts/UserContext";
 
 type AssessmentDetails = {
   assessmentId: string;
@@ -138,6 +139,7 @@ type ReviewerOption = {
 function AssessmentDetailsContent() {
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("id");
+  const { profile } = useUser();
 
   const [assessmentDetails, setAssessmentDetails] =
     useState<AssessmentDetails | null>(null);
@@ -663,6 +665,32 @@ function AssessmentDetailsContent() {
   const [blockCertificationError, setBlockCertificationError] = useState<
     string | null
   >(null);
+  const isSubadmin = profile?.role === "subadmin";
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: "read" | "write" | "edit" | "delete",
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === "string") {
+        return action === "read" && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? "") && actions.includes(action)
+      );
+    });
+  };
+  const canWriteAssessment = hasActionPermission(
+    ["assessment", "assessments"],
+    "write",
+  );
 
   const AUDITOR_PAGE_SIZE = 10;
 
@@ -804,7 +832,7 @@ function AssessmentDetailsContent() {
   }, [questionsData]);
 
   useEffect(() => {
-    if (!isAssignAuditorModalOpen) return;
+    if (!isAssignAuditorModalOpen || !canWriteAssessment) return;
 
     let isCancelled = false;
 
@@ -875,10 +903,10 @@ function AssessmentDetailsContent() {
     return () => {
       isCancelled = true;
     };
-  }, [isAssignAuditorModalOpen]);
+  }, [canWriteAssessment, isAssignAuditorModalOpen]);
 
   useEffect(() => {
-    if (!isAssignReviewerModalOpen) return;
+    if (!isAssignReviewerModalOpen || !canWriteAssessment) return;
 
     let isCancelled = false;
 
@@ -929,7 +957,7 @@ function AssessmentDetailsContent() {
     return () => {
       isCancelled = true;
     };
-  }, [isAssignReviewerModalOpen]);
+  }, [canWriteAssessment, isAssignReviewerModalOpen]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) => {
@@ -972,6 +1000,7 @@ function AssessmentDetailsContent() {
   };
 
   const handleAssignAuditor = async () => {
+    if (!canWriteAssessment) return;
     const id = assessmentDetails?.assessmentId ?? assessmentId;
     if (!id || !selectedAuditor) return;
 
@@ -1008,6 +1037,7 @@ function AssessmentDetailsContent() {
   };
 
   const handleAssignReviewer = async () => {
+    if (!canWriteAssessment) return;
     const id = assessmentDetails?.assessmentId ?? assessmentId;
     if (!id || !selectedReviewer) return;
 
@@ -1045,6 +1075,7 @@ function AssessmentDetailsContent() {
   };
 
   const handleBlockCertification = async () => {
+    if (!canWriteAssessment) return;
     const id = assessmentDetails?.assessmentId ?? assessmentId;
     const reason = blockCertificationReason.trim();
 
@@ -1435,7 +1466,7 @@ function AssessmentDetailsContent() {
           <div className="flex flex-wrap gap-3 md:gap-4">
             <Button
               onClick={
-                isCertificateBlocked
+                isCertificateBlocked || !canWriteAssessment
                   ? undefined
                   : () => {
                       setBlockCertificationReason("");
@@ -1443,10 +1474,10 @@ function AssessmentDetailsContent() {
                       setIsBlockCertificationModalOpen(true);
                     }
               }
-              disabled={isCertificateBlocked}
+              disabled={isCertificateBlocked || !canWriteAssessment}
               variant="custom"
               className={`px-4 py-2 md:px-6 md:py-3 border rounded-xl ${
-                isCertificateBlocked
+                isCertificateBlocked || !canWriteAssessment
                   ? "cursor-not-allowed opacity-70"
                   : "hover:bg-red-100"
               }`}
@@ -1468,9 +1499,16 @@ function AssessmentDetailsContent() {
 
             {!isCertificateBlocked && !hasAssignedReviewer && (
               <Button
-                onClick={() => setIsAssignReviewerModalOpen(true)}
+                onClick={
+                  canWriteAssessment
+                    ? () => setIsAssignReviewerModalOpen(true)
+                    : undefined
+                }
+                disabled={!canWriteAssessment}
                 variant="secondary"
-                className="px-4 py-2 md:px-6 md:py-3 rounded-xl"
+                className={`px-4 py-2 md:px-6 md:py-3 rounded-xl ${
+                  !canWriteAssessment ? "cursor-not-allowed opacity-70" : ""
+                }`}
                 style={{
                   fontFamily: "Public Sans",
                   fontWeight: 600,
@@ -1489,13 +1527,13 @@ function AssessmentDetailsContent() {
               <div className="flex flex-col gap-1.5">
                 <Button
                   onClick={
-                    isAuditorInvitePending
+                    isAuditorInvitePending || !canWriteAssessment
                       ? undefined
                       : () => setIsAssignAuditorModalOpen(true)
                   }
-                  disabled={isAuditorInvitePending}
+                  disabled={isAuditorInvitePending || !canWriteAssessment}
                   className={`px-3 py-1.5 md:px-8 md:py-3 rounded-xl shrink-0 ${
-                    isAuditorInvitePending
+                    isAuditorInvitePending || !canWriteAssessment
                       ? "cursor-not-allowed opacity-70"
                       : ""
                   }`}
@@ -1517,7 +1555,7 @@ function AssessmentDetailsContent() {
         </div>
       </div>
 
-      {isBlockCertificationModalOpen && (
+      {isBlockCertificationModalOpen && canWriteAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1591,7 +1629,7 @@ function AssessmentDetailsContent() {
               </button>
               <button
                 onClick={handleBlockCertification}
-                disabled={isBlockingCertification}
+                disabled={isBlockingCertification || !canWriteAssessment}
                 className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0"
                 style={{
                   fontFamily: "Public Sans",
@@ -1614,7 +1652,7 @@ function AssessmentDetailsContent() {
         </div>
       )}
 
-      {isAssignAuditorModalOpen && (
+      {isAssignAuditorModalOpen && canWriteAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1843,7 +1881,7 @@ function AssessmentDetailsContent() {
               </button>
               <button
                 onClick={handleAssignAuditor}
-                disabled={!selectedAuditor || isAssigningAuditor}
+                disabled={!selectedAuditor || isAssigningAuditor || !canWriteAssessment}
                 className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   fontFamily: "Public Sans",
@@ -1864,7 +1902,7 @@ function AssessmentDetailsContent() {
         </div>
       )}
 
-      {isAssignReviewerModalOpen && (
+      {isAssignReviewerModalOpen && canWriteAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2036,7 +2074,9 @@ function AssessmentDetailsContent() {
               </button>
               <button
                 onClick={handleAssignReviewer}
-                disabled={!selectedReviewer || isAssigningReviewer}
+                disabled={
+                  !selectedReviewer || isAssigningReviewer || !canWriteAssessment
+                }
                 className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   fontFamily: "Public Sans",

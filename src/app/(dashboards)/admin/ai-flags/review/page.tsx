@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, Suspense } from 'react';
 import React from 'react';
 import Button from '../../common/button';
+import { useUser } from '@/contexts/UserContext';
 
 interface MetricCardProps {
   icon: React.ReactNode;
@@ -44,6 +45,32 @@ function ReviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const flagId = searchParams.get('id');
+  const { profile } = useUser();
+  const isSubadmin = profile?.role === 'subadmin';
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: 'read' | 'write' | 'edit' | 'delete',
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === 'string') {
+        return action === 'read' && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? '') && actions.includes(action)
+      );
+    });
+  };
+  const canTakeFlagAction =
+    hasActionPermission(['aiFlags'], 'write') ||
+    hasActionPermission(['aiFlags'], 'edit');
 
   
   const [reviewData] = useState({
@@ -245,13 +272,25 @@ function ReviewPageContent() {
 
         
         <div className="p-4 md:p-6 flex flex-wrap gap-3">
-          <Button className="shrink-0">
+          <Button
+            className={`shrink-0 ${!canTakeFlagAction ? 'opacity-60 cursor-not-allowed' : ''}`}
+            disabled={!canTakeFlagAction}
+          >
             Approve Assessment
           </Button>
-          <Button variant="secondary" className="px-4 py-2 md:px-6 md:py-3">
+          <Button
+            variant="secondary"
+            className={`px-4 py-2 md:px-6 md:py-3 ${!canTakeFlagAction ? 'opacity-60 cursor-not-allowed' : ''}`}
+            disabled={!canTakeFlagAction}
+          >
             Request Clarification
           </Button>
-          <Button variant="custom" className="px-4 py-2 md:px-6 md:py-3 text-secondary border border-black" style={{ backgroundColor: '#e9e9e9' }}>
+          <Button
+            variant="custom"
+            className={`px-4 py-2 md:px-6 md:py-3 text-secondary border border-black ${!canTakeFlagAction ? 'opacity-60 cursor-not-allowed' : ''}`}
+            style={{ backgroundColor: '#e9e9e9' }}
+            disabled={!canTakeFlagAction}
+          >
             Escalate to Audit
           </Button>
         </div>
