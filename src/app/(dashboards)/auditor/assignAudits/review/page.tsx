@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, type ChangeEvent } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
+import { Loading } from "@/app/(dashboards)/admin/common/Loading";
 import { DUMMY_MAIN_SECTIONS } from "@/lib/dummyMainSections";
 import { useSearchParams } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
@@ -118,9 +119,39 @@ const isFileQuestionType = (
   );
 };
 
+type NoteSaveFeedback = {
+  isSaving: boolean;
+  message: string;
+  type: "success" | "error" | null;
+};
+
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_SUMMARY_DOC_EXTENSIONS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+]);
+
+const toDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Unable to read selected document"));
+    reader.readAsDataURL(file);
+  });
+
 export default function AssignAuditsReview() {
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("id");
+  const [isLoading, setIsLoading] = useState(Boolean(assessmentId));
+  const [showLoader, setShowLoader] = useState(Boolean(assessmentId));
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [activeButton, setActiveButton] = useState<"assessment" | "submit">(
     "assessment",
   );
@@ -144,6 +175,23 @@ export default function AssignAuditsReview() {
   const [certificateName, setCertificateName] = useState("ISO 27001:2022");
   const [assessmentStatus, setAssessmentStatus] = useState("Assigned");
   const [auditDateLabel, setAuditDateLabel] = useState("N/A");
+  const [auditSummary, setAuditSummary] = useState("");
+  const [auditDescription, setAuditDescription] = useState("");
+  const [auditSummaryDoc, setAuditSummaryDoc] = useState("");
+  const [auditSummaryDocName, setAuditSummaryDocName] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [submitReportError, setSubmitReportError] = useState("");
+  const [submitReportSuccess, setSubmitReportSuccess] = useState("");
+  const [auditorNotesByQuestion, setAuditorNotesByQuestion] = useState<
+    Record<string, string>
+  >({});
+  const [hasSavedAuditorNotes, setHasSavedAuditorNotes] = useState<
+    Record<string, boolean>
+  >({});
+  const [noteSaveFeedbackByQuestion, setNoteSaveFeedbackByQuestion] = useState<
+    Record<string, NoteSaveFeedback>
+  >({});
+  const auditSummaryDocInputRef = useRef<HTMLInputElement | null>(null);
 
   const formatStatusLabel = (value?: string | null): string => {
     const raw = (value || "").trim();
@@ -168,6 +216,9 @@ export default function AssignAuditsReview() {
 
   useEffect(() => {
     if (!assessmentId) {
+      setIsLoading(false);
+      setShowLoader(false);
+      setLoadingProgress(0);
       console.warn("Assessment id is missing in query params");
       return;
     }
@@ -175,6 +226,7 @@ export default function AssignAuditsReview() {
     let isCancelled = false;
 
     const fetchAssessmentById = async () => {
+      setIsLoading(true);
       try {
         const response = await axiosInstance.get(
           `/audits/assessment/${assessmentId}`,
@@ -272,6 +324,30 @@ export default function AssignAuditsReview() {
           })
           .filter((section: any) => section.sections.length > 0);
 
+        const nextAuditorNotesByQuestion: Record<string, string> = {};
+        const nextHasSavedAuditorNotes: Record<string, boolean> = {};
+
+        mappedMainSections.forEach((mainSection: any) => {
+          (mainSection.sections || []).forEach((section: any) => {
+            (section.questions || []).forEach((question: any) => {
+              const questionId = String(question.id || "");
+              if (!questionId) return;
+
+              const noteValue =
+                typeof question.auditorNotes === "string"
+                  ? question.auditorNotes
+                  : "";
+
+              nextAuditorNotesByQuestion[questionId] = noteValue;
+              nextHasSavedAuditorNotes[questionId] = Boolean(noteValue.trim());
+            });
+          });
+        });
+
+        setAuditorNotesByQuestion(nextAuditorNotesByQuestion);
+        setHasSavedAuditorNotes(nextHasSavedAuditorNotes);
+        setNoteSaveFeedbackByQuestion({});
+
         if (mappedMainSections.length > 0) {
           setMainSectionsData(mappedMainSections);
           setExpandedMain(
@@ -291,6 +367,10 @@ export default function AssignAuditsReview() {
         if (axios.isAxiosError(error)) {
           console.error("API message:", error.response?.data?.message);
         }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -300,6 +380,253 @@ export default function AssignAuditsReview() {
       isCancelled = true;
     };
   }, [assessmentId]);
+
+  const handleAuditorNotesChange = (questionId: string, value: string) => {
+    setAuditorNotesByQuestion((prev) => ({
+      ...prev,
+      [questionId]: value,
+    }));
+
+    setNoteSaveFeedbackByQuestion((prev) => {
+      const existing = prev[questionId];
+      if (!existing?.message) return prev;
+
+      return {
+        ...prev,
+        [questionId]: {
+          ...existing,
+          message: "",
+          type: null,
+        },
+      };
+    });
+  };
+
+  const handleAuditorNotesSave = async (questionId: string) => {
+    if (!assessmentId) return;
+
+    const noteValue = (auditorNotesByQuestion[questionId] || "").trim();
+
+    if (!noteValue) {
+      setNoteSaveFeedbackByQuestion((prev) => ({
+        ...prev,
+        [questionId]: {
+          isSaving: false,
+          message: "Please add notes before saving.",
+          type: "error",
+        },
+      }));
+      return;
+    }
+
+    setNoteSaveFeedbackByQuestion((prev) => ({
+      ...prev,
+      [questionId]: {
+        isSaving: true,
+        message: "",
+        type: null,
+      },
+    }));
+
+    try {
+      await axiosInstance.patch(
+        `/audits/assessment/${encodeURIComponent(assessmentId)}/questions/${encodeURIComponent(questionId)}/auditor-notes`,
+        {
+          auditorNotes: noteValue,
+        },
+      );
+
+      setAuditorNotesByQuestion((prev) => ({
+        ...prev,
+        [questionId]: noteValue,
+      }));
+      setHasSavedAuditorNotes((prev) => ({
+        ...prev,
+        [questionId]: true,
+      }));
+      setMainSectionsData((prev) =>
+        prev.map((mainSection: any) => ({
+          ...mainSection,
+          sections: (mainSection.sections || []).map((section: any) => ({
+            ...section,
+            questions: (section.questions || []).map((question: any) =>
+              String(question.id) === questionId
+                ? { ...question, auditorNotes: noteValue }
+                : question,
+            ),
+          })),
+        })),
+      );
+      setNoteSaveFeedbackByQuestion((prev) => ({
+        ...prev,
+        [questionId]: {
+          isSaving: false,
+          message: "Notes saved successfully.",
+          type: "success",
+        },
+      }));
+    } catch (error) {
+      let message = "Failed to save notes";
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.message || message;
+      }
+
+      setNoteSaveFeedbackByQuestion((prev) => ({
+        ...prev,
+        [questionId]: {
+          isSaving: false,
+          message,
+          type: "error",
+        },
+      }));
+    }
+  };
+
+  const handleAuditSummaryDocSelect = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+
+    setSubmitReportError("");
+    setSubmitReportSuccess("");
+
+    const extension =
+      selectedFile.name.split(".").pop()?.toLowerCase().trim() || "";
+    if (!ALLOWED_SUMMARY_DOC_EXTENSIONS.has(extension)) {
+      setAuditSummaryDoc("");
+      setAuditSummaryDocName("");
+      setSubmitReportError(
+        "Invalid file type. Please upload PDF, DOC, DOCX, XLS, or XLSX.",
+      );
+      event.target.value = "";
+      return;
+    }
+
+    if (selectedFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      setAuditSummaryDoc("");
+      setAuditSummaryDocName("");
+      setSubmitReportError("File size must be 10MB or less.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const encodedDocument = await toDataUrl(selectedFile);
+      setAuditSummaryDoc(encodedDocument);
+      setAuditSummaryDocName(selectedFile.name);
+    } catch {
+      setAuditSummaryDoc("");
+      setAuditSummaryDocName("");
+      setSubmitReportError("Unable to process selected document.");
+      event.target.value = "";
+    }
+  };
+
+  const handleSubmitAuditReport = async () => {
+    if (!assessmentId) {
+      setSubmitReportError("Assessment id is missing.");
+      return;
+    }
+
+    const trimmedSummary = auditSummary.trim();
+    const trimmedDescription = auditDescription.trim();
+
+    if (!trimmedSummary) {
+      setSubmitReportError("Audit summary is required.");
+      setSubmitReportSuccess("");
+      return;
+    }
+
+    if (!trimmedDescription) {
+      setSubmitReportError("Audit findings are required.");
+      setSubmitReportSuccess("");
+      return;
+    }
+
+    if (!finalDecision) {
+      setSubmitReportError("Please select a final decision.");
+      setSubmitReportSuccess("");
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    setSubmitReportError("");
+    setSubmitReportSuccess("");
+
+    try {
+      const payload: {
+        auditSummary: string;
+        auditDescription: string;
+        status: "approved" | "conditional" | "rejected";
+        auditSummaryDoc?: string;
+      } = {
+        auditSummary: trimmedSummary,
+        auditDescription: trimmedDescription,
+        status: finalDecision,
+      };
+
+      if (auditSummaryDoc) {
+        payload.auditSummaryDoc = auditSummaryDoc;
+      }
+
+      await axiosInstance.put(
+        `/audits/assessment/${encodeURIComponent(assessmentId)}`,
+        payload,
+      );
+
+      setSubmitReportSuccess("Audit report submitted successfully.");
+      setAssessmentStatus(formatStatusLabel(finalDecision));
+    } catch (error) {
+      let message = "Failed to submit audit report";
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.message || message;
+      }
+      setSubmitReportError(message);
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  useEffect(() => {
+    if (loaderIntervalRef.current) {
+      clearInterval(loaderIntervalRef.current);
+      loaderIntervalRef.current = null;
+    }
+    if (loaderFinishTimeoutRef.current) {
+      clearTimeout(loaderFinishTimeoutRef.current);
+      loaderFinishTimeoutRef.current = null;
+    }
+
+    if (isLoading) {
+      setShowLoader(true);
+      setLoadingProgress(0);
+      loaderIntervalRef.current = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 95) return prev;
+          const step = Math.max(1, Math.round((95 - prev) / 8));
+          return Math.min(prev + step, 95);
+        });
+      }, 120);
+      return;
+    }
+
+    if (showLoader) {
+      setLoadingProgress(100);
+      loaderFinishTimeoutRef.current = setTimeout(() => {
+        setShowLoader(false);
+        setLoadingProgress(0);
+      }, 300);
+    }
+  }, [isLoading, showLoader]);
+
+  if (showLoader) {
+    return (
+      <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
+        <Loading isLoading size="sm" progress={loadingProgress} className="p-4" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
@@ -564,6 +891,16 @@ export default function AssignAuditsReview() {
 
                       {selectedSection?.questions?.length ? (
                         selectedSection.questions.map((q: any, idx: number) => {
+                          const questionId = String(q.id);
+                          const noteValue =
+                            auditorNotesByQuestion[questionId] ??
+                            q.auditorNotes ??
+                            "";
+                          const hasSavedNotes =
+                            hasSavedAuditorNotes[questionId] ??
+                            Boolean(String(q.auditorNotes || "").trim());
+                          const noteSaveFeedback =
+                            noteSaveFeedbackByQuestion[questionId];
                           const showAttachments = isFileQuestionType(
                             q.questionType,
                             q.responseType,
@@ -671,7 +1008,13 @@ export default function AssignAuditsReview() {
                                   className="w-full min-h-30 p-3 rounded-md text-sm border focus:outline-none focus:border-black"
                                   style={{ borderColor: "#E6E6E6" }}
                                   placeholder="Add your notes here....."
-                                  defaultValue={q.auditorNotes}
+                                  value={noteValue}
+                                  onChange={(event) =>
+                                    handleAuditorNotesChange(
+                                      questionId,
+                                      event.target.value,
+                                    )
+                                  }
                                 ></textarea>
                               </div>
 
@@ -692,7 +1035,36 @@ export default function AssignAuditsReview() {
                                 >
                                   Compliant
                                 </Button>
+                                <Button
+                                  variant="custom"
+                                  className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={() => {
+                                    void handleAuditorNotesSave(questionId);
+                                  }}
+                                  disabled={
+                                    !assessmentId ||
+                                    Boolean(noteSaveFeedback?.isSaving) ||
+                                    !noteValue.trim()
+                                  }
+                                >
+                                  {noteSaveFeedback?.isSaving
+                                    ? "Saving..."
+                                    : hasSavedNotes
+                                      ? "Update Notes"
+                                      : "Add Notes"}
+                                </Button>
                               </div>
+                              {noteSaveFeedback?.message ? (
+                                <p
+                                  className={`text-sm ${
+                                    noteSaveFeedback.type === "error"
+                                      ? "text-red-600"
+                                      : "text-green-600"
+                                  }`}
+                                >
+                                  {noteSaveFeedback.message}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                           );
@@ -831,6 +1203,12 @@ export default function AssignAuditsReview() {
                   className="w-full min-h-30 p-4 rounded-md text-sm border focus:outline-none"
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Provide a high-level summary of the audits findings....."
+                  value={auditSummary}
+                  onChange={(event) => {
+                    setAuditSummary(event.target.value);
+                    if (submitReportError) setSubmitReportError("");
+                    if (submitReportSuccess) setSubmitReportSuccess("");
+                  }}
                 />
               </div>
 
@@ -842,6 +1220,12 @@ export default function AssignAuditsReview() {
                   className="w-full min-h-30 p-4 rounded-md text-sm border focus:outline-none"
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Document your detailed findings, observations and recommendations....."
+                  value={auditDescription}
+                  onChange={(event) => {
+                    setAuditDescription(event.target.value);
+                    if (submitReportError) setSubmitReportError("");
+                    if (submitReportSuccess) setSubmitReportSuccess("");
+                  }}
                 />
               </div>
             </div>
@@ -1034,7 +1418,7 @@ export default function AssignAuditsReview() {
             </div>
             <div className="mt-5">
               <label className="block text-sm font-medium text-secondary mb-2">
-                Audit Summary *
+                Audit Summary Document
               </label>
               <div
                 className="w-full rounded-lg border-2 border-dashed border-zinc-300 p-8 min-h-30 flex flex-col items-center justify-center text-center text-gray-400"
@@ -1062,6 +1446,25 @@ export default function AssignAuditsReview() {
                 <div className="text-xs text-gray-400 mt-1">
                   PDF, DOC, DOCX, XLS, XLSX (max 10MB)
                 </div>
+                <input
+                  ref={auditSummaryDocInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={handleAuditSummaryDocSelect}
+                />
+                <button
+                  type="button"
+                  className="mt-4 px-4 py-2 text-sm border border-zinc-300 rounded-md text-secondary hover:bg-zinc-50"
+                  onClick={() => auditSummaryDocInputRef.current?.click()}
+                >
+                  Select Document
+                </button>
+                {auditSummaryDocName ? (
+                  <p className="mt-2 text-xs text-secondary">
+                    Selected: {auditSummaryDocName}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -1069,11 +1472,18 @@ export default function AssignAuditsReview() {
               variant="primary"
               className="mt-6"
               onClick={() => {
-                console.log("Submit Audit Report");
+                void handleSubmitAuditReport();
               }}
+              disabled={isSubmittingReport}
             >
-              Submit Audit Report
+              {isSubmittingReport ? "Submitting..." : "Submit Audit Report"}
             </Button>
+            {submitReportError ? (
+              <p className="mt-3 text-sm text-red-600">{submitReportError}</p>
+            ) : null}
+            {submitReportSuccess ? (
+              <p className="mt-3 text-sm text-green-600">{submitReportSuccess}</p>
+            ) : null}
           </div>
         </div>
       )}
