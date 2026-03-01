@@ -1,7 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useUser } from "@/contexts/UserContext";
+import { axiosInstance } from "@/lib/axios";
+import { Loading } from "../common/Loading";
 
 interface SupportTicketCardProps {
   title: string;
@@ -9,9 +17,64 @@ interface SupportTicketCardProps {
   certification: string;
   date: string;
   status: string;
-  onStatusChange?: (newStatus: string) => void;
+  onStatusChange?: (newStatus: string) => Promise<boolean> | boolean;
   canUpdateStatus?: boolean;
 }
+
+type SupportTicketApiItem = {
+  id: string;
+  subject?: string | null;
+  category?: string | null;
+  certificate_name?: string | null;
+  created_at?: string | null;
+  status?: string | null;
+  description?: string | null;
+  supporting_document?: string | null;
+};
+
+type SupportTicketsApiResponse = {
+  success?: boolean;
+  message?: string;
+  statusCode?: number;
+  timestamp?: string;
+  page?: number;
+  limit?: number;
+  total?: number;
+  data?: SupportTicketApiItem[] | null;
+};
+
+type SupportTicket = {
+  id: string;
+  title: string;
+  category: string;
+  certification: string;
+  date: string;
+  status: string;
+};
+
+const toTitleCase = (value?: string | null): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "N/A";
+  return raw
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
+
+const toApiStatus = (value: string): string =>
+  value.toLowerCase().trim().replace(/\s+/g, "-");
 
 function SupportTicketCard({
   title,
@@ -35,10 +98,15 @@ function SupportTicketCard({
   ];
 
   const handleStatusChange = (newStatus: string) => {
+    const previousStatus = currentStatus;
     setCurrentStatus(newStatus);
     setIsDropdownOpen(false);
     if (onStatusChange) {
-      onStatusChange(newStatus);
+      Promise.resolve(onStatusChange(newStatus)).then((success) => {
+        if (!success) {
+          setCurrentStatus(previousStatus);
+        }
+      });
     }
   };
 
@@ -204,6 +272,139 @@ export default function SupportPage() {
   const canManageTicketStatus =
     hasActionPermission(["supportCenter"], "write") ||
     hasActionPermission(["supportCenter"], "edit");
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [showLoader, setShowLoader] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const updateTicketStatusLocally = (
+    setter: Dispatch<SetStateAction<SupportTicket[]>>,
+    ticketId: string,
+    status: string,
+  ) => {
+    setter((prev) =>
+      prev.map((ticket) =>
+        ticket.id === ticketId ? { ...ticket, status } : ticket,
+      ),
+    );
+  };
+
+  const handleTicketStatusChange = async (
+    ticketId: string,
+    newStatus: string,
+  ): Promise<boolean> => {
+    const currentStatus =
+      tickets.find((ticket) => ticket.id === ticketId)?.status || "";
+    const apiStatus = toApiStatus(newStatus);
+
+    updateTicketStatusLocally(setTickets, ticketId, newStatus);
+
+    try {
+      const response = await axiosInstance.patch(
+        `/support-tickets/${encodeURIComponent(ticketId)}/status`,
+        {
+          status: apiStatus,
+        },
+      );
+      console.log("Support ticket status update response:", response.data);
+      return true;
+    } catch (error) {
+      console.error("Failed to update support ticket status:", error);
+      setLoadError("Failed to update support ticket status.");
+      updateTicketStatusLocally(setTickets, ticketId, currentStatus);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchSupportTickets = async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const response = await axiosInstance.get<SupportTicketsApiResponse>(
+          "/support-tickets",
+          {
+          params: {
+            page: 1,
+            limit: 10,
+          },
+          },
+        );
+
+        if (isCancelled) return;
+        console.log("Support tickets response:", response.data);
+
+        const apiTickets = Array.isArray(response.data?.data)
+          ? response.data.data
+          : [];
+
+        const mappedTickets: SupportTicket[] = apiTickets.map((ticket) => ({
+          id: ticket.id,
+          title: ticket.subject || "Untitled ticket",
+          category: toTitleCase(ticket.category),
+          certification: ticket.certificate_name || "N/A",
+          date: formatDate(ticket.created_at),
+          status: toTitleCase(ticket.status),
+        }));
+
+        setTickets(mappedTickets);
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch support tickets:", error);
+        setLoadError("Failed to fetch support tickets.");
+        setTickets([]);
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchSupportTickets();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (loaderIntervalRef.current) {
+      clearInterval(loaderIntervalRef.current);
+      loaderIntervalRef.current = null;
+    }
+    if (loaderFinishTimeoutRef.current) {
+      clearTimeout(loaderFinishTimeoutRef.current);
+      loaderFinishTimeoutRef.current = null;
+    }
+
+    if (isLoading) {
+      setShowLoader(true);
+      setLoadingProgress(0);
+      loaderIntervalRef.current = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 95) return prev;
+          const step = Math.max(1, Math.round((95 - prev) / 8));
+          return Math.min(prev + step, 95);
+        });
+      }, 120);
+      return;
+    }
+
+    if (showLoader) {
+      setLoadingProgress(100);
+      loaderFinishTimeoutRef.current = setTimeout(() => {
+        setShowLoader(false);
+        setLoadingProgress(0);
+      }, 300);
+    }
+  }, [isLoading, showLoader]);
 
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
@@ -224,55 +425,42 @@ export default function SupportPage() {
         </h2>
       </div>
 
+      {loadError ? (
+        <div className="mb-4 p-3 bg-red/10 border border-red/20 rounded-lg">
+          <p className="text-sm font-semibold text-red">{loadError}</p>
+        </div>
+      ) : null}
+
       <div className="space-y-4">
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="In progress"
-          canUpdateStatus={canManageTicketStatus}
-        />
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="In progress"
-          canUpdateStatus={canManageTicketStatus}
-        />
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Pending"
-          canUpdateStatus={canManageTicketStatus}
-        />
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Pending"
-          canUpdateStatus={canManageTicketStatus}
-        />
-        <SupportTicketCard
-          title="Question about GRI Standards compliance requirements"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Completed"
-          canUpdateStatus={canManageTicketStatus}
-        />
-        <SupportTicketCard
-          title="Question about GRI Standards compliance requirements"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Completed"
-          canUpdateStatus={canManageTicketStatus}
-        />
+        {showLoader ? (
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6 flex items-center justify-center min-h-[140px]">
+            <Loading
+              isLoading
+              size="sm"
+              progress={loadingProgress}
+              className="p-4"
+            />
+          </div>
+        ) : tickets.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6 text-sm text-gray">
+            No support tickets found.
+          </div>
+        ) : (
+          tickets.map((ticket) => (
+            <SupportTicketCard
+              key={ticket.id}
+              title={ticket.title}
+              category={ticket.category}
+              certification={ticket.certification}
+              date={ticket.date}
+              status={ticket.status}
+              onStatusChange={(newStatus) =>
+                handleTicketStatusChange(ticket.id, newStatus)
+              }
+              canUpdateStatus={canManageTicketStatus}
+            />
+          ))
+        )}
       </div>
     </div>
   );
