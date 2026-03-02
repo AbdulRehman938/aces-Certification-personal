@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, type ChangeEvent } from "react";
+import { Suspense, useEffect, useState, useRef, type ChangeEvent } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
 import { Loading } from "@/app/(dashboards)/admin/common/Loading";
 import { DUMMY_MAIN_SECTIONS } from "@/lib/dummyMainSections";
@@ -142,7 +142,7 @@ const toDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-export default function AssignAuditsReview() {
+function AssignAuditsReviewContent() {
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("id");
   const [isLoading, setIsLoading] = useState(Boolean(assessmentId));
@@ -1427,5 +1427,19 @@ export default function AssignAuditsReview() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AssignAuditsReview() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
+          <div className="text-secondary">Loading...</div>
+        </div>
+      }
+    >
+      <AssignAuditsReviewContent />
+    </Suspense>
   );
 }
