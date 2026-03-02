@@ -16,10 +16,51 @@ export default function AssignSelfAssureReview() {
         DUMMY_MAIN_SECTIONS[0]?.sections?.[0]?.name || null
     );
     const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
-    const [finalDecision, setFinalDecision] = useState<'approved' | 'conditional' | 'rejected' | null>(null);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
-    const [showCompliantModal, setShowCompliantModal] = useState(false);
     const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+    const [reviewerNotesByQuestion, setReviewerNotesByQuestion] = useState<
+        Record<string, string>
+    >({});
+    const [hasSavedReviewerNotes, setHasSavedReviewerNotes] = useState<
+        Record<string, boolean>
+    >({});
+    const [noteSaveFeedbackByQuestion, setNoteSaveFeedbackByQuestion] = useState<
+        Record<string, { type: 'success' | 'error'; message: string; isSaving?: boolean }>
+    >({});
+
+    const handleReviewerNotesChange = (questionId: string, value: string) => {
+        setReviewerNotesByQuestion((prev) => ({ ...prev, [questionId]: value }));
+        setNoteSaveFeedbackByQuestion((prev) => {
+            if (!prev[questionId]) return prev;
+            const next = { ...prev };
+            delete next[questionId];
+            return next;
+        });
+    };
+
+    const handleReviewerNotesSave = (questionId: string) => {
+        const noteValue = (reviewerNotesByQuestion[questionId] || '').trim();
+        if (!noteValue) {
+            setNoteSaveFeedbackByQuestion((prev) => ({
+                ...prev,
+                [questionId]: { type: 'error', message: 'Please add notes before saving.' },
+            }));
+            return;
+        }
+
+        setNoteSaveFeedbackByQuestion((prev) => ({
+            ...prev,
+            [questionId]: { type: 'success', message: '', isSaving: true },
+        }));
+
+        setTimeout(() => {
+            setHasSavedReviewerNotes((prev) => ({ ...prev, [questionId]: true }));
+            setNoteSaveFeedbackByQuestion((prev) => ({
+                ...prev,
+                [questionId]: { type: 'success', message: 'Notes saved successfully.' },
+            }));
+        }, 250);
+    };
 
     return (
         <div className="p-3 md:p-6 bg-light-gray min-h-screen">
@@ -175,7 +216,13 @@ export default function AssignSelfAssureReview() {
                                     </div>
 
                                     {selectedSection?.questions?.length ? (
-                                        selectedSection.questions.map((q: any, idx: number) => (
+                                        selectedSection.questions.map((q: any, idx: number) => {
+                                            const questionId = String(q.id);
+                                            const noteValue = reviewerNotesByQuestion[questionId] || "";
+                                            const hasSavedNotes = hasSavedReviewerNotes[questionId] || false;
+                                            const noteSaveFeedback = noteSaveFeedbackByQuestion[questionId];
+
+                                            return (
                                             <div key={q.id} className="mt-6 border border-zinc-100 rounded-md p-6">
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div className="flex items-center gap-4">
@@ -269,19 +316,45 @@ export default function AssignSelfAssureReview() {
                                                             className="w-full min-h-30 p-3 rounded-md text-sm border focus:outline-none focus:border-black"
                                                             style={{ borderColor: "#E6E6E6" }}
                                                             placeholder="Add your reviewer notes here..."
+                                                            value={noteValue}
+                                                            onChange={(event) =>
+                                                                handleReviewerNotesChange(
+                                                                    questionId,
+                                                                    event.target.value
+                                                                )
+                                                            }
                                                         ></textarea>
                                                     </div>
 
                                                     <div className="mt-6 flex items-center gap-4">
-                                                        <Button variant="primary">Non-Compliant</Button>
                                                         <Button variant="custom" className="border border-black rounded-lg px-6 py-2 font-semibold" onClick={() => setShowSubmitModal(true)}>Request Clarification</Button>
-                                                        <Button variant="custom" className="border border-red-500 text-red-500 rounded-lg px-6 py-2 font-semibold" style={{ background: "white" }} onClick={() => setShowCompliantModal(true)}>
-                                                            Compliant
+                                                        <Button
+                                                            variant="custom"
+                                                            className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            onClick={() => handleReviewerNotesSave(questionId)}
+                                                            disabled={Boolean(noteSaveFeedback?.isSaving) || !noteValue.trim()}
+                                                        >
+                                                            {noteSaveFeedback?.isSaving
+                                                                ? "Saving..."
+                                                                : hasSavedNotes
+                                                                    ? "Update Notes"
+                                                                    : "Add Notes"}
                                                         </Button>
                                                     </div>
+                                                    {noteSaveFeedback?.message ? (
+                                                        <p
+                                                            className={`text-sm ${noteSaveFeedback.type === 'error'
+                                                                ? 'text-red-600'
+                                                                : 'text-green-600'
+                                                                }`}
+                                                        >
+                                                            {noteSaveFeedback.message}
+                                                        </p>
+                                                    ) : null}
                                                 </div>
                                             </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="mt-6 border border-zinc-100 rounded-md p-6">
                                             <div className="text-sm text-gray-500">No questions available for this section.</div>
@@ -315,33 +388,6 @@ export default function AssignSelfAssureReview() {
                             <div className="mt-6 flex justify-end gap-3">
                                 <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>Close</Button>
                                 <Button variant="primary" onClick={() => { console.log("Request sent"); setShowSubmitModal(false); }}>Send Request</Button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                {showCompliantModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-black/40" onClick={() => setShowCompliantModal(false)} />
-                        <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
-                            <button
-                                className="absolute top-4 right-4"
-                                onClick={() => setShowCompliantModal(false)}
-                            >
-                                <img src="/assets/imgs/admin/commons/cross.svg" alt="close" className="w-5 h-5" />
-                            </button>
-
-                            <h3 className="text-lg font-medium text-secondary mb-3">Complaint</h3>
-                            <p className="text-sm text-gray-600 mb-4">Describe your compliant</p>
-
-                            <textarea
-                                className="w-full min-h-30 p-3 rounded-md text-sm border"
-                                style={{ borderColor: "#E6E6E6" }}
-                                placeholder="Describe your compliant here...."
-                            />
-
-                            <div className="mt-6 flex justify-end gap-3">
-                                <Button variant="secondary" onClick={() => setShowCompliantModal(false)}>Close</Button>
-                                <Button variant="primary" onClick={() => { console.log("Compliant submitted"); setShowCompliantModal(false); }}>Compliant</Button>
                             </div>
                         </div>
                     </div>

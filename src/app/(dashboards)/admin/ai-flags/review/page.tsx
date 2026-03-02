@@ -35,6 +35,10 @@ type AiFlaggedResponse = {
 
 type AiFlagReview = {
   id?: string;
+  assessmentId?: string | null;
+  assessment_id?: string | null;
+  certificateAssessmentId?: string | null;
+  certificate_assessment_id?: string | null;
   flag_status?: string | null;
   review_description?: string | null;
   review_status?: string | null;
@@ -45,6 +49,10 @@ type AiFlagReview = {
 };
 
 type AiFlagDetailData = {
+  assessmentId?: string | null;
+  assessment_id?: string | null;
+  certificateAssessmentId?: string | null;
+  certificate_assessment_id?: string | null;
   organizationName?: string | null;
   certificateName?: string | null;
   assessmentType?: string | null;
@@ -59,6 +67,9 @@ type AiFlagDetailApiResponse = {
   timestamp?: string;
   data?: AiFlagDetailData;
 };
+
+type FlagActionType = "approve" | "clarification" | "escalate" | null;
+const DEFAULT_ESCALATE_ASSESSMENT_ID = "36bf0264-765d-4967-80b3-7b03d5f8b111";
 
 const formatDateTime = (value?: string | null): string => {
   if (!value) return "N/A";
@@ -177,6 +188,12 @@ function ReviewPageContent() {
   const [loadError, setLoadError] = useState("");
   const [showLoader, setShowLoader] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [activeActionModal, setActiveActionModal] = useState<FlagActionType>(
+    null,
+  );
+  const [actionReason, setActionReason] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -313,6 +330,94 @@ function ReviewPageContent() {
     typeof review?.total_flags === "number"
       ? review.total_flags
       : flaggedResponses.length;
+
+  const actionTitleMap: Record<Exclude<FlagActionType, null>, string> = {
+    approve: "Approve Question",
+    clarification: "Request Clarification",
+    escalate: "Escalate to Audit",
+  };
+
+  const openActionModal = (action: Exclude<FlagActionType, null>) => {
+    if (!canTakeFlagAction) return;
+    setActiveActionModal(action);
+    setActionReason("");
+    setActionError("");
+  };
+
+  const closeActionModal = () => {
+    if (isSubmittingAction) return;
+    setActiveActionModal(null);
+    setActionReason("");
+    setActionError("");
+  };
+
+  const currentActionLabel = activeActionModal
+    ? actionTitleMap[activeActionModal]
+    : "";
+
+  const resolveAssessmentIdForEscalate = (): string => {
+    const candidates = [
+      detail?.assessmentId,
+      detail?.assessment_id,
+      detail?.certificateAssessmentId,
+      detail?.certificate_assessment_id,
+      review?.assessmentId,
+      review?.assessment_id,
+      review?.certificateAssessmentId,
+      review?.certificate_assessment_id,
+    ];
+
+    const resolved = candidates.find(
+      (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
+    );
+
+    return resolved
+      ? String(resolved).trim()
+      : DEFAULT_ESCALATE_ASSESSMENT_ID;
+  };
+
+  const handleActionSubmit = async () => {
+    if (!activeActionModal) return;
+
+    if (
+      activeActionModal === "approve" ||
+      activeActionModal === "clarification"
+    ) {
+      closeActionModal();
+      return;
+    }
+
+    const reasonToSend = actionReason.trim();
+    if (!reasonToSend) {
+      setActionError("Reason is required.");
+      return;
+    }
+
+    setIsSubmittingAction(true);
+    setActionError("");
+
+    try {
+      if (activeActionModal === "escalate") {
+        const assessmentId = resolveAssessmentIdForEscalate();
+        await axiosInstance.post(
+          `/admin/assessments/${encodeURIComponent(assessmentId)}/escalate`,
+          { reason: reasonToSend },
+        );
+        console.log("Assessment escalated successfully", {
+          assessmentId,
+          reason: reasonToSend,
+        });
+      }
+
+      setActiveActionModal(null);
+      setActionReason("");
+    } catch (error) {
+      console.error(`Failed to ${activeActionModal} assessment:`, error);
+      setActionError("Failed to escalate assessment. Please try again.");
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  };
 
   if (showLoader) {
     return (
@@ -595,38 +700,94 @@ function ReviewPageContent() {
                   </p>
                 </div>
               </div>
+
+              <div className="p-4 md:p-6 pt-0">
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    className={`shrink-0 ${!canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""}`}
+                    disabled={!canTakeFlagAction}
+                    onClick={() => openActionModal("approve")}
+                  >
+                    Approve Question
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className={`px-4 py-2 md:px-6 md:py-3 ${!canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""}`}
+                    disabled={!canTakeFlagAction}
+                    onClick={() => openActionModal("clarification")}
+                  >
+                    Request Clarification
+                  </Button>
+                  <Button
+                    variant="custom"
+                    className={`px-4 py-2 md:px-6 md:py-3 text-secondary border border-black ${
+                      !canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                    style={{ backgroundColor: "#e9e9e9" }}
+                    disabled={!canTakeFlagAction}
+                    onClick={() => openActionModal("escalate")}
+                  >
+                    Escalate to Audit
+                  </Button>
+                </div>
+              </div>
             </div>
           );
         })
       )}
 
-      <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mt-4">
-        <div className="flex flex-wrap gap-3">
-          <Button
-            className={`shrink-0 ${!canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""}`}
-            disabled={!canTakeFlagAction}
-          >
-            Approve Assessment
-          </Button>
-          <Button
-            variant="secondary"
-            className={`px-4 py-2 md:px-6 md:py-3 ${!canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""}`}
-            disabled={!canTakeFlagAction}
-          >
-            Request Clarification
-          </Button>
-          <Button
-            variant="custom"
-            className={`px-4 py-2 md:px-6 md:py-3 text-secondary border border-black ${
-              !canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""
-            }`}
-            style={{ backgroundColor: "#e9e9e9" }}
-            disabled={!canTakeFlagAction}
-          >
-            Escalate to Audit
-          </Button>
+      {activeActionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={closeActionModal} />
+          <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
+            <button
+              className="absolute top-4 right-4"
+              onClick={closeActionModal}
+              disabled={isSubmittingAction}
+            >
+              <img
+                src="/assets/imgs/admin/commons/cross.svg"
+                alt="close"
+                className="w-5 h-5"
+              />
+            </button>
+
+            <h3 className="text-lg font-medium text-secondary mb-3">Reason</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Add reason for {currentActionLabel.toLowerCase()}.
+            </p>
+
+            <textarea
+              className="w-full min-h-30 p-3 rounded-md text-sm border"
+              style={{ borderColor: "#E6E6E6" }}
+              placeholder="Write reason..."
+              value={actionReason}
+              onChange={(event) => setActionReason(event.target.value)}
+            />
+
+            {actionError ? (
+              <p className="mt-3 text-sm text-red-600">{actionError}</p>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button
+                variant="secondary"
+                onClick={closeActionModal}
+                disabled={isSubmittingAction}
+              >
+                Close
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => void handleActionSubmit()}
+                disabled={isSubmittingAction}
+              >
+                {isSubmittingAction ? "Submitting..." : "Submit"}
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

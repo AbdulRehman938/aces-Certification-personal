@@ -170,7 +170,6 @@ export default function AssignAuditsReview() {
     "approved" | "conditional" | "rejected" | null
   >(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [showCompliantModal, setShowCompliantModal] = useState(false);
   const [organizationName, setOrganizationName] = useState("Acme Corporation");
   const [certificateName, setCertificateName] = useState("ISO 27001:2022");
   const [assessmentStatus, setAssessmentStatus] = useState("Assigned");
@@ -1019,21 +1018,12 @@ export default function AssignAuditsReview() {
                               </div>
 
                               <div className="mt-6 flex items-center gap-4">
-                                <Button variant="primary">Non-Compliant</Button>
                                 <Button
                                   variant="custom"
                                   className="border border-black rounded-lg px-6 py-2 font-semibold"
                                   onClick={() => setShowSubmitModal(true)}
                                 >
                                   Request Clarification
-                                </Button>
-                                <Button
-                                  variant="custom"
-                                  className="border border-red-500 text-red-500 rounded-lg px-6 py-2 font-semibold"
-                                  style={{ background: "white" }}
-                                  onClick={() => setShowCompliantModal(true)}
-                                >
-                                  Compliant
                                 </Button>
                                 <Button
                                   variant="custom"
@@ -1128,57 +1118,6 @@ export default function AssignAuditsReview() {
                     }}
                   >
                     Send Request
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-          {showCompliantModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div
-                className="absolute inset-0 bg-black/40"
-                onClick={() => setShowCompliantModal(false)}
-              />
-              <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
-                <button
-                  className="absolute top-4 right-4"
-                  onClick={() => setShowCompliantModal(false)}
-                >
-                  <img
-                    src="/assets/imgs/admin/commons/cross.svg"
-                    alt="close"
-                    className="w-5 h-5"
-                  />
-                </button>
-
-                <h3 className="text-lg font-medium text-secondary mb-3">
-                  Complaint
-                </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Describe your compliant
-                </p>
-
-                <textarea
-                  className="w-full min-h-30 p-3 rounded-md text-sm border"
-                  style={{ borderColor: "#E6E6E6" }}
-                  placeholder="Describe your compliant here...."
-                />
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setShowCompliantModal(false)}
-                  >
-                    Close
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      console.log("Compliant submitted");
-                      setShowCompliantModal(false);
-                    }}
-                  >
-                    Compliant
                   </Button>
                 </div>
               </div>

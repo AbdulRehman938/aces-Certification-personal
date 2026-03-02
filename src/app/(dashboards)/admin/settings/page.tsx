@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import Dropdown from "../common/dropdown";
 import Button from "../common/button";
 import { useUser } from "@/contexts/UserContext";
+import { axiosInstance } from "@/lib/axios";
 
 interface NotificationCardProps {
   label: string;
@@ -12,6 +14,27 @@ interface NotificationCardProps {
   onToggle: () => void;
   disabled?: boolean;
 }
+
+type NotificationSettingsPayload = {
+  email_enabled: boolean;
+  in_app_enabled: boolean;
+  assessment_submissions_enabled: boolean;
+  ai_flags_enabled: boolean;
+  audit_scheduling_enabled: boolean;
+  payment_events_enabled: boolean;
+  certificate_events_enabled: boolean;
+  reminder_frequency: string;
+};
+
+const normalizeReminderFrequency = (value: unknown): string => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "daily" || normalized === "weekly" || normalized === "monthly") {
+    return normalized;
+  }
+  return "daily";
+};
 
 function NotificationCard({
   label,
@@ -63,7 +86,14 @@ export default function SettingsPage() {
   const [auditScheduling, setAuditScheduling] = useState(true);
   const [paymentEvents, setPaymentEvents] = useState(true);
   const [certificateEvents, setCertificateEvents] = useState(true);
-  const [reminderFrequency, setReminderFrequency] = useState("UTC");
+  const [reminderFrequency, setReminderFrequency] = useState("daily");
+  const [isLoadingNotificationSettings, setIsLoadingNotificationSettings] =
+    useState(false);
+  const [isSavingNotificationSettings, setIsSavingNotificationSettings] =
+    useState(false);
+  const [notificationSettingsError, setNotificationSettingsError] = useState("");
+  const [notificationSettingsSuccess, setNotificationSettingsSuccess] =
+    useState("");
 
   const timeZoneOptions = [
     { value: "UTC", label: "UTC" },
@@ -87,10 +117,9 @@ export default function SettingsPage() {
   ];
 
   const reminderFrequencyOptions = [
-    { value: "UTC", label: "UTC" },
-    { value: "Daily", label: "Daily" },
-    { value: "Weekly", label: "Weekly" },
-    { value: "Monthly", label: "Monthly" },
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
   ];
   const isSubadmin = profile?.role === "subadmin";
   const permissions = Array.isArray(profile?.permissions)
@@ -117,6 +146,125 @@ export default function SettingsPage() {
   const canWrite = hasActionPermission(["setting", "settings"], "write");
   const canEdit = hasActionPermission(["setting", "settings"], "edit");
   const canManageSettings = canWrite || canEdit;
+  const isNotificationControlsDisabled =
+    !canManageSettings || isLoadingNotificationSettings || isSavingNotificationSettings;
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchNotificationSettings = async () => {
+      setIsLoadingNotificationSettings(true);
+      setNotificationSettingsError("");
+      setNotificationSettingsSuccess("");
+
+      try {
+        const response = await axiosInstance.get("/notifications/settings");
+        if (isCancelled) return;
+
+        const payload = response.data?.data ?? response.data ?? {};
+
+        setEmailNotifications(
+          typeof payload.email_enabled === "boolean"
+            ? payload.email_enabled
+            : true,
+        );
+        setInAppNotifications(
+          typeof payload.in_app_enabled === "boolean"
+            ? payload.in_app_enabled
+            : true,
+        );
+        setAssessmentSubmissions(
+          typeof payload.assessment_submissions_enabled === "boolean"
+            ? payload.assessment_submissions_enabled
+            : true,
+        );
+        setAiFlags(
+          typeof payload.ai_flags_enabled === "boolean"
+            ? payload.ai_flags_enabled
+            : false,
+        );
+        setAuditScheduling(
+          typeof payload.audit_scheduling_enabled === "boolean"
+            ? payload.audit_scheduling_enabled
+            : true,
+        );
+        setPaymentEvents(
+          typeof payload.payment_events_enabled === "boolean"
+            ? payload.payment_events_enabled
+            : true,
+        );
+        setCertificateEvents(
+          typeof payload.certificate_events_enabled === "boolean"
+            ? payload.certificate_events_enabled
+            : true,
+        );
+        setReminderFrequency(
+          normalizeReminderFrequency(payload.reminder_frequency),
+        );
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch notification settings:", error);
+        if (axios.isAxiosError(error)) {
+          setNotificationSettingsError(
+            String(
+              error.response?.data?.message ||
+                "Failed to load notification settings.",
+            ),
+          );
+        } else {
+          setNotificationSettingsError("Failed to load notification settings.");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingNotificationSettings(false);
+        }
+      }
+    };
+
+    void fetchNotificationSettings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const handleSaveNotificationSettings = async () => {
+    if (isNotificationControlsDisabled) return;
+
+    const payload: NotificationSettingsPayload = {
+      email_enabled: emailNotifications,
+      in_app_enabled: inAppNotifications,
+      assessment_submissions_enabled: assessmentSubmissions,
+      ai_flags_enabled: aiFlags,
+      audit_scheduling_enabled: auditScheduling,
+      payment_events_enabled: paymentEvents,
+      certificate_events_enabled: certificateEvents,
+      reminder_frequency: normalizeReminderFrequency(reminderFrequency),
+    };
+
+    setIsSavingNotificationSettings(true);
+    setNotificationSettingsError("");
+    setNotificationSettingsSuccess("");
+
+    try {
+      await axiosInstance.post("/notifications/settings", payload);
+      setNotificationSettingsSuccess("Notification settings saved successfully.");
+    } catch (error) {
+      console.error("Failed to save notification settings:", error);
+      if (axios.isAxiosError(error)) {
+        setNotificationSettingsError(
+          String(
+            error.response?.data?.message ||
+              "Failed to save notification settings.",
+          ),
+        );
+      } else {
+        setNotificationSettingsError("Failed to save notification settings.");
+      }
+    } finally {
+      setIsSavingNotificationSettings(false);
+    }
+  };
 
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
@@ -293,14 +441,14 @@ export default function SettingsPage() {
                 description="Receive notifications via email"
                 isEnabled={emailNotifications}
                 onToggle={() => setEmailNotifications(!emailNotifications)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
               <NotificationCard
                 label="In-App Notifications"
                 description="Show notifications within the platform"
                 isEnabled={inAppNotifications}
                 onToggle={() => setInAppNotifications(!inAppNotifications)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
             </div>
           </div>
@@ -317,35 +465,35 @@ export default function SettingsPage() {
                 onToggle={() =>
                   setAssessmentSubmissions(!assessmentSubmissions)
                 }
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
               <NotificationCard
                 label="AI Flags"
                 description="When AI detects discrepancies"
                 isEnabled={aiFlags}
                 onToggle={() => setAiFlags(!aiFlags)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
               <NotificationCard
                 label="Audit scheduling and results"
                 description="Audit scheduling and results"
                 isEnabled={auditScheduling}
                 onToggle={() => setAuditScheduling(!auditScheduling)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
               <NotificationCard
                 label="Payment Events"
                 description="Payment confirmations and refunds"
                 isEnabled={paymentEvents}
                 onToggle={() => setPaymentEvents(!paymentEvents)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
               <NotificationCard
                 label="Certificate Events"
                 description="Issuance, renewal, and expiry"
                 isEnabled={certificateEvents}
                 onToggle={() => setCertificateEvents(!certificateEvents)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
             </div>
           </div>
@@ -359,7 +507,7 @@ export default function SettingsPage() {
                 options={reminderFrequencyOptions}
                 value={reminderFrequency}
                 onChange={(e) => setReminderFrequency(e.target.value)}
-                disabled={!canManageSettings}
+                disabled={isNotificationControlsDisabled}
               />
               <p className="text-xs text-gray mt-2">
                 How often to send reminder notifications for pending actions
@@ -367,15 +515,31 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {(notificationSettingsError || notificationSettingsSuccess) && (
+            <div className="mb-4">
+              {notificationSettingsError ? (
+                <p className="text-sm text-red-600">{notificationSettingsError}</p>
+              ) : null}
+              {notificationSettingsSuccess ? (
+                <p className="text-sm text-green-600">{notificationSettingsSuccess}</p>
+              ) : null}
+            </div>
+          )}
+
           <div className="flex justify-end">
             <Button
               variant="primary"
               className={`text-white ${
-                !canManageSettings ? "opacity-60 cursor-not-allowed" : ""
+                isNotificationControlsDisabled ? "opacity-60 cursor-not-allowed" : ""
               }`}
-              disabled={!canManageSettings}
+              disabled={isNotificationControlsDisabled}
+              onClick={() => void handleSaveNotificationSettings()}
             >
-              Save Changes
+              {isLoadingNotificationSettings
+                ? "Loading..."
+                : isSavingNotificationSettings
+                  ? "Saving..."
+                  : "Save Changes"}
             </Button>
           </div>
         </div>
