@@ -187,6 +187,7 @@ export default function AssessmentPage() {
       const response = await axiosInstance.get<AssessmentMetricsApiResponse>(
         "/admin/assessments/metrics",
       );
+      console.log("assessment metrics response:", response.data);
       setMetrics(response.data?.data ?? null);
     } catch (err) {
       console.error("Failed to fetch assessment metrics:", err);
@@ -210,6 +211,7 @@ export default function AssessmentPage() {
           },
         },
       );
+      console.log("assessments list response:", response.data);
 
       const items = response.data?.data?.data ?? [];
       const apiTotal = response.data?.data?.total;
@@ -229,6 +231,7 @@ export default function AssessmentPage() {
         assessmentType: a.assessmentType,
         isCertificateBlocked: Boolean(a.isCertificateBlocked),
       }));
+      console.log("assessments mapped data:", mapped);
 
       setData(mapped);
       setTotal(typeof apiTotal === "number" ? apiTotal : 0);
@@ -1002,4 +1005,3 @@ export default function AssessmentPage() {
     </div>
   );
 }
-

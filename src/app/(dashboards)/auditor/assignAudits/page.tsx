@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -10,6 +10,8 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
+import { Loading } from "@/app/(dashboards)/admin/common/Loading";
 
 interface AssignedAudit {
   id: string;
@@ -18,99 +20,172 @@ interface AssignedAudit {
   startDate: string;
   time: string;
   dueDate: string;
-  status: "In Progress" | "Pending" | "Overdue" | "Submitted";
+  status: string;
 }
 
-const assignedAuditsData: AssignedAudit[] = [
-  {
-    id: "1",
-    organization: "Grand Hyatt....",
-    certification: "ISO 14001 Environment....",
-    startDate: "Dec 20, 2024",
-    time: "02:00 PM",
-    dueDate: "Dec 20, 2024",
-    status: "In Progress",
-  },
-  {
-    id: "2",
-    organization: "Marina Bay....",
-    certification: "Carbon Neutral Certif....",
-    startDate: "Dec 20, 2024",
-    time: "02:00 PM",
-    dueDate: "Dec 20, 2024",
-    status: "Pending",
-  },
-  {
-    id: "3",
-    organization: "Raffles Hotel",
-    certification: "Sustainable Supply....",
-    startDate: "Dec 20, 2024",
-    time: "02:00 PM",
-    dueDate: "Dec 20, 2024",
-    status: "Pending",
-  },
-  {
-    id: "4",
-    organization: "CapitaLand....",
-    certification: "ESG Reporting Excell....",
-    startDate: "Dec 20, 2024",
-    time: "02:00 PM",
-    dueDate: "Dec 20, 2024",
-    status: "Overdue",
-  },
-  {
-    id: "5",
-    organization: "Mandarin Or....",
-    certification: "ISO 14001 Environmen....",
-    startDate: "Dec 20, 2024",
-    time: "02:00 PM",
-    dueDate: "Dec 20, 2024",
-    status: "Submitted",
-  },
-  {
-    id: "6",
-    organization: "Far East Or....",
-    certification: "ESG Reporting Excell....",
-    startDate: "Dec 20, 2024",
-    time: "02:00 PM",
-    dueDate: "Dec 20, 2024",
-    status: "Pending",
-  },
-];
+type AssignedAssessmentApiItem = {
+  id: string;
+  organization_name?: string | null;
+  certificate_name?: string | null;
+  submitted_at?: string | null;
+  created_at?: string | null;
+  audit_date?: string | null;
+  completed_at?: string | null;
+  status?: string | null;
+};
+
+type AssignedAssessmentsApiResponse = {
+  message?: string;
+  data?: AssignedAssessmentApiItem[];
+  total?: number;
+  page?: number;
+  limit?: number;
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
+
+const formatTime = (value?: string | null): string => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const getApiStatusLabel = (value?: string | null): string => {
+  const raw = (value || "").trim();
+  if (!raw) return "N/A";
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+};
 
 export default function AssignAudits() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"reviewer" | "admin">("reviewer");
+  const [assignedAudits, setAssignedAudits] = useState<AssignedAudit[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showTableLoader, setShowTableLoader] = useState(false);
+  const [tableLoadingProgress, setTableLoadingProgress] = useState(0);
+  const [error, setError] = useState("");
+  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const tableLoaderFinishTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   useEffect(() => {
     const fetchAssignedAssessments = async () => {
+      setIsLoading(true);
+      setError("");
       try {
-        const response = await axiosInstance.get(
+        const response = await axiosInstance.get<AssignedAssessmentsApiResponse>(
           "/auditors/assigned-assessments",
+          {
+            params: {
+              page: 1,
+              limit: 10,
+              assignedByRole: activeTab,
+            },
+          },
         );
-        console.log("assigned assessments response:", response);
         console.log("assigned assessments data:", response.data);
+
+        const apiRows = Array.isArray(response.data?.data)
+          ? response.data.data
+          : [];
+
+        const mappedRows: AssignedAudit[] = apiRows.map((item) => {
+          const startAt = item.submitted_at || item.created_at || null;
+          const dueAt = item.audit_date || item.completed_at || null;
+
+          return {
+            id: item.id,
+            organization: item.organization_name || "N/A",
+            certification: item.certificate_name || "N/A",
+            startDate: formatDate(startAt),
+            time: formatTime(startAt),
+            dueDate: formatDate(dueAt),
+            status: getApiStatusLabel(item.status),
+          };
+        });
+
+        setAssignedAudits(mappedRows);
       } catch (error) {
         console.error("Failed to fetch assigned assessments:", error);
+        let message = "Failed to fetch assigned assessments";
+        if (axios.isAxiosError(error)) {
+          message = error.response?.data?.message || message;
+        }
+        setError(message);
+        setAssignedAudits([]);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchAssignedAssessments();
-  }, []);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (tableLoaderIntervalRef.current) {
+      clearInterval(tableLoaderIntervalRef.current);
+      tableLoaderIntervalRef.current = null;
+    }
+    if (tableLoaderFinishTimeoutRef.current) {
+      clearTimeout(tableLoaderFinishTimeoutRef.current);
+      tableLoaderFinishTimeoutRef.current = null;
+    }
+
+    if (isLoading) {
+      setShowTableLoader(true);
+      setTableLoadingProgress(0);
+      tableLoaderIntervalRef.current = setInterval(() => {
+        setTableLoadingProgress((prev) => {
+          if (prev >= 95) return prev;
+          const step = Math.max(1, Math.round((95 - prev) / 8));
+          return Math.min(prev + step, 95);
+        });
+      }, 120);
+      return;
+    }
+
+    if (showTableLoader) {
+      setTableLoadingProgress(100);
+      tableLoaderFinishTimeoutRef.current = setTimeout(() => {
+        setShowTableLoader(false);
+        setTableLoadingProgress(0);
+      }, 300);
+    }
+  }, [isLoading, showTableLoader]);
 
   const getStatusStyles = (status: string) => {
-    switch (status) {
-      case "In Progress":
-        return "bg-[#e9e9e9] text-black border border-black";
-      case "Pending":
-        return "bg-[#fef7e5] text-[#FAAB00] border border-[#FAAB00]";
-      case "Overdue":
-        return "bg-red-50 text-red-600 border border-red-600";
-      case "Submitted":
-        return "bg-green-50 text-green-600 border border-green-600";
-      default:
-        return "bg-[#e9e9e9] text-black border border-black";
+    const statusKey = status.toLowerCase();
+    if (statusKey.includes("pending")) {
+      return "bg-[#fef7e5] text-[#FAAB00] border border-[#FAAB00]";
     }
+    if (statusKey.includes("overdue") || statusKey.includes("expired")) {
+      return "bg-red-50 text-red-600 border border-red-600";
+    }
+    if (
+      statusKey.includes("submitted") ||
+      statusKey.includes("completed") ||
+      statusKey.includes("approved")
+    ) {
+      return "bg-green-50 text-green-600 border border-green-600";
+    }
+    return "bg-[#e9e9e9] text-black border border-black";
   };
 
   const columns = useMemo<ColumnDef<AssignedAudit>[]>(
@@ -254,10 +329,14 @@ export default function AssignAudits() {
             Action
           </span>
         ),
-        cell: (info: any) => {
-          const row = info.row.original as AssignedAudit;
+        cell: ({ row }) => {
+          const rowData = row.original;
+          const statusKey = rowData.status.toLowerCase();
           const showViewButton =
-            row.status === "Overdue" || row.status === "Submitted";
+            statusKey.includes("overdue") ||
+            statusKey.includes("submitted") ||
+            statusKey.includes("completed") ||
+            statusKey.includes("approved");
           return (
             <div className="flex items-center justify-end">
               <button
@@ -266,7 +345,13 @@ export default function AssignAudits() {
                     ? "bg-white text-secondary"
                     : "bg-[#262626] text-white"
                 }`}
-                onClick={() => router.push("/auditor/assignAudits/review")}
+                onClick={() =>
+                  router.push(
+                    `/auditor/assignAudits/review?id=${encodeURIComponent(
+                      rowData.id,
+                    )}`,
+                  )
+                }
               >
                 {showViewButton ? "View" : "Audit"}
               </button>
@@ -279,18 +364,20 @@ export default function AssignAudits() {
         maxSize: 120,
       },
     ],
-    [],
+    [router],
   );
 
   const table = useReactTable({
-    data: assignedAuditsData,
+    data: assignedAudits,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });
 
+  const emptyStateMessage = error || "No assigned audits found";
+
   return (
-    <div className="p-3 md:p-6 bg-light-gray min-h-screen">
+    <div className="p-3 md:p-6 bg-light-gray min-h-screen flex flex-col">
       <div className="mb-4 md:mb-6">
         <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
           Assigned Audits
@@ -340,10 +427,16 @@ export default function AssignAudits() {
       </div>
 
       {activeTab === "reviewer" && (
-        <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+        <div
+          className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
+            showTableLoader ? "flex flex-col flex-1" : ""
+          }`}
+        >
+          <div
+            className={`relative ${showTableLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
+          >
             <table
-              className="w-full min-w-250"
+              className={`w-full min-w-250 ${showTableLoader ? "h-full" : ""}`}
               style={{ tableLayout: "fixed" }}
             >
               <thead>
@@ -368,14 +461,15 @@ export default function AssignAudits() {
                   </tr>
                 ))}
               </thead>
-              <tbody>
-                {table.getRowModel().rows.length === 0 ? (
+              <tbody className={showTableLoader ? "h-full" : ""}>
+                {showTableLoader ? null : table.getRowModel().rows.length ===
+                  0 ? (
                   <tr>
                     <td
                       colSpan={columns.length}
                       className="px-4 py-8 text-center text-gray text-sm"
                     >
-                      No assigned audits found
+                      {emptyStateMessage}
                     </td>
                   </tr>
                 ) : (
@@ -403,15 +497,32 @@ export default function AssignAudits() {
                 )}
               </tbody>
             </table>
+
+            {showTableLoader && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loading
+                  isLoading
+                  size="sm"
+                  progress={tableLoadingProgress}
+                  className="p-4"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {activeTab === "admin" && (
-        <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+        <div
+          className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
+            showTableLoader ? "flex flex-col flex-1" : ""
+          }`}
+        >
+          <div
+            className={`relative ${showTableLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
+          >
             <table
-              className="w-full min-w-250"
+              className={`w-full min-w-250 ${showTableLoader ? "h-full" : ""}`}
               style={{ tableLayout: "fixed" }}
             >
               <thead>
@@ -436,14 +547,15 @@ export default function AssignAudits() {
                   </tr>
                 ))}
               </thead>
-              <tbody>
-                {table.getRowModel().rows.length === 0 ? (
+              <tbody className={showTableLoader ? "h-full" : ""}>
+                {showTableLoader ? null : table.getRowModel().rows.length ===
+                  0 ? (
                   <tr>
                     <td
                       colSpan={columns.length}
                       className="px-4 py-8 text-center text-gray text-sm"
                     >
-                      No assigned audits found
+                      {emptyStateMessage}
                     </td>
                   </tr>
                 ) : (
@@ -471,10 +583,20 @@ export default function AssignAudits() {
                 )}
               </tbody>
             </table>
+
+            {showTableLoader && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loading
+                  isLoading
+                  size="sm"
+                  progress={tableLoadingProgress}
+                  className="p-4"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
   );
 }
-

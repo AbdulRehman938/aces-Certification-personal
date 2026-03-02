@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useSidebar } from "@/app/components/dashboards/sidebarContext";
 import { useUser } from "@/contexts/UserContext";
 import { axiosInstance } from "@/lib/axios";
@@ -16,6 +17,8 @@ export default function DashboardHeader({
   defaultInitial,
 }: DashboardHeaderProps) {
   const { toggle, toggleCollapse } = useSidebar();
+  const pathname = usePathname();
+  const router = useRouter();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileDropdownOpen, setIsMobileDropdownOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -49,6 +52,20 @@ export default function DashboardHeader({
       toggle();
     } else {
       toggleCollapse();
+    }
+  };
+
+  const handleNotificationsClick = () => {
+    if (pathname.startsWith("/admin")) {
+      router.push("/admin/notifications");
+      return;
+    }
+    if (pathname.startsWith("/auditor")) {
+      router.push("/auditor/notifications");
+      return;
+    }
+    if (pathname.startsWith("/reviewer")) {
+      router.push("/reviewer/notifications");
     }
   };
 
@@ -195,7 +212,10 @@ export default function DashboardHeader({
               className="pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-secondary placeholder:text-gray focus:outline-none focus:ring-2 focus:ring-zinc-200 focus:border-transparent w-64"
             />
           </div>
-          <button className="relative p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+          <button
+            onClick={handleNotificationsClick}
+            className="relative p-2 hover:bg-zinc-50 rounded-lg transition-colors"
+          >
             <Image
               src="/assets/imgs/admin/dashboard/bell.svg"
               alt="Notifications"
@@ -277,4 +297,3 @@ export default function DashboardHeader({
     </div>
   );
 }
-

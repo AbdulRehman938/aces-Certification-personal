@@ -1,12 +1,157 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useRef, type ChangeEvent } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
+import { Loading } from "@/app/(dashboards)/admin/common/Loading";
 import { DUMMY_MAIN_SECTIONS } from "@/lib/dummyMainSections";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
+
+const getFileNameFromUrl = (value: string): string => {
+  const fallback = "Attached document";
+
+  try {
+    const parsedUrl = new URL(value);
+    const fromPath = parsedUrl.pathname.split("/").filter(Boolean).pop();
+    return fromPath ? decodeURIComponent(fromPath) : fallback;
+  } catch {
+    const fromPath = value
+      .split("?")[0]
+      .split("#")[0]
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    return fromPath ? decodeURIComponent(fromPath) : fallback;
+  }
+};
+
+const normalizeAttachments = (value: any): Array<{ name: string; url: string }> => {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+
+  return list
+    .map((item: any, index: number) => {
+      if (!item) return null;
+
+      if (typeof item === "string") {
+        const fileUrl = item.trim();
+        if (!fileUrl) return null;
+        return { name: getFileNameFromUrl(fileUrl), url: fileUrl };
+      }
+
+      if (typeof item === "object") {
+        const fileUrl =
+          item.url || item.fileUrl || item.path || item.link || item.downloadUrl;
+
+        if (typeof fileUrl !== "string" || !fileUrl.trim()) return null;
+
+        const fileName =
+          item.name ||
+          item.fileName ||
+          item.originalName ||
+          item.title ||
+          `Document ${index + 1}`;
+
+        return { name: String(fileName), url: fileUrl.trim() };
+      }
+
+      return null;
+    })
+    .filter(Boolean) as Array<{ name: string; url: string }>;
+};
+
+const extractQuestionAttachments = (question: any): Array<{ name: string; url: string }> => {
+  const knownAttachmentSources = [
+    question?.attachments,
+    question?.files,
+    question?.documents,
+    question?.file,
+    question?.uploadedFiles,
+    question?.answerFiles,
+  ];
+
+  for (const source of knownAttachmentSources) {
+    const mapped = normalizeAttachments(source);
+    if (mapped.length > 0) return mapped;
+  }
+
+  const answer = question?.applicantAnswer;
+
+  if (typeof answer === "string") {
+    const trimmed = answer.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      const parsedMapped = normalizeAttachments(parsed);
+      if (parsedMapped.length > 0) return parsedMapped;
+    } catch {
+      // applicantAnswer is not JSON, continue with URL check
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return normalizeAttachments(trimmed);
+    }
+  }
+
+  if (Array.isArray(answer) || (answer && typeof answer === "object")) {
+    return normalizeAttachments(answer);
+  }
+
+  return [];
+};
+
+const isFileQuestionType = (
+  questionType?: string | null,
+  responseType?: string | null,
+): boolean => {
+  const types = [questionType, responseType]
+    .map((value) => String(value || "").toLowerCase().trim())
+    .filter(Boolean);
+
+  return types.some(
+    (type) =>
+      type === "file" ||
+      type === "file_upload" ||
+      type === "upload" ||
+      type === "document",
+  );
+};
+
+type NoteSaveFeedback = {
+  isSaving: boolean;
+  message: string;
+  type: "success" | "error" | null;
+};
+
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_SUMMARY_DOC_EXTENSIONS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+]);
+
+const toDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Unable to read selected document"));
+    reader.readAsDataURL(file);
+  });
 
 export default function AssignAuditsReview() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
+  const assessmentId = searchParams.get("id");
+  const [isLoading, setIsLoading] = useState(Boolean(assessmentId));
+  const [showLoader, setShowLoader] = useState(Boolean(assessmentId));
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [activeButton, setActiveButton] = useState<"assessment" | "submit">(
     "assessment",
   );
@@ -20,12 +165,467 @@ export default function AssignAuditsReview() {
   const [activeSubsection, setActiveSubsection] = useState<string | null>(
     DUMMY_MAIN_SECTIONS[0]?.sections?.[0]?.name || null,
   );
-  const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
+  const [, setSelectedQuestionIndex] = useState<number>(0);
   const [finalDecision, setFinalDecision] = useState<
     "approved" | "conditional" | "rejected" | null
   >(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [showCompliantModal, setShowCompliantModal] = useState(false);
+  const [organizationName, setOrganizationName] = useState("Acme Corporation");
+  const [certificateName, setCertificateName] = useState("ISO 27001:2022");
+  const [assessmentStatus, setAssessmentStatus] = useState("Assigned");
+  const [auditDateLabel, setAuditDateLabel] = useState("N/A");
+  const [auditSummary, setAuditSummary] = useState("");
+  const [auditDescription, setAuditDescription] = useState("");
+  const [auditSummaryDoc, setAuditSummaryDoc] = useState("");
+  const [auditSummaryDocName, setAuditSummaryDocName] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [submitReportError, setSubmitReportError] = useState("");
+  const [submitReportSuccess, setSubmitReportSuccess] = useState("");
+  const [auditorNotesByQuestion, setAuditorNotesByQuestion] = useState<
+    Record<string, string>
+  >({});
+  const [hasSavedAuditorNotes, setHasSavedAuditorNotes] = useState<
+    Record<string, boolean>
+  >({});
+  const [noteSaveFeedbackByQuestion, setNoteSaveFeedbackByQuestion] = useState<
+    Record<string, NoteSaveFeedback>
+  >({});
+  const auditSummaryDocInputRef = useRef<HTMLInputElement | null>(null);
+
+  const formatStatusLabel = (value?: string | null): string => {
+    const raw = (value || "").trim();
+    if (!raw) return "N/A";
+    return raw
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const formatDateLabel = (value?: string | null): string => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  useEffect(() => {
+    if (!assessmentId) {
+      setIsLoading(false);
+      setShowLoader(false);
+      setLoadingProgress(0);
+      console.warn("Assessment id is missing in query params");
+      return;
+    }
+
+    let isCancelled = false;
+
+    const fetchAssessmentById = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axiosInstance.get(
+          `/audits/assessment/${assessmentId}`,
+        );
+        if (isCancelled) return;
+        console.log("audits assessment by id response:", response.data);
+
+        const payload = response.data?.data;
+        if (!payload || typeof payload !== "object") return;
+
+        setOrganizationName(payload.organizationName || "N/A");
+        setCertificateName(payload.certificateName || "N/A");
+        setAssessmentStatus(formatStatusLabel(payload.status));
+
+        const auditDateFromApi =
+          payload.auditRecord?.auditDate ||
+          payload.auditRecord?.date ||
+          payload.auditRecord?.scheduledAt ||
+          null;
+        setAuditDateLabel(formatDateLabel(auditDateFromApi));
+
+        const mainSections = Array.isArray(payload.sections)
+          ? payload.sections
+          : [];
+
+        const mappedMainSections = mainSections
+          .map((mainSection: any, mainIndex: number) => {
+            const sectionItems = Array.isArray(mainSection.sections)
+              ? mainSection.sections
+              : [];
+
+            const mappedSections = sectionItems.flatMap(
+              (section: any, sectionIndex: number) => {
+                const subSections = Array.isArray(section.subSections)
+                  ? section.subSections
+                  : [];
+
+                const sourceSubSections =
+                  subSections.length > 0
+                    ? subSections
+                    : [
+                        {
+                          subSectionId: section.sectionId,
+                          subSectionName: section.sectionName,
+                          questions: section.questions || [],
+                        },
+                      ];
+
+                return sourceSubSections.map((subSection: any, subIndex: number) => {
+                  const questions = Array.isArray(subSection.questions)
+                    ? subSection.questions
+                    : [];
+
+                  return {
+                    id:
+                      subSection.subSectionId ||
+                      section.sectionId ||
+                      `section-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}`,
+                    name:
+                      subSection.subSectionName ||
+                      section.sectionName ||
+                      `Section ${sectionIndex + 1}`,
+                    questions: questions.map((question: any, questionIndex: number) => ({
+                      id:
+                        question.questionId ||
+                        `question-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}-${questionIndex + 1}`,
+                      text: question.questionText || `Question ${questionIndex + 1}`,
+                      applicantAnswer:
+                        typeof question.applicantAnswer === "string"
+                          ? question.applicantAnswer
+                          : question.applicantAnswer == null
+                            ? "N/A"
+                            : JSON.stringify(question.applicantAnswer),
+                      aiSummary:
+                        question.aiReview?.summary || "No AI analysis available",
+                      reviewerNotes:
+                        question.reviewerNotes || "No reviewer notes available",
+                      auditorNotes: question.auditorNotes || "",
+                      isFlagged: Boolean(question.aiReview?.isFlagged),
+                      questionType: String(question.questionType || "").toLowerCase(),
+                      responseType: String(question.responseType || "").toLowerCase(),
+                      attachments: extractQuestionAttachments(question),
+                    })),
+                  };
+                });
+              },
+            );
+
+            return {
+              id: mainSection.mainSectionId || `main-${mainIndex + 1}`,
+              name: mainSection.mainSectionName || `Main Section ${mainIndex + 1}`,
+              isExpanded: mainIndex === 0,
+              sections: mappedSections,
+            };
+          })
+          .filter((section: any) => section.sections.length > 0);
+
+        const nextAuditorNotesByQuestion: Record<string, string> = {};
+        const nextHasSavedAuditorNotes: Record<string, boolean> = {};
+
+        mappedMainSections.forEach((mainSection: any) => {
+          (mainSection.sections || []).forEach((section: any) => {
+            (section.questions || []).forEach((question: any) => {
+              const questionId = String(question.id || "");
+              if (!questionId) return;
+
+              const noteValue =
+                typeof question.auditorNotes === "string"
+                  ? question.auditorNotes
+                  : "";
+
+              nextAuditorNotesByQuestion[questionId] = noteValue;
+              nextHasSavedAuditorNotes[questionId] = Boolean(noteValue.trim());
+            });
+          });
+        });
+
+        setAuditorNotesByQuestion(nextAuditorNotesByQuestion);
+        setHasSavedAuditorNotes(nextHasSavedAuditorNotes);
+        setNoteSaveFeedbackByQuestion({});
+
+        if (mappedMainSections.length > 0) {
+          setMainSectionsData(mappedMainSections);
+          setExpandedMain(
+            Object.fromEntries(
+              mappedMainSections.map((ms: any, index: number) => [
+                ms.id,
+                index === 0,
+              ]),
+            ),
+          );
+          setActiveSubsection(mappedMainSections[0]?.sections?.[0]?.name || null);
+          setSelectedQuestionIndex(0);
+        }
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch audits assessment by id:", error);
+        if (axios.isAxiosError(error)) {
+          console.error("API message:", error.response?.data?.message);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchAssessmentById();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [assessmentId]);
+
+  const handleAuditorNotesChange = (questionId: string, value: string) => {
+    setAuditorNotesByQuestion((prev) => ({
+      ...prev,
+      [questionId]: value,
+    }));
+
+    setNoteSaveFeedbackByQuestion((prev) => {
+      const existing = prev[questionId];
+      if (!existing?.message) return prev;
+
+      return {
+        ...prev,
+        [questionId]: {
+          ...existing,
+          message: "",
+          type: null,
+        },
+      };
+    });
+  };
+
+  const handleAuditorNotesSave = async (questionId: string) => {
+    if (!assessmentId) return;
+
+    const noteValue = (auditorNotesByQuestion[questionId] || "").trim();
+
+    if (!noteValue) {
+      setNoteSaveFeedbackByQuestion((prev) => ({
+        ...prev,
+        [questionId]: {
+          isSaving: false,
+          message: "Please add notes before saving.",
+          type: "error",
+        },
+      }));
+      return;
+    }
+
+    setNoteSaveFeedbackByQuestion((prev) => ({
+      ...prev,
+      [questionId]: {
+        isSaving: true,
+        message: "",
+        type: null,
+      },
+    }));
+
+    try {
+      await axiosInstance.patch(
+        `/audits/assessment/${encodeURIComponent(assessmentId)}/questions/${encodeURIComponent(questionId)}/auditor-notes`,
+        {
+          auditorNotes: noteValue,
+        },
+      );
+
+      setAuditorNotesByQuestion((prev) => ({
+        ...prev,
+        [questionId]: noteValue,
+      }));
+      setHasSavedAuditorNotes((prev) => ({
+        ...prev,
+        [questionId]: true,
+      }));
+      setMainSectionsData((prev) =>
+        prev.map((mainSection: any) => ({
+          ...mainSection,
+          sections: (mainSection.sections || []).map((section: any) => ({
+            ...section,
+            questions: (section.questions || []).map((question: any) =>
+              String(question.id) === questionId
+                ? { ...question, auditorNotes: noteValue }
+                : question,
+            ),
+          })),
+        })),
+      );
+      setNoteSaveFeedbackByQuestion((prev) => ({
+        ...prev,
+        [questionId]: {
+          isSaving: false,
+          message: "Notes saved successfully.",
+          type: "success",
+        },
+      }));
+    } catch (error) {
+      let message = "Failed to save notes";
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.message || message;
+      }
+
+      setNoteSaveFeedbackByQuestion((prev) => ({
+        ...prev,
+        [questionId]: {
+          isSaving: false,
+          message,
+          type: "error",
+        },
+      }));
+    }
+  };
+
+  const handleAuditSummaryDocSelect = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+
+    setSubmitReportError("");
+    setSubmitReportSuccess("");
+
+    const extension =
+      selectedFile.name.split(".").pop()?.toLowerCase().trim() || "";
+    if (!ALLOWED_SUMMARY_DOC_EXTENSIONS.has(extension)) {
+      setAuditSummaryDoc("");
+      setAuditSummaryDocName("");
+      setSubmitReportError(
+        "Invalid file type. Please upload PDF, DOC, DOCX, XLS, or XLSX.",
+      );
+      event.target.value = "";
+      return;
+    }
+
+    if (selectedFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      setAuditSummaryDoc("");
+      setAuditSummaryDocName("");
+      setSubmitReportError("File size must be 10MB or less.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const encodedDocument = await toDataUrl(selectedFile);
+      setAuditSummaryDoc(encodedDocument);
+      setAuditSummaryDocName(selectedFile.name);
+    } catch {
+      setAuditSummaryDoc("");
+      setAuditSummaryDocName("");
+      setSubmitReportError("Unable to process selected document.");
+      event.target.value = "";
+    }
+  };
+
+  const handleSubmitAuditReport = async () => {
+    if (!assessmentId) {
+      setSubmitReportError("Assessment id is missing.");
+      return;
+    }
+
+    const trimmedSummary = auditSummary.trim();
+    const trimmedDescription = auditDescription.trim();
+
+    if (!trimmedSummary) {
+      setSubmitReportError("Audit summary is required.");
+      setSubmitReportSuccess("");
+      return;
+    }
+
+    if (!trimmedDescription) {
+      setSubmitReportError("Audit findings are required.");
+      setSubmitReportSuccess("");
+      return;
+    }
+
+    if (!finalDecision) {
+      setSubmitReportError("Please select a final decision.");
+      setSubmitReportSuccess("");
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    setSubmitReportError("");
+    setSubmitReportSuccess("");
+
+    try {
+      const payload: {
+        auditSummary: string;
+        auditDescription: string;
+        status: "approved" | "conditional" | "rejected";
+        auditSummaryDoc?: string;
+      } = {
+        auditSummary: trimmedSummary,
+        auditDescription: trimmedDescription,
+        status: finalDecision,
+      };
+
+      if (auditSummaryDoc) {
+        payload.auditSummaryDoc = auditSummaryDoc;
+      }
+
+      await axiosInstance.put(
+        `/audits/assessment/${encodeURIComponent(assessmentId)}`,
+        payload,
+      );
+
+      setSubmitReportSuccess("Audit report submitted successfully.");
+      setAssessmentStatus(formatStatusLabel(finalDecision));
+    } catch (error) {
+      let message = "Failed to submit audit report";
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.message || message;
+      }
+      setSubmitReportError(message);
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  useEffect(() => {
+    if (loaderIntervalRef.current) {
+      clearInterval(loaderIntervalRef.current);
+      loaderIntervalRef.current = null;
+    }
+    if (loaderFinishTimeoutRef.current) {
+      clearTimeout(loaderFinishTimeoutRef.current);
+      loaderFinishTimeoutRef.current = null;
+    }
+
+    if (isLoading) {
+      setShowLoader(true);
+      setLoadingProgress(0);
+      loaderIntervalRef.current = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 95) return prev;
+          const step = Math.max(1, Math.round((95 - prev) / 8));
+          return Math.min(prev + step, 95);
+        });
+      }, 120);
+      return;
+    }
+
+    if (showLoader) {
+      setLoadingProgress(100);
+      loaderFinishTimeoutRef.current = setTimeout(() => {
+        setShowLoader(false);
+        setLoadingProgress(0);
+      }, 300);
+    }
+  }, [isLoading, showLoader]);
+
+  if (showLoader) {
+    return (
+      <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
+        <Loading isLoading size="sm" progress={loadingProgress} className="p-4" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
@@ -72,7 +672,7 @@ export default function AssignAuditsReview() {
 
           <div className="flex-1 min-w-0">
             <h2 className="text-[15px] md:text-[17px] font-medium text-secondary mb-2">
-              Acme Corporation
+              {organizationName}
             </h2>
             <div className="flex flex-row items-center gap-4">
               <div className="flex items-center gap-2">
@@ -89,7 +689,7 @@ export default function AssignAuditsReview() {
                   />
                 </svg>
                 <span className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px]">
-                  ISO 27001:2022
+                  {certificateName}
                 </span>
               </div>
 
@@ -113,7 +713,7 @@ export default function AssignAuditsReview() {
                   />
                 </svg>
                 <span className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px]">
-                  Jan 15, 2024
+                  {auditDateLabel}
                 </span>
               </div>
             </div>
@@ -121,7 +721,7 @@ export default function AssignAuditsReview() {
 
           <div className="shrink-0">
             <span className="inline-flex items-center justify-center px-4 py-1 rounded-md text-sm font-medium bg-green-50 text-green-600 border border-green-600">
-              Assigned
+              {assessmentStatus}
             </span>
           </div>
         </div>
@@ -273,8 +873,6 @@ export default function AssignAuditsReview() {
                     .find((s: any) => s.name === activeSubsection);
                   const questionsCount =
                     selectedSection?.questions?.length || 0;
-                  const question =
-                    selectedSection?.questions?.[selectedQuestionIndex] || null;
 
                   return (
                     <div>
@@ -291,11 +889,27 @@ export default function AssignAuditsReview() {
                       </div>
 
                       {selectedSection?.questions?.length ? (
-                        selectedSection.questions.map((q: any, idx: number) => (
-                          <div
-                            key={q.id}
-                            className="mt-6 border border-zinc-100 rounded-md p-6"
-                          >
+                        selectedSection.questions.map((q: any, idx: number) => {
+                          const questionId = String(q.id);
+                          const noteValue =
+                            auditorNotesByQuestion[questionId] ??
+                            q.auditorNotes ??
+                            "";
+                          const hasSavedNotes =
+                            hasSavedAuditorNotes[questionId] ??
+                            Boolean(String(q.auditorNotes || "").trim());
+                          const noteSaveFeedback =
+                            noteSaveFeedbackByQuestion[questionId];
+                          const showAttachments = isFileQuestionType(
+                            q.questionType,
+                            q.responseType,
+                          );
+
+                          return (
+                            <div
+                              key={q.id}
+                              className="mt-6 border border-zinc-100 rounded-md p-6"
+                            >
                             <div className="flex items-start justify-between mb-4">
                               <div className="flex items-center gap-4">
                                 <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-sm font-semibold">
@@ -313,7 +927,7 @@ export default function AssignAuditsReview() {
                                   border: "1px solid #FAAB00",
                                 }}
                               >
-                                Pending
+                                {q.isFlagged ? "AI Flagged" : "AI Reviewed"}
                               </span>
                             </div>
 
@@ -326,79 +940,40 @@ export default function AssignAuditsReview() {
                                   className="min-h-[80px] p-4 rounded-md text-sm text-gray-700"
                                   style={{ border: "1px solid #E6E6E6" }}
                                 >
-                                  Yes, we have a comprehensive information
-                                  security policy that was last reviewed in Q3
-                                  2024. The policy covers data classification,
-                                  access control, incident response, and
-                                  employee responsibilities.
+                                  {q.applicantAnswer || "N/A"}
                                 </div>
                               </div>
 
-                              <div>
-                                <h5 className="text-sm font-medium text-gray mb-2">
-                                  Attached Documents
-                                </h5>
-                                <div className="flex gap-3 flex-wrap">
-                                  <button
-                                    className="flex items-center gap-1 px-3 py-2 rounded-md text-sm"
-                                    style={{ background: "#F6F6F6" }}
-                                  >
-                                    <svg
-                                      width="20"
-                                      height="20"
-                                      viewBox="0 0 20 20"
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                      <g clipPath="url(#clip0_566_2624)">
-                                        <path
-                                          fillRule="evenodd"
-                                          clipRule="evenodd"
-                                          d="M8.55746 2.08333C8.55746 2.02808 8.53551 1.97509 8.49644 1.93602C8.45737 1.89695 8.40438 1.875 8.34912 1.875H2.51579C1.908 1.875 1.32511 2.11644 0.895335 2.54621C0.465564 2.97598 0.224121 3.55888 0.224121 4.16667V15.8333C0.224121 16.4411 0.465564 17.024 0.895335 17.4538C1.32511 17.8836 1.908 18.125 2.51579 18.125H10.8491C11.4569 18.125 12.0398 17.8836 12.4696 17.4538C12.8993 17.024 13.1408 16.4411 13.1408 15.8333V7.6225C13.1408 7.56725 13.1188 7.51426 13.0798 7.47519C13.0407 7.43612 12.9877 7.41417 12.9325 7.41417H9.18246C9.01669 7.41417 8.85772 7.34832 8.74051 7.23111C8.6233 7.1139 8.55746 6.95493 8.55746 6.78917V2.08333ZM9.18246 10.2083C9.34822 10.2083 9.50719 10.2742 9.6244 10.3914C9.74161 10.5086 9.80746 10.6676 9.80746 10.8333C9.80746 10.9991 9.74161 11.1581 9.6244 11.2753C9.50719 11.3925 9.34822 11.4583 9.18246 11.4583H4.18245C4.01669 11.4583 3.85772 11.3925 3.74051 11.2753C3.6233 11.1581 3.55745 10.9991 3.55745 10.8333C3.55745 10.6676 3.6233 10.5086 3.74051 10.3914C3.85772 10.2742 4.01669 10.2083 4.18245 10.2083H9.18246ZM9.18246 13.5417C9.34822 13.5417 9.50719 13.6075 9.6244 13.7247C9.74161 13.8419 9.80746 14.0009 9.80746 14.1667C9.80746 14.3324 9.74161 14.4914 9.6244 14.6086C9.50719 14.7258 9.34822 14.7917 9.18246 14.7917H4.18245C4.01669 14.7917 3.85772 14.7258 3.74051 14.6086C3.6233 14.4914 3.55745 14.3324 3.55745 14.1667C3.55745 14.0009 3.6233 13.8419 3.74051 13.7247C3.85772 13.6075 4.01669 13.5417 4.18245 13.5417H9.18246Z"
-                                          fill="#262626"
-                                        />
-                                        <path
-                                          d="M9.80737 2.35322C9.80737 2.19988 9.96821 2.10238 10.0874 2.19822C10.1885 2.27988 10.2782 2.37488 10.3565 2.48322L12.8674 5.98072C12.924 6.06072 12.8624 6.16405 12.764 6.16405H10.0157C9.96045 6.16405 9.90746 6.1421 9.86839 6.10303C9.82932 6.06396 9.80737 6.01097 9.80737 5.95572V2.35322Z"
-                                          fill="black"
-                                        />
-                                      </g>
-                                      <defs>
-                                        <clipPath id="clip0_566_2624">
-                                          <rect
-                                            width="20"
-                                            height="20"
-                                            fill="white"
-                                          />
-                                        </clipPath>
-                                      </defs>
-                                    </svg>
-                                    ems_overview.pdf
-                                    <svg
-                                      width="20"
-                                      height="20"
-                                      viewBox="0 0 20 20"
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                      <g clipPath="url(#clip0_566_2628)">
-                                        <path
-                                          d="M6.68205 12.9788C6.57094 12.9788 6.46677 12.9616 6.36955 12.9272C6.27233 12.8927 6.18205 12.8336 6.09871 12.7497L3.09871 9.74968C2.93205 9.58301 2.85205 9.38857 2.85871 9.16634C2.86538 8.94412 2.94538 8.74968 3.09871 8.58301C3.26538 8.41634 3.46344 8.32968 3.69288 8.32301C3.92233 8.31634 4.1201 8.39607 4.28621 8.56218L5.84871 10.1247V4.16634C5.84871 3.93023 5.92871 3.73246 6.08871 3.57301C6.24871 3.41357 6.44649 3.33357 6.68205 3.33301C6.9176 3.33246 7.11566 3.41246 7.27621 3.57301C7.43677 3.73357 7.51649 3.93134 7.51538 4.16634V10.1247L9.07788 8.56218C9.24455 8.39551 9.4426 8.31551 9.67205 8.32218C9.90149 8.32884 10.0993 8.41579 10.2654 8.58301C10.4182 8.74968 10.4982 8.94412 10.5054 9.16634C10.5126 9.38857 10.4326 9.58301 10.2654 9.74968L7.26538 12.7497C7.18205 12.833 7.09177 12.8922 6.99455 12.9272C6.89733 12.9622 6.79316 12.9794 6.68205 12.9788ZM1.68205 16.6663C1.22371 16.6663 0.831492 16.5033 0.505381 16.1772C0.17927 15.8511 0.0159364 15.4586 0.0153809 14.9997V13.333C0.0153809 13.0969 0.0953809 12.8991 0.255381 12.7397C0.415381 12.5802 0.613159 12.5002 0.848714 12.4997C1.08427 12.4991 1.28233 12.5791 1.44288 12.7397C1.60344 12.9002 1.68316 13.098 1.68205 13.333V14.9997H11.682V13.333C11.682 13.0969 11.762 12.8991 11.922 12.7397C12.082 12.5802 12.2798 12.5002 12.5154 12.4997C12.7509 12.4991 12.949 12.5791 13.1095 12.7397C13.2701 12.9002 13.3498 13.098 13.3487 13.333V14.9997C13.3487 15.458 13.1857 15.8505 12.8595 16.1772C12.5334 16.5038 12.1409 16.6669 11.682 16.6663H1.68205Z"
-                                          fill="#262626"
-                                        />
-                                      </g>
-                                      <defs>
-                                        <clipPath id="clip0_566_2628">
-                                          <rect
-                                            width="20"
-                                            height="20"
-                                            fill="white"
-                                          />
-                                        </clipPath>
-                                      </defs>
-                                    </svg>
-                                  </button>
+                              {showAttachments && (
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray mb-2">
+                                    Attached Documents
+                                  </h5>
+                                  {Array.isArray(q.attachments) &&
+                                  q.attachments.length > 0 ? (
+                                    <div className="flex gap-3 flex-wrap">
+                                      {q.attachments.map(
+                                        (file: any, fileIndex: number) => (
+                                          <a
+                                            key={`${q.id}-file-${fileIndex}`}
+                                            href={file.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm text-secondary underline"
+                                            style={{ background: "#F6F6F6" }}
+                                          >
+                                            {file.name || `Document ${fileIndex + 1}`}
+                                          </a>
+                                        ),
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-gray-500">
+                                      No attached documents
+                                    </p>
+                                  )}
                                 </div>
-                              </div>
+                              )}
 
                               <div>
                                 <h5 className="text-sm font-medium text-gray mb-2">
@@ -408,9 +983,7 @@ export default function AssignAuditsReview() {
                                   className="p-4 rounded-md text-sm text-gray-700 border"
                                   style={{ borderColor: "#E6E6E6" }}
                                 >
-                                  Policy document appears comprehensive. Version
-                                  control evident. Recommend verifying approval
-                                  signatures.
+                                  {q.aiSummary || "No AI analysis available"}
                                 </div>
                               </div>
 
@@ -422,8 +995,7 @@ export default function AssignAuditsReview() {
                                   className="p-4 rounded-md text-sm text-gray-700 border"
                                   style={{ borderColor: "#E6E6E6" }}
                                 >
-                                  Policy structure follows ISO requirements.
-                                  Check section 4.3 for scope definition.
+                                  {q.reviewerNotes || "No reviewer notes available"}
                                 </div>
                               </div>
 
@@ -435,11 +1007,17 @@ export default function AssignAuditsReview() {
                                   className="w-full min-h-30 p-3 rounded-md text-sm border focus:outline-none focus:border-black"
                                   style={{ borderColor: "#E6E6E6" }}
                                   placeholder="Add your notes here....."
+                                  value={noteValue}
+                                  onChange={(event) =>
+                                    handleAuditorNotesChange(
+                                      questionId,
+                                      event.target.value,
+                                    )
+                                  }
                                 ></textarea>
                               </div>
 
                               <div className="mt-6 flex items-center gap-4">
-                                <Button variant="primary">Non-Compliant</Button>
                                 <Button
                                   variant="custom"
                                   className="border border-black rounded-lg px-6 py-2 font-semibold"
@@ -449,16 +1027,38 @@ export default function AssignAuditsReview() {
                                 </Button>
                                 <Button
                                   variant="custom"
-                                  className="border border-red-500 text-red-500 rounded-lg px-6 py-2 font-semibold"
-                                  style={{ background: "white" }}
-                                  onClick={() => setShowCompliantModal(true)}
+                                  className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={() => {
+                                    void handleAuditorNotesSave(questionId);
+                                  }}
+                                  disabled={
+                                    !assessmentId ||
+                                    Boolean(noteSaveFeedback?.isSaving) ||
+                                    !noteValue.trim()
+                                  }
                                 >
-                                  Compliant
+                                  {noteSaveFeedback?.isSaving
+                                    ? "Saving..."
+                                    : hasSavedNotes
+                                      ? "Update Notes"
+                                      : "Add Notes"}
                                 </Button>
                               </div>
+                              {noteSaveFeedback?.message ? (
+                                <p
+                                  className={`text-sm ${
+                                    noteSaveFeedback.type === "error"
+                                      ? "text-red-600"
+                                      : "text-green-600"
+                                  }`}
+                                >
+                                  {noteSaveFeedback.message}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="mt-6 border border-zinc-100 rounded-md p-6">
                           <div className="text-sm text-gray-500">
@@ -523,57 +1123,6 @@ export default function AssignAuditsReview() {
               </div>
             </div>
           )}
-          {showCompliantModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div
-                className="absolute inset-0 bg-black/40"
-                onClick={() => setShowCompliantModal(false)}
-              />
-              <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
-                <button
-                  className="absolute top-4 right-4"
-                  onClick={() => setShowCompliantModal(false)}
-                >
-                  <img
-                    src="/assets/imgs/admin/commons/cross.svg"
-                    alt="close"
-                    className="w-5 h-5"
-                  />
-                </button>
-
-                <h3 className="text-lg font-medium text-secondary mb-3">
-                  Complaint
-                </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Describe your compliant
-                </p>
-
-                <textarea
-                  className="w-full min-h-30 p-3 rounded-md text-sm border"
-                  style={{ borderColor: "#E6E6E6" }}
-                  placeholder="Describe your compliant here...."
-                />
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setShowCompliantModal(false)}
-                  >
-                    Close
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      console.log("Compliant submitted");
-                      setShowCompliantModal(false);
-                    }}
-                  >
-                    Compliant
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -593,6 +1142,12 @@ export default function AssignAuditsReview() {
                   className="w-full min-h-30 p-4 rounded-md text-sm border focus:outline-none"
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Provide a high-level summary of the audits findings....."
+                  value={auditSummary}
+                  onChange={(event) => {
+                    setAuditSummary(event.target.value);
+                    if (submitReportError) setSubmitReportError("");
+                    if (submitReportSuccess) setSubmitReportSuccess("");
+                  }}
                 />
               </div>
 
@@ -604,6 +1159,12 @@ export default function AssignAuditsReview() {
                   className="w-full min-h-30 p-4 rounded-md text-sm border focus:outline-none"
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Document your detailed findings, observations and recommendations....."
+                  value={auditDescription}
+                  onChange={(event) => {
+                    setAuditDescription(event.target.value);
+                    if (submitReportError) setSubmitReportError("");
+                    if (submitReportSuccess) setSubmitReportSuccess("");
+                  }}
                 />
               </div>
             </div>
@@ -796,7 +1357,7 @@ export default function AssignAuditsReview() {
             </div>
             <div className="mt-5">
               <label className="block text-sm font-medium text-secondary mb-2">
-                Audit Summary *
+                Audit Summary Document
               </label>
               <div
                 className="w-full rounded-lg border-2 border-dashed border-zinc-300 p-8 min-h-30 flex flex-col items-center justify-center text-center text-gray-400"
@@ -824,6 +1385,25 @@ export default function AssignAuditsReview() {
                 <div className="text-xs text-gray-400 mt-1">
                   PDF, DOC, DOCX, XLS, XLSX (max 10MB)
                 </div>
+                <input
+                  ref={auditSummaryDocInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={handleAuditSummaryDocSelect}
+                />
+                <button
+                  type="button"
+                  className="mt-4 px-4 py-2 text-sm border border-zinc-300 rounded-md text-secondary hover:bg-zinc-50"
+                  onClick={() => auditSummaryDocInputRef.current?.click()}
+                >
+                  Select Document
+                </button>
+                {auditSummaryDocName ? (
+                  <p className="mt-2 text-xs text-secondary">
+                    Selected: {auditSummaryDocName}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -831,11 +1411,18 @@ export default function AssignAuditsReview() {
               variant="primary"
               className="mt-6"
               onClick={() => {
-                console.log("Submit Audit Report");
+                void handleSubmitAuditReport();
               }}
+              disabled={isSubmittingReport}
             >
-              Submit Audit Report
+              {isSubmittingReport ? "Submitting..." : "Submit Audit Report"}
             </Button>
+            {submitReportError ? (
+              <p className="mt-3 text-sm text-red-600">{submitReportError}</p>
+            ) : null}
+            {submitReportSuccess ? (
+              <p className="mt-3 text-sm text-green-600">{submitReportSuccess}</p>
+            ) : null}
           </div>
         </div>
       )}

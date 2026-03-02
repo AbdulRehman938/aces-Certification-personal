@@ -7,6 +7,8 @@ import Button from "../../common/button";
 import { Loading } from "../../common/Loading";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useUser } from "@/contexts/UserContext";
 
 type AssessmentDetails = {
   assessmentId: string;
@@ -33,6 +35,7 @@ type AssessmentDetails = {
   aiReview: AiReview | null;
   assignedReviewer: NamedAssignee | string | null;
   assignedAuditor: NamedAssignee | string | null;
+  auditorInvited?: boolean;
   isCertificateBlocked?: boolean;
   certificateBlockReason?: string | null;
 };
@@ -136,6 +139,7 @@ type ReviewerOption = {
 function AssessmentDetailsContent() {
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("id");
+  const { profile } = useUser();
 
   const [assessmentDetails, setAssessmentDetails] =
     useState<AssessmentDetails | null>(null);
@@ -180,15 +184,12 @@ function AssessmentDetailsContent() {
 
         if (isCancelled) return;
         const details = response.data?.data ?? null;
+        console.log("assessment details by id:", {
+          assessmentId,
+          data: details,
+        });
         setAssessmentDetails(details);
-      } catch (err) {
-        console.error("Failed to fetch assessment details:", err);
-        if (axios.isAxiosError(err)) {
-          console.error(
-            "assessment details error response:",
-            err.response?.data,
-          );
-        }
+      } catch {
         if (!isCancelled) setAssessmentDetails(null);
       } finally {
         if (!isCancelled) setIsLoading(false);
@@ -253,11 +254,9 @@ function AssessmentDetailsContent() {
           );
         if (isCancelled) return;
         const questions = response.data?.data ?? [];
-        console.log("assessment questions response:", response.data.data);
         setAssessmentQuestions(questions);
-      } catch (err) {
+      } catch {
         if (!isCancelled) {
-          console.error("Failed to fetch assessment questions:", err);
           setAssessmentQuestions([]);
         }
       }
@@ -315,15 +314,8 @@ function AssessmentDetailsContent() {
 
         setAiFlaggedAnswerIds(flaggedIds);
         setAiFlagReasonsById(reasonMap);
-      } catch (err) {
+      } catch {
         if (!isCancelled) {
-          console.error("Failed to fetch AI review flags:", err);
-          if (axios.isAxiosError(err)) {
-            console.error(
-              "ai review flags error response:",
-              err.response?.data,
-            );
-          }
           setAiFlaggedAnswerIds(new Set());
           setAiFlagReasonsById({});
         }
@@ -423,6 +415,7 @@ function AssessmentDetailsContent() {
   const hasAssignedAuditor = !!getDisplayName(
     assessmentDetails?.assignedAuditor,
   );
+  const isAuditorInvitePending = Boolean(assessmentDetails?.auditorInvited);
   const hasAssignedReviewer = !!getDisplayName(
     assessmentDetails?.assignedReviewer,
   );
@@ -672,6 +665,32 @@ function AssessmentDetailsContent() {
   const [blockCertificationError, setBlockCertificationError] = useState<
     string | null
   >(null);
+  const isSubadmin = profile?.role === "subadmin";
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: "read" | "write" | "edit" | "delete",
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === "string") {
+        return action === "read" && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? "") && actions.includes(action)
+      );
+    });
+  };
+  const canWriteAssessment = hasActionPermission(
+    ["assessment", "assessments"],
+    "write",
+  );
 
   const AUDITOR_PAGE_SIZE = 10;
 
@@ -813,7 +832,7 @@ function AssessmentDetailsContent() {
   }, [questionsData]);
 
   useEffect(() => {
-    if (!isAssignAuditorModalOpen) return;
+    if (!isAssignAuditorModalOpen || !canWriteAssessment) return;
 
     let isCancelled = false;
 
@@ -863,7 +882,6 @@ function AssessmentDetailsContent() {
         setAuditorVisibleCount(AUDITOR_PAGE_SIZE);
       } catch (err) {
         if (!isCancelled) {
-          console.error("Failed to fetch auditors list:", err);
           if (axios.isAxiosError(err)) {
             setAuditorsError(
               err.response?.data?.message || "Failed to load auditors",
@@ -885,10 +903,10 @@ function AssessmentDetailsContent() {
     return () => {
       isCancelled = true;
     };
-  }, [isAssignAuditorModalOpen]);
+  }, [canWriteAssessment, isAssignAuditorModalOpen]);
 
   useEffect(() => {
-    if (!isAssignReviewerModalOpen) return;
+    if (!isAssignReviewerModalOpen || !canWriteAssessment) return;
 
     let isCancelled = false;
 
@@ -916,10 +934,8 @@ function AssessmentDetailsContent() {
 
         setReviewerOptions(mappedData);
         setReviewerVisibleCount(REVIEWER_PAGE_SIZE);
-        console.log("reviewers list response:", response.data);
       } catch (err) {
         if (!isCancelled) {
-          console.error("Failed to fetch reviewers list:", err);
           if (axios.isAxiosError(err)) {
             setReviewersError(
               err.response?.data?.message || "Failed to load reviewers",
@@ -941,7 +957,7 @@ function AssessmentDetailsContent() {
     return () => {
       isCancelled = true;
     };
-  }, [isAssignReviewerModalOpen]);
+  }, [canWriteAssessment, isAssignReviewerModalOpen]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) => {
@@ -984,6 +1000,7 @@ function AssessmentDetailsContent() {
   };
 
   const handleAssignAuditor = async () => {
+    if (!canWriteAssessment) return;
     const id = assessmentDetails?.assessmentId ?? assessmentId;
     if (!id || !selectedAuditor) return;
 
@@ -1004,31 +1021,23 @@ function AssessmentDetailsContent() {
         payload.auditDate = new Date(auditDate).toISOString();
       }
 
-      const response = await axiosInstance.post(
-        "/auditors/assign-assessment",
-        payload,
-      );
-      console.log("assign auditor response:", response.data);
+      await axiosInstance.post("/auditors/assign-assessment", payload);
 
       setIsAssignAuditorModalOpen(false);
       setSelectedAuditor(null);
       setAuditDate("");
       setAssessmentRefreshKey((prev) => prev + 1);
     } catch (err) {
-      console.error("Failed to assign auditor:", err);
-      if (axios.isAxiosError(err)) {
-        setAssignAuditorError(
-          err.response?.data?.message || "Failed to assign auditor",
-        );
-      } else {
-        setAssignAuditorError("Failed to assign auditor");
-      }
+      setAssignAuditorError(
+        getApiErrorMessage(err, "Failed to assign auditor"),
+      );
     } finally {
       setIsAssigningAuditor(false);
     }
   };
 
   const handleAssignReviewer = async () => {
+    if (!canWriteAssessment) return;
     const id = assessmentDetails?.assessmentId ?? assessmentId;
     if (!id || !selectedReviewer) return;
 
@@ -1041,17 +1050,12 @@ function AssessmentDetailsContent() {
         reviewerId: selectedReviewer,
       };
 
-      const response = await axiosInstance.post(
-        "/reviewers/assign-assessment",
-        payload,
-      );
-      console.log("assign reviewer response:", response.data);
+      await axiosInstance.post("/reviewers/assign-assessment", payload);
 
       setIsAssignReviewerModalOpen(false);
       setSelectedReviewer(null);
       setAssessmentRefreshKey((prev) => prev + 1);
     } catch (err) {
-      console.error("Failed to assign reviewer:", err);
       if (axios.isAxiosError(err)) {
         setAssignReviewerError(
           err.response?.data?.message || "Failed to assign reviewer",
@@ -1071,6 +1075,7 @@ function AssessmentDetailsContent() {
   };
 
   const handleBlockCertification = async () => {
+    if (!canWriteAssessment) return;
     const id = assessmentDetails?.assessmentId ?? assessmentId;
     const reason = blockCertificationReason.trim();
 
@@ -1092,7 +1097,6 @@ function AssessmentDetailsContent() {
       closeBlockCertificationModal();
       setAssessmentRefreshKey((prev) => prev + 1);
     } catch (err) {
-      console.error("Failed to block certification:", err);
       if (axios.isAxiosError(err)) {
         setBlockCertificationError(
           err.response?.data?.message || "Failed to block certification",
@@ -1444,6 +1448,11 @@ function AssessmentDetailsContent() {
           <h3 className="text-lg md:text-xl font-semibold text-secondary mb-4 md:mb-6">
             Admin Actions
           </h3>
+          {!isCertificateBlocked && !hasAssignedAuditor && isAuditorInvitePending && (
+            <p className="text-xs font-medium text-[#FAAB00] mb-4 md:mb-6">
+              Request already sent for this assessment.
+            </p>
+          )}
           {isCertificateBlocked && (
             <div className="mb-4 md:mb-6 p-3 rounded-lg border border-red-200 bg-red-50">
               <p className="text-xs font-semibold text-red-600 mb-1">
@@ -1457,7 +1466,7 @@ function AssessmentDetailsContent() {
           <div className="flex flex-wrap gap-3 md:gap-4">
             <Button
               onClick={
-                isCertificateBlocked
+                isCertificateBlocked || !canWriteAssessment
                   ? undefined
                   : () => {
                       setBlockCertificationReason("");
@@ -1465,10 +1474,10 @@ function AssessmentDetailsContent() {
                       setIsBlockCertificationModalOpen(true);
                     }
               }
-              disabled={isCertificateBlocked}
+              disabled={isCertificateBlocked || !canWriteAssessment}
               variant="custom"
               className={`px-4 py-2 md:px-6 md:py-3 border rounded-xl ${
-                isCertificateBlocked
+                isCertificateBlocked || !canWriteAssessment
                   ? "cursor-not-allowed opacity-70"
                   : "hover:bg-red-100"
               }`}
@@ -1490,9 +1499,16 @@ function AssessmentDetailsContent() {
 
             {!isCertificateBlocked && !hasAssignedReviewer && (
               <Button
-                onClick={() => setIsAssignReviewerModalOpen(true)}
+                onClick={
+                  canWriteAssessment
+                    ? () => setIsAssignReviewerModalOpen(true)
+                    : undefined
+                }
+                disabled={!canWriteAssessment}
                 variant="secondary"
-                className="px-4 py-2 md:px-6 md:py-3 rounded-xl"
+                className={`px-4 py-2 md:px-6 md:py-3 rounded-xl ${
+                  !canWriteAssessment ? "cursor-not-allowed opacity-70" : ""
+                }`}
                 style={{
                   fontFamily: "Public Sans",
                   fontWeight: 600,
@@ -1508,27 +1524,38 @@ function AssessmentDetailsContent() {
             )}
 
             {!isCertificateBlocked && !hasAssignedAuditor && (
-              <Button
-                onClick={() => setIsAssignAuditorModalOpen(true)}
-                className="px-3 py-1.5 md:px-8 md:py-3 rounded-xl shrink-0"
-                style={{
-                  fontFamily: "Public Sans",
-                  fontWeight: 600,
-                  fontStyle: "normal",
-                  fontSize: "16px",
-                  lineHeight: "24px",
-                  letterSpacing: "0%",
-                  verticalAlign: "middle",
-                }}
-              >
-                Assign Auditor
-              </Button>
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  onClick={
+                    isAuditorInvitePending || !canWriteAssessment
+                      ? undefined
+                      : () => setIsAssignAuditorModalOpen(true)
+                  }
+                  disabled={isAuditorInvitePending || !canWriteAssessment}
+                  className={`px-3 py-1.5 md:px-8 md:py-3 rounded-xl shrink-0 ${
+                    isAuditorInvitePending || !canWriteAssessment
+                      ? "cursor-not-allowed opacity-70"
+                      : ""
+                  }`}
+                  style={{
+                    fontFamily: "Public Sans",
+                    fontWeight: 600,
+                    fontStyle: "normal",
+                    fontSize: "16px",
+                    lineHeight: "24px",
+                    letterSpacing: "0%",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  Assign Auditor
+                </Button>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {isBlockCertificationModalOpen && (
+      {isBlockCertificationModalOpen && canWriteAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1602,7 +1629,7 @@ function AssessmentDetailsContent() {
               </button>
               <button
                 onClick={handleBlockCertification}
-                disabled={isBlockingCertification}
+                disabled={isBlockingCertification || !canWriteAssessment}
                 className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0"
                 style={{
                   fontFamily: "Public Sans",
@@ -1625,7 +1652,7 @@ function AssessmentDetailsContent() {
         </div>
       )}
 
-      {isAssignAuditorModalOpen && (
+      {isAssignAuditorModalOpen && canWriteAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1854,7 +1881,7 @@ function AssessmentDetailsContent() {
               </button>
               <button
                 onClick={handleAssignAuditor}
-                disabled={!selectedAuditor || isAssigningAuditor}
+                disabled={!selectedAuditor || isAssigningAuditor || !canWriteAssessment}
                 className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   fontFamily: "Public Sans",
@@ -1875,7 +1902,7 @@ function AssessmentDetailsContent() {
         </div>
       )}
 
-      {isAssignReviewerModalOpen && (
+      {isAssignReviewerModalOpen && canWriteAssessment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2047,7 +2074,9 @@ function AssessmentDetailsContent() {
               </button>
               <button
                 onClick={handleAssignReviewer}
-                disabled={!selectedReviewer || isAssigningReviewer}
+                disabled={
+                  !selectedReviewer || isAssigningReviewer || !canWriteAssessment
+                }
                 className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   fontFamily: "Public Sans",
@@ -2084,4 +2113,3 @@ export default function AssessmentDetailsPage() {
     </Suspense>
   );
 }
-
