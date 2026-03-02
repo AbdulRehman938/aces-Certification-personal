@@ -20,6 +20,8 @@ interface NotificationCardProps {
   onToggle: () => void;
 }
 
+type AccountModalType = "profile" | "email" | "password" | null;
+
 function NotificationCard({
   label,
   description,
@@ -354,6 +356,8 @@ export default function Settings() {
   const [searchCountry, setSearchCountry] = useState("");
   const [searchState, setSearchState] = useState("");
   const [searchCity, setSearchCity] = useState("");
+  const [activeAccountModal, setActiveAccountModal] =
+    useState<AccountModalType>(null);
 
   const loadCountries = useCallback(async () => {
     setIsLoadingCountries(true);
@@ -666,6 +670,39 @@ export default function Settings() {
       };
     }
   }, [showCountryDropdown, showStateDropdown, showCityDropdown]);
+
+  const openProfileModal = () => {
+    handleEditClick();
+    setActiveAccountModal("profile");
+  };
+
+  const openEmailModal = () => {
+    setActiveAccountModal("email");
+    if (!isChangingEmail && !isSendingEmailOtp) {
+      void handleRequestEmailOtp();
+    }
+  };
+
+  const openPasswordModal = () => {
+    setActiveAccountModal("password");
+    if (!isChangingPassword && !isSendingPasswordOtp) {
+      void handleRequestPasswordOtp();
+    }
+  };
+
+  const closeActiveAccountModal = () => {
+    if (activeAccountModal === "profile") {
+      handleCancel();
+    }
+    if (activeAccountModal === "email") {
+      handleCancelEmailChange();
+    }
+    if (activeAccountModal === "password") {
+      handleCancelPasswordChange();
+    }
+    setActiveAccountModal(null);
+  };
+
   return (
     <div className="p-6 bg-light-gray min-h-screen">
       <div className="mb-8">
@@ -718,802 +755,888 @@ export default function Settings() {
 
       {activeTab === "account" && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
-            {(showProfileLoader || profileSuccessMessage) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading
-                  isLoading
-                  size="sm"
-                  progress={showProfileLoader ? profileLoadingProgress : 100}
-                  className="p-4"
-                />
-              </div>
-            )}
-            <div
-              className={
-                showProfileLoader || profileSuccessMessage
-                  ? "blur-sm pointer-events-none"
-                  : ""
-              }
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-secondary">
-                    Profile Information
-                  </h3>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Profile Picture
-                </label>
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 overflow-hidden">
-                    {profilePicturePreview ? (
-                      <img
-                        src={profilePicturePreview}
-                        alt="Profile preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg font-semibold text-zinc-600">
-                        {getInitials(firstName, lastName) || "PP"}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleProfilePictureChange}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={!isEditingProfile}
-                      className={`px-4 py-2 text-sm font-medium text-secondary border border-zinc-200 rounded-lg transition-colors ${
-                        isEditingProfile
-                          ? "hover:bg-zinc-50 cursor-pointer"
-                          : "opacity-50 cursor-not-allowed"
-                      }`}
-                    >
-                      Upload Photo
-                    </button>
-                    {profilePicture && (
-                      <button
-                        onClick={() => {
-                          setProfilePicture(null);
-                          setProfilePicturePreview("");
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
-                        }}
-                        disabled={!isEditingProfile}
-                        className={`ml-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg transition-colors ${
-                          isEditingProfile
-                            ? "hover:bg-red-50 cursor-pointer"
-                            : "opacity-50 cursor-not-allowed"
-                        }`}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    First Name
-                  </label>
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    disabled={!isEditingProfile}
-                    className={`w-full p-3 rounded-md text-sm border ${
-                      !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                    placeholder="Sarah"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    Last Name
-                  </label>
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    disabled={!isEditingProfile}
-                    className={`w-full p-3 rounded-md text-sm border ${
-                      !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                    placeholder="Mitchell"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 country-state-city-dropdown">
-                <div className="relative">
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    Country
-                  </label>
-                  <div
-                    onClick={async () => {
-                      if (!isEditingProfile) return;
-                      if (countries.length === 0) {
-                        await loadCountries();
-                      }
-                      setShowCountryDropdown(!showCountryDropdown);
-                      setShowStateDropdown(false);
-                      setShowCityDropdown(false);
-                    }}
-                    className={`w-full px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between ${
-                      isEditingProfile
-                        ? "cursor-pointer"
-                        : "cursor-not-allowed opacity-50 bg-primary"
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                  >
-                    <span
-                      className={
-                        selectedCountry ? "text-secondary" : "text-gray-400"
-                      }
-                    >
-                      {selectedCountry || "Select country"}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </div>
-                  {showCountryDropdown && isEditingProfile && (
-                    <div className="absolute z-50 w-75 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg p-2 max-h-60 overflow-hidden">
-                      <div className="p-2 border-b border-zinc-100 flex items-center">
-                        <Search className="w-4 h-4 text-gray-400 mr-2" />
-                        <input
-                          type="text"
-                          placeholder="Search..."
-                          className="w-full text-sm outline-none"
-                          value={searchCountry}
-                          onChange={(e) => setSearchCountry(e.target.value)}
-                        />
-                      </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        {isLoadingCountries ? (
-                          <div className="px-4 py-3 text-sm text-gray text-center">
-                            Loading...
-                          </div>
-                        ) : (
-                          countries
-                            .filter((c) =>
-                              c.name.common
-                                .toLowerCase()
-                                .includes(searchCountry.toLowerCase()),
-                            )
-                            .map((c) => (
-                              <button
-                                key={c.cca2}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCountry(c.name.common);
-                                  const states = CSS.getStatesOfCountry(c.cca2);
-                                  if (states.length === 0) {
-                                    setSelectedState(c.name.common);
-                                    setSelectedCity(c.name.common);
-                                  } else {
-                                    setSelectedState("");
-                                    setSelectedCity("");
-                                  }
-                                  setShowCountryDropdown(false);
-                                  setSearchCountry("");
-                                }}
-                                className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-zinc-50 text-secondary"
-                              >
-                                <div className="relative w-5 h-3 overflow-hidden rounded-sm ring-1 ring-zinc-100 shrink-0">
-                                  <Image
-                                    src={c.flags.svg}
-                                    alt={c.name.common}
-                                    fill
-                                    className="object-cover"
-                                  />
-                                </div>
-                                <span className="whitespace-normal wrap-break-word">
-                                  {c.name.common}
-                                </span>
-                              </button>
-                            ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    State
-                  </label>
-                  <div
-                    onClick={() => {
-                      if (!isEditingProfile || !selectedCountry) return;
-                      const countryCode =
-                        countries.find((c) => c.name.common === selectedCountry)
-                          ?.cca2 || "";
-                      const hasStates =
-                        CSS.getStatesOfCountry(countryCode).length > 0;
-                      if (!hasStates) return;
-                      setShowStateDropdown(!showStateDropdown);
-                      setShowCityDropdown(false);
-                    }}
-                    className={`w-full px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between ${
-                      !isEditingProfile ||
-                      !selectedCountry ||
-                      CSS.getStatesOfCountry(
-                        countries.find((c) => c.name.common === selectedCountry)
-                          ?.cca2 || "",
-                      ).length === 0
-                        ? "opacity-50 cursor-not-allowed bg-primary"
-                        : "cursor-pointer"
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                  >
-                    <span
-                      className={
-                        selectedState ? "text-secondary" : "text-gray-400"
-                      }
-                    >
-                      {selectedState || "Select state"}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </div>
-                  {showStateDropdown && selectedCountry && isEditingProfile && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg p-2 max-h-60 overflow-hidden">
-                      <div className="p-2 border-b border-zinc-100 flex items-center">
-                        <Search className="w-4 h-4 text-gray-400 mr-2" />
-                        <input
-                          type="text"
-                          placeholder="Search..."
-                          className="w-full text-sm outline-none"
-                          value={searchState}
-                          onChange={(e) => setSearchState(e.target.value)}
-                        />
-                      </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        {CSS.getStatesOfCountry(
-                          countries.find(
-                            (c) => c.name.common === selectedCountry,
-                          )?.cca2 || "",
-                        )
-                          .filter((s) =>
-                            s.name
-                              .toLowerCase()
-                              .includes(searchState.toLowerCase()),
-                          )
-                          .map((s) => (
-                            <button
-                              key={s.isoCode}
-                              type="button"
-                              onClick={() => {
-                                setSelectedState(s.name);
-                                const countryCode =
-                                  countries.find(
-                                    (c) => c.name.common === selectedCountry,
-                                  )?.cca2 || "";
-                                const nextCities = CSCity.getCitiesOfState(
-                                  countryCode,
-                                  s.isoCode,
-                                );
-                                if (nextCities.length === 0) {
-                                  setSelectedCity(s.name);
-                                } else {
-                                  setSelectedCity("");
-                                }
-                                setShowStateDropdown(false);
-                                setSearchState("");
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-50 text-secondary"
-                            >
-                              {s.name}
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    City
-                  </label>
-                  <div
-                    onClick={() => {
-                      if (!isEditingProfile || !selectedState) return;
-                      const countryCode =
-                        countries.find((c) => c.name.common === selectedCountry)
-                          ?.cca2 || "";
-                      const stateCode =
-                        CSS.getStatesOfCountry(countryCode).find(
-                          (s) => s.name === selectedState,
-                        )?.isoCode || "";
-                      const hasCities =
-                        CSCity.getCitiesOfState(countryCode, stateCode).length >
-                        0;
-                      if (!hasCities) return;
-                      setShowCityDropdown(!showCityDropdown);
-                    }}
-                    className={`w-full px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between ${
-                      !isEditingProfile ||
-                      !selectedState ||
-                      CSCity.getCitiesOfState(
-                        countries.find((c) => c.name.common === selectedCountry)
-                          ?.cca2 || "",
-                        CSS.getStatesOfCountry(
-                          countries.find(
-                            (c) => c.name.common === selectedCountry,
-                          )?.cca2 || "",
-                        ).find((s) => s.name === selectedState)?.isoCode || "",
-                      ).length === 0
-                        ? "opacity-50 cursor-not-allowed bg-primary"
-                        : "cursor-pointer"
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                  >
-                    <span
-                      className={
-                        selectedCity ? "text-secondary" : "text-gray-400"
-                      }
-                    >
-                      {selectedCity || "Select city"}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </div>
-                  {showCityDropdown &&
-                    selectedState &&
-                    selectedCountry &&
-                    isEditingProfile && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg p-2 max-h-60 overflow-hidden">
-                        <div className="p-2 border-b border-zinc-100 flex items-center">
-                          <Search className="w-4 h-4 text-gray-400 mr-2" />
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            className="w-full text-sm outline-none"
-                            value={searchCity}
-                            onChange={(e) => setSearchCity(e.target.value)}
-                          />
-                        </div>
-                        <div className="max-h-48 overflow-y-auto">
-                          {CSCity.getCitiesOfState(
-                            countries.find(
-                              (c) => c.name.common === selectedCountry,
-                            )?.cca2 || "",
-                            CSS.getStatesOfCountry(
-                              countries.find(
-                                (c) => c.name.common === selectedCountry,
-                              )?.cca2 || "",
-                            ).find((s) => s.name === selectedState)?.isoCode ||
-                              "",
-                          )
-                            .filter((city) =>
-                              city.name
-                                .toLowerCase()
-                                .includes(searchCity.toLowerCase()),
-                            )
-                            .map((city) => (
-                              <button
-                                key={city.name}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCity(city.name);
-                                  setShowCityDropdown(false);
-                                  setSearchCity("");
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-50 text-secondary"
-                              >
-                                {city.name}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                {isEditingProfile ? (
-                  <>
-                    <button
-                      onClick={handleCancel}
-                      className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      variant="primary"
-                      onClick={handleSaveChanges}
-                      disabled={!hasChanges() || isSaving}
-                    >
-                      {isSaving ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </>
-                ) : (
-                  <Button variant="primary" onClick={handleEditClick}>
-                    Update Profile
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
-            {(isSendingEmailOtp || isSavingEmail || emailSuccessMessage) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
-            )}
-            <div
-              className={
-                isSendingEmailOtp || isSavingEmail || emailSuccessMessage
-                  ? "blur-sm pointer-events-none"
-                  : ""
-              }
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-secondary">
-                    Email Address
-                  </h3>
-                  <p className="text-xs text-gray mt-1">
-                    Change your email address
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Current Email
-                </label>
-                <input
-                  value={email}
-                  disabled
-                  className="w-full p-3 rounded-md text-sm border bg-zinc-50 cursor-not-allowed"
-                  style={{ borderColor: "#E6E6E6" }}
-                />
-              </div>
-
-              {!isChangingEmail ? (
-                <div className="mt-6 flex justify-end">
-                  <Button variant="primary" onClick={handleRequestEmailOtp}>
-                    Change Email
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="mt-6">
-                    <label className="block text-xs font-medium text-dull-gray mb-2">
-                      New Email Address
-                    </label>
-                    <input
-                      value={newEmail}
-                      onChange={(e) => {
-                        setNewEmail(e.target.value);
-                        setEmailError("");
-                      }}
-                      type="email"
-                      className={`w-full p-3 rounded-md text-sm border ${
-                        emailError ? "border-red" : ""
-                      }`}
-                      style={{
-                        borderColor: emailError ? "#ef4444" : "#E6E6E6",
-                      }}
-                      placeholder="Enter new email address"
-                    />
-                  </div>
-
-                  <div className="mt-4">
-                    <p className="text-xs text-gray">
-                      We sent an OTP email to your old email. Enter the 6-digit
-                      code below.
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      {emailOtp.map((digit, index) => (
-                        <input
-                          key={index}
-                          ref={(el) => {
-                            emailOtpRefs.current[index] = el;
-                          }}
-                          value={digit}
-                          onChange={(e) => {
-                            const value = e.target.value.slice(-1);
-                            setEmailOtp((prev) => {
-                              const next = [...prev];
-                              next[index] = value;
-                              return next;
-                            });
-                            setEmailError("");
-                            if (value && index < emailOtp.length - 1) {
-                              emailOtpRefs.current[index + 1]?.focus();
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === "Backspace" &&
-                              !emailOtp[index] &&
-                              index > 0
-                            ) {
-                              emailOtpRefs.current[index - 1]?.focus();
-                            }
-                          }}
-                          inputMode="text"
-                          maxLength={1}
-                          className={`w-10 h-10 text-center rounded-md text-sm border ${
-                            emailError ? "border-red" : ""
-                          }`}
-                          style={{
-                            borderColor: emailError ? "#ef4444" : "#E6E6E6",
-                          }}
-                          aria-label={`OTP digit ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {emailError && (
-                    <p className="text-xs text-red mt-2">{emailError}</p>
-                  )}
-
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={handleCancelEmailChange}
-                      disabled={isSavingEmail}
-                      className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      variant="primary"
-                      onClick={handleEmailChange}
-                      disabled={
-                        isSavingEmail ||
-                        !newEmail.trim() ||
-                        emailOtp.some((digit) => !digit.trim())
-                      }
-                    >
-                      {isSavingEmail ? "Updating..." : "Update Email"}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
-            {(isSendingPasswordOtp ||
-              isSavingPassword ||
-              passwordSuccessMessage) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
-            )}
-            <div
-              className={
-                isSendingPasswordOtp ||
-                isSavingPassword ||
-                passwordSuccessMessage
-                  ? "blur-sm pointer-events-none"
-                  : ""
-              }
-            >
-              <h3 className="text-lg font-medium text-secondary">
-                Security Settings
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-zinc-100 p-5">
+              <h3 className="text-base font-semibold text-secondary">
+                Profile Information
               </h3>
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    Current Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      value={currentPassword}
-                      onChange={(e) => {
-                        setCurrentPassword(e.target.value);
-                        setPasswordError("");
-                      }}
-                      disabled={!isChangingPassword}
-                      className="w-full p-3 pr-10 rounded-md text-sm border"
-                      style={{ borderColor: "#E6E6E6" }}
-                      placeholder="Enter current password"
-                      type={showCurrentPassword ? "text" : "password"}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword((prev) => !prev)}
-                      disabled={!isChangingPassword}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
-                      aria-label={
-                        showCurrentPassword ? "Hide password" : "Show password"
-                      }
-                    >
-                      {showCurrentPassword ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      value={newPasswordValue}
-                      onChange={(e) => {
-                        setNewPasswordValue(e.target.value);
-                        setPasswordError("");
-                      }}
-                      disabled={!isChangingPassword}
-                      className="w-full p-3 pr-10 rounded-md text-sm border"
-                      style={{ borderColor: "#E6E6E6" }}
-                      placeholder="Enter new password"
-                      type={showNewPassword ? "text" : "password"}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword((prev) => !prev)}
-                      disabled={!isChangingPassword}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
-                      aria-label={
-                        showNewPassword ? "Hide password" : "Show password"
-                      }
-                    >
-                      {showNewPassword ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
-                  </div>
-                </div>
+              <p className="text-sm text-gray mt-2">
+                Update your personal details, location, and profile photo.
+              </p>
+              <div className="mt-5">
+                <Button variant="primary" onClick={openProfileModal}>
+                  Update Profile
+                </Button>
               </div>
+            </div>
 
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <input
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      setPasswordError("");
-                    }}
-                    disabled={!isChangingPassword}
-                    className="w-full p-3 pr-10 rounded-md text-sm border"
-                    style={{ borderColor: "#E6E6E6" }}
-                    placeholder="Confirm new password"
-                    type={showConfirmPassword ? "text" : "password"}
+            <div className="bg-white rounded-xl border border-zinc-100 p-5">
+              <h3 className="text-base font-semibold text-secondary">
+                Change Email
+              </h3>
+              <p className="text-sm text-gray mt-2">
+                Change your email with OTP verification sent to current email.
+              </p>
+              <div className="mt-5">
+                <Button variant="primary" onClick={openEmailModal}>
+                  Change Email
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-zinc-100 p-5">
+              <h3 className="text-base font-semibold text-secondary">
+                Change Password
+              </h3>
+              <p className="text-sm text-gray mt-2">
+                Update password securely using OTP verification.
+              </p>
+              <div className="mt-5">
+                <Button variant="primary" onClick={openPasswordModal}>
+                  Change Password
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {activeAccountModal === "profile" && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={closeActiveAccountModal}
+              />
+              <div className="relative w-[95%] max-w-6xl max-h-[90vh] overflow-y-auto">
+                <button
+                  className="absolute top-4 right-4 z-20"
+                  onClick={closeActiveAccountModal}
+                >
+                  <img
+                    src="/assets/imgs/admin/commons/cross.svg"
+                    alt="close"
+                    className="w-5 h-5"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    disabled={!isChangingPassword}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
-                    aria-label={
-                      showConfirmPassword ? "Hide password" : "Show password"
+                </button>
+
+                <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+                  {(showProfileLoader || profileSuccessMessage) && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+                      <Loading
+                        isLoading
+                        size="sm"
+                        progress={showProfileLoader ? profileLoadingProgress : 100}
+                        className="p-4"
+                      />
+                    </div>
+                  )}
+                  <div
+                    className={
+                      showProfileLoader || profileSuccessMessage
+                        ? "blur-sm pointer-events-none"
+                        : ""
                     }
                   >
-                    {showConfirmPassword ? (
-                      <EyeOff size={16} />
-                    ) : (
-                      <Eye size={16} />
-                    )}
-                  </button>
-                </div>
-              </div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-secondary">
+                          Profile Information
+                        </h3>
+                      </div>
+                    </div>
 
-              {isChangingPassword && (
-                <div className="mt-4">
-                  <p className="text-xs text-gray">
-                    We sent an OTP email to your current email. Enter the
-                    6-digit code below.
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    {passwordOtp.map((digit, index) => (
-                      <input
-                        key={index}
-                        ref={(el) => {
-                          passwordOtpRefs.current[index] = el;
-                        }}
-                        value={digit}
-                        onChange={(e) => {
-                          const value = e.target.value.slice(-1);
-                          setPasswordOtp((prev) => {
-                            const next = [...prev];
-                            next[index] = value;
-                            return next;
-                          });
-                          setPasswordError("");
-                          if (value && index < passwordOtp.length - 1) {
-                            passwordOtpRefs.current[index + 1]?.focus();
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Backspace" &&
-                            !passwordOtp[index] &&
-                            index > 0
-                          ) {
-                            passwordOtpRefs.current[index - 1]?.focus();
-                          }
-                        }}
-                        inputMode="text"
-                        maxLength={1}
-                        className={`w-10 h-10 text-center rounded-md text-sm border ${
-                          passwordError ? "border-red" : ""
-                        }`}
-                        style={{
-                          borderColor: passwordError ? "#ef4444" : "#E6E6E6",
-                        }}
-                        aria-label={`Password OTP digit ${index + 1}`}
-                      />
-                    ))}
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Profile Picture
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <div className="w-20 h-20 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 overflow-hidden">
+                          {profilePicturePreview ? (
+                            <img
+                              src={profilePicturePreview}
+                              alt="Profile preview"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-lg font-semibold text-zinc-600">
+                              {getInitials(firstName, lastName) || "PP"}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleProfilePictureChange}
+                            accept="image/*"
+                            className="hidden"
+                          />
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!isEditingProfile}
+                            className={`px-4 py-2 text-sm font-medium text-secondary border border-zinc-200 rounded-lg transition-colors ${
+                              isEditingProfile
+                                ? "hover:bg-zinc-50 cursor-pointer"
+                                : "opacity-50 cursor-not-allowed"
+                            }`}
+                          >
+                            Upload Photo
+                          </button>
+                          {profilePicture && (
+                            <button
+                              onClick={() => {
+                                setProfilePicture(null);
+                                setProfilePicturePreview("");
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = "";
+                                }
+                              }}
+                              disabled={!isEditingProfile}
+                              className={`ml-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg transition-colors ${
+                                isEditingProfile
+                                  ? "hover:bg-red-50 cursor-pointer"
+                                  : "opacity-50 cursor-not-allowed"
+                              }`}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          First Name
+                        </label>
+                        <input
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          disabled={!isEditingProfile}
+                          className={`w-full p-3 rounded-md text-sm border ${
+                            !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                          placeholder="Sarah"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          Last Name
+                        </label>
+                        <input
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          disabled={!isEditingProfile}
+                          className={`w-full p-3 rounded-md text-sm border ${
+                            !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                          placeholder="Mitchell"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 country-state-city-dropdown">
+                      <div className="relative">
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          Country
+                        </label>
+                        <div
+                          onClick={async () => {
+                            if (!isEditingProfile) return;
+                            if (countries.length === 0) {
+                              await loadCountries();
+                            }
+                            setShowCountryDropdown(!showCountryDropdown);
+                            setShowStateDropdown(false);
+                            setShowCityDropdown(false);
+                          }}
+                          className={`w-full px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between ${
+                            isEditingProfile
+                              ? "cursor-pointer"
+                              : "cursor-not-allowed opacity-50 bg-primary"
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                        >
+                          <span
+                            className={
+                              selectedCountry ? "text-secondary" : "text-gray-400"
+                            }
+                          >
+                            {selectedCountry || "Select country"}
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        </div>
+                        {showCountryDropdown && isEditingProfile && (
+                          <div className="absolute z-50 w-75 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg p-2 max-h-60 overflow-hidden">
+                            <div className="p-2 border-b border-zinc-100 flex items-center">
+                              <Search className="w-4 h-4 text-gray-400 mr-2" />
+                              <input
+                                type="text"
+                                placeholder="Search..."
+                                className="w-full text-sm outline-none"
+                                value={searchCountry}
+                                onChange={(e) => setSearchCountry(e.target.value)}
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {isLoadingCountries ? (
+                                <div className="px-4 py-3 text-sm text-gray text-center">
+                                  Loading...
+                                </div>
+                              ) : (
+                                countries
+                                  .filter((c) =>
+                                    c.name.common
+                                      .toLowerCase()
+                                      .includes(searchCountry.toLowerCase()),
+                                  )
+                                  .map((c) => (
+                                    <button
+                                      key={c.cca2}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedCountry(c.name.common);
+                                        const states = CSS.getStatesOfCountry(c.cca2);
+                                        if (states.length === 0) {
+                                          setSelectedState(c.name.common);
+                                          setSelectedCity(c.name.common);
+                                        } else {
+                                          setSelectedState("");
+                                          setSelectedCity("");
+                                        }
+                                        setShowCountryDropdown(false);
+                                        setSearchCountry("");
+                                      }}
+                                      className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-zinc-50 text-secondary"
+                                    >
+                                      <div className="relative w-5 h-3 overflow-hidden rounded-sm ring-1 ring-zinc-100 shrink-0">
+                                        <Image
+                                          src={c.flags.svg}
+                                          alt={c.name.common}
+                                          fill
+                                          className="object-cover"
+                                        />
+                                      </div>
+                                      <span className="whitespace-normal wrap-break-word">
+                                        {c.name.common}
+                                      </span>
+                                    </button>
+                                  ))
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="relative">
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          State
+                        </label>
+                        <div
+                          onClick={() => {
+                            if (!isEditingProfile || !selectedCountry) return;
+                            const countryCode =
+                              countries.find((c) => c.name.common === selectedCountry)
+                                ?.cca2 || "";
+                            const hasStates = CSS.getStatesOfCountry(countryCode).length > 0;
+                            if (!hasStates) return;
+                            setShowStateDropdown(!showStateDropdown);
+                            setShowCityDropdown(false);
+                          }}
+                          className={`w-full px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between ${
+                            !isEditingProfile ||
+                            !selectedCountry ||
+                            CSS.getStatesOfCountry(
+                              countries.find((c) => c.name.common === selectedCountry)
+                                ?.cca2 || "",
+                            ).length === 0
+                              ? "opacity-50 cursor-not-allowed bg-primary"
+                              : "cursor-pointer"
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                        >
+                          <span
+                            className={
+                              selectedState ? "text-secondary" : "text-gray-400"
+                            }
+                          >
+                            {selectedState || "Select state"}
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        </div>
+                        {showStateDropdown && selectedCountry && isEditingProfile && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg p-2 max-h-60 overflow-hidden">
+                            <div className="p-2 border-b border-zinc-100 flex items-center">
+                              <Search className="w-4 h-4 text-gray-400 mr-2" />
+                              <input
+                                type="text"
+                                placeholder="Search..."
+                                className="w-full text-sm outline-none"
+                                value={searchState}
+                                onChange={(e) => setSearchState(e.target.value)}
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {CSS.getStatesOfCountry(
+                                countries.find((c) => c.name.common === selectedCountry)
+                                  ?.cca2 || "",
+                              )
+                                .filter((s) =>
+                                  s.name
+                                    .toLowerCase()
+                                    .includes(searchState.toLowerCase()),
+                                )
+                                .map((s) => (
+                                  <button
+                                    key={s.isoCode}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedState(s.name);
+                                      const countryCode =
+                                        countries.find(
+                                          (c) => c.name.common === selectedCountry,
+                                        )?.cca2 || "";
+                                      const nextCities = CSCity.getCitiesOfState(
+                                        countryCode,
+                                        s.isoCode,
+                                      );
+                                      if (nextCities.length === 0) {
+                                        setSelectedCity(s.name);
+                                      } else {
+                                        setSelectedCity("");
+                                      }
+                                      setShowStateDropdown(false);
+                                      setSearchState("");
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-50 text-secondary"
+                                  >
+                                    {s.name}
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="relative">
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          City
+                        </label>
+                        <div
+                          onClick={() => {
+                            if (!isEditingProfile || !selectedState) return;
+                            const countryCode =
+                              countries.find((c) => c.name.common === selectedCountry)
+                                ?.cca2 || "";
+                            const stateCode =
+                              CSS.getStatesOfCountry(countryCode).find(
+                                (s) => s.name === selectedState,
+                              )?.isoCode || "";
+                            const hasCities =
+                              CSCity.getCitiesOfState(countryCode, stateCode).length > 0;
+                            if (!hasCities) return;
+                            setShowCityDropdown(!showCityDropdown);
+                          }}
+                          className={`w-full px-4 py-2.5 border rounded-lg text-sm flex items-center justify-between ${
+                            !isEditingProfile ||
+                            !selectedState ||
+                            CSCity.getCitiesOfState(
+                              countries.find((c) => c.name.common === selectedCountry)
+                                ?.cca2 || "",
+                              CSS.getStatesOfCountry(
+                                countries.find((c) => c.name.common === selectedCountry)
+                                  ?.cca2 || "",
+                              ).find((s) => s.name === selectedState)?.isoCode || "",
+                            ).length === 0
+                              ? "opacity-50 cursor-not-allowed bg-primary"
+                              : "cursor-pointer"
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                        >
+                          <span
+                            className={
+                              selectedCity ? "text-secondary" : "text-gray-400"
+                            }
+                          >
+                            {selectedCity || "Select city"}
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        </div>
+                        {showCityDropdown &&
+                          selectedState &&
+                          selectedCountry &&
+                          isEditingProfile && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg p-2 max-h-60 overflow-hidden">
+                              <div className="p-2 border-b border-zinc-100 flex items-center">
+                                <Search className="w-4 h-4 text-gray-400 mr-2" />
+                                <input
+                                  type="text"
+                                  placeholder="Search..."
+                                  className="w-full text-sm outline-none"
+                                  value={searchCity}
+                                  onChange={(e) => setSearchCity(e.target.value)}
+                                />
+                              </div>
+                              <div className="max-h-48 overflow-y-auto">
+                                {CSCity.getCitiesOfState(
+                                  countries.find((c) => c.name.common === selectedCountry)
+                                    ?.cca2 || "",
+                                  CSS.getStatesOfCountry(
+                                    countries.find((c) => c.name.common === selectedCountry)
+                                      ?.cca2 || "",
+                                  ).find((s) => s.name === selectedState)?.isoCode || "",
+                                )
+                                  .filter((city) =>
+                                    city.name
+                                      .toLowerCase()
+                                      .includes(searchCity.toLowerCase()),
+                                  )
+                                  .map((city) => (
+                                    <button
+                                      key={city.name}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedCity(city.name);
+                                        setShowCityDropdown(false);
+                                        setSearchCity("");
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-50 text-secondary"
+                                    >
+                                      {city.name}
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3">
+                      {isEditingProfile ? (
+                        <>
+                          <button
+                            onClick={closeActiveAccountModal}
+                            className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <Button
+                            variant="primary"
+                            onClick={handleSaveChanges}
+                            disabled={!hasChanges() || isSaving}
+                          >
+                            {isSaving ? "Saving..." : "Save Changes"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button variant="primary" onClick={openProfileModal}>
+                          Update Profile
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-2 text-xs text-gray">
-                    {passwordOtpSecondsLeft > 0 ? (
-                      <span>
-                        Resend OTP in {formatOtpTimer(passwordOtpSecondsLeft)}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleResendPasswordOtp}
-                        disabled={isSendingPasswordOtp}
-                        className="text-secondary underline disabled:opacity-50"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-                  </div>
                 </div>
-              )}
-
-              {passwordError && (
-                <p className="text-xs text-red mt-2">{passwordError}</p>
-              )}
-
-              <div className="mt-6 flex justify-end gap-3">
-                {isChangingPassword ? (
-                  <>
-                    <button
-                      onClick={handleCancelPasswordChange}
-                      disabled={isSavingPassword}
-                      className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      variant="primary"
-                      onClick={handlePasswordChange}
-                      disabled={isSavingPassword}
-                    >
-                      {isSavingPassword ? "Updating..." : "Update Password"}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="primary"
-                    onClick={handleRequestPasswordOtp}
-                    disabled={isSendingPasswordOtp}
-                  >
-                    {isSendingPasswordOtp ? "Sending..." : "Update Password"}
-                  </Button>
-                )}
               </div>
             </div>
-          </div>
+          )}
+
+          {activeAccountModal === "email" && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={closeActiveAccountModal}
+              />
+              <div className="relative w-[95%] max-w-2xl max-h-[90vh] overflow-y-auto">
+                <button
+                  className="absolute top-4 right-4 z-20"
+                  onClick={closeActiveAccountModal}
+                >
+                  <img
+                    src="/assets/imgs/admin/commons/cross.svg"
+                    alt="close"
+                    className="w-5 h-5"
+                  />
+                </button>
+
+                <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+                  {(isSendingEmailOtp || isSavingEmail || emailSuccessMessage) && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+                      <Loading isLoading size="sm" className="p-4" />
+                    </div>
+                  )}
+                  <div
+                    className={
+                      isSendingEmailOtp || isSavingEmail || emailSuccessMessage
+                        ? "blur-sm pointer-events-none"
+                        : ""
+                    }
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-secondary">
+                          Email Address
+                        </h3>
+                        <p className="text-xs text-gray mt-1">
+                          Change your email address
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Current Email
+                      </label>
+                      <input
+                        value={email}
+                        disabled
+                        className="w-full p-3 rounded-md text-sm border bg-zinc-50 cursor-not-allowed"
+                        style={{ borderColor: "#E6E6E6" }}
+                      />
+                    </div>
+
+                    {!isChangingEmail ? (
+                      <div className="mt-6 flex justify-end">
+                        <Button variant="primary" onClick={handleRequestEmailOtp}>
+                          Change Email
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-6">
+                          <label className="block text-xs font-medium text-dull-gray mb-2">
+                            New Email Address
+                          </label>
+                          <input
+                            value={newEmail}
+                            onChange={(e) => {
+                              setNewEmail(e.target.value);
+                              setEmailError("");
+                            }}
+                            type="email"
+                            className={`w-full p-3 rounded-md text-sm border ${
+                              emailError ? "border-red" : ""
+                            }`}
+                            style={{
+                              borderColor: emailError ? "#ef4444" : "#E6E6E6",
+                            }}
+                            placeholder="Enter new email address"
+                          />
+                        </div>
+
+                        <div className="mt-4">
+                          <p className="text-xs text-gray">
+                            We sent an OTP email to your old email. Enter the 6-digit
+                            code below.
+                          </p>
+                          <div className="mt-3 flex gap-2">
+                            {emailOtp.map((digit, index) => (
+                              <input
+                                key={index}
+                                ref={(el) => {
+                                  emailOtpRefs.current[index] = el;
+                                }}
+                                value={digit}
+                                onChange={(e) => {
+                                  const value = e.target.value.slice(-1);
+                                  setEmailOtp((prev) => {
+                                    const next = [...prev];
+                                    next[index] = value;
+                                    return next;
+                                  });
+                                  setEmailError("");
+                                  if (value && index < emailOtp.length - 1) {
+                                    emailOtpRefs.current[index + 1]?.focus();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (
+                                    e.key === "Backspace" &&
+                                    !emailOtp[index] &&
+                                    index > 0
+                                  ) {
+                                    emailOtpRefs.current[index - 1]?.focus();
+                                  }
+                                }}
+                                inputMode="text"
+                                maxLength={1}
+                                className={`w-10 h-10 text-center rounded-md text-sm border ${
+                                  emailError ? "border-red" : ""
+                                }`}
+                                style={{
+                                  borderColor: emailError ? "#ef4444" : "#E6E6E6",
+                                }}
+                                aria-label={`OTP digit ${index + 1}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        {emailError && (
+                          <p className="text-xs text-red mt-2">{emailError}</p>
+                        )}
+
+                        <div className="mt-6 flex justify-end gap-3">
+                          <button
+                            onClick={closeActiveAccountModal}
+                            disabled={isSavingEmail}
+                            className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Cancel
+                          </button>
+                          <Button
+                            variant="primary"
+                            onClick={handleEmailChange}
+                            disabled={
+                              isSavingEmail ||
+                              !newEmail.trim() ||
+                              emailOtp.some((digit) => !digit.trim())
+                            }
+                          >
+                            {isSavingEmail ? "Updating..." : "Update Email"}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeAccountModal === "password" && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={closeActiveAccountModal}
+              />
+              <div className="relative w-[95%] max-w-3xl max-h-[90vh] overflow-y-auto">
+                <button
+                  className="absolute top-4 right-4 z-20"
+                  onClick={closeActiveAccountModal}
+                >
+                  <img
+                    src="/assets/imgs/admin/commons/cross.svg"
+                    alt="close"
+                    className="w-5 h-5"
+                  />
+                </button>
+
+                <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+                  {(isSendingPasswordOtp ||
+                    isSavingPassword ||
+                    passwordSuccessMessage) && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+                      <Loading isLoading size="sm" className="p-4" />
+                    </div>
+                  )}
+                  <div
+                    className={
+                      isSendingPasswordOtp ||
+                      isSavingPassword ||
+                      passwordSuccessMessage
+                        ? "blur-sm pointer-events-none"
+                        : ""
+                    }
+                  >
+                    <h3 className="text-lg font-medium text-secondary">
+                      Security Settings
+                    </h3>
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          Current Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            value={currentPassword}
+                            onChange={(e) => {
+                              setCurrentPassword(e.target.value);
+                              setPasswordError("");
+                            }}
+                            disabled={!isChangingPassword}
+                            className="w-full p-3 pr-10 rounded-md text-sm border"
+                            style={{ borderColor: "#E6E6E6" }}
+                            placeholder="Enter current password"
+                            type={showCurrentPassword ? "text" : "password"}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword((prev) => !prev)}
+                            disabled={!isChangingPassword}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
+                            aria-label={
+                              showCurrentPassword ? "Hide password" : "Show password"
+                            }
+                          >
+                            {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          New Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            value={newPasswordValue}
+                            onChange={(e) => {
+                              setNewPasswordValue(e.target.value);
+                              setPasswordError("");
+                            }}
+                            disabled={!isChangingPassword}
+                            className="w-full p-3 pr-10 rounded-md text-sm border"
+                            style={{ borderColor: "#E6E6E6" }}
+                            placeholder="Enter new password"
+                            type={showNewPassword ? "text" : "password"}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword((prev) => !prev)}
+                            disabled={!isChangingPassword}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
+                            aria-label={showNewPassword ? "Hide password" : "Show password"}
+                          >
+                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            setPasswordError("");
+                          }}
+                          disabled={!isChangingPassword}
+                          className="w-full p-3 pr-10 rounded-md text-sm border"
+                          style={{ borderColor: "#E6E6E6" }}
+                          placeholder="Confirm new password"
+                          type={showConfirmPassword ? "text" : "password"}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          disabled={!isChangingPassword}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
+                          aria-label={
+                            showConfirmPassword ? "Hide password" : "Show password"
+                          }
+                        >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isChangingPassword && (
+                      <div className="mt-4">
+                        <p className="text-xs text-gray">
+                          We sent an OTP email to your current email. Enter the
+                          6-digit code below.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          {passwordOtp.map((digit, index) => (
+                            <input
+                              key={index}
+                              ref={(el) => {
+                                passwordOtpRefs.current[index] = el;
+                              }}
+                              value={digit}
+                              onChange={(e) => {
+                                const value = e.target.value.slice(-1);
+                                setPasswordOtp((prev) => {
+                                  const next = [...prev];
+                                  next[index] = value;
+                                  return next;
+                                });
+                                setPasswordError("");
+                                if (value && index < passwordOtp.length - 1) {
+                                  passwordOtpRefs.current[index + 1]?.focus();
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "Backspace" &&
+                                  !passwordOtp[index] &&
+                                  index > 0
+                                ) {
+                                  passwordOtpRefs.current[index - 1]?.focus();
+                                }
+                              }}
+                              inputMode="text"
+                              maxLength={1}
+                              className={`w-10 h-10 text-center rounded-md text-sm border ${
+                                passwordError ? "border-red" : ""
+                              }`}
+                              style={{
+                                borderColor: passwordError ? "#ef4444" : "#E6E6E6",
+                              }}
+                              aria-label={`Password OTP digit ${index + 1}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs text-gray">
+                          {passwordOtpSecondsLeft > 0 ? (
+                            <span>
+                              Resend OTP in {formatOtpTimer(passwordOtpSecondsLeft)}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleResendPasswordOtp}
+                              disabled={isSendingPasswordOtp}
+                              className="text-secondary underline disabled:opacity-50"
+                            >
+                              Resend OTP
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {passwordError && (
+                      <p className="text-xs text-red mt-2">{passwordError}</p>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                      {isChangingPassword ? (
+                        <>
+                          <button
+                            onClick={closeActiveAccountModal}
+                            disabled={isSavingPassword}
+                            className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Cancel
+                          </button>
+                          <Button
+                            variant="primary"
+                            onClick={handlePasswordChange}
+                            disabled={isSavingPassword}
+                          >
+                            {isSavingPassword ? "Updating..." : "Update Password"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          onClick={handleRequestPasswordOtp}
+                          disabled={isSendingPasswordOtp}
+                        >
+                          {isSendingPasswordOtp ? "Sending..." : "Update Password"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1681,4 +1804,3 @@ export default function Settings() {
     </div>
   );
 }
-

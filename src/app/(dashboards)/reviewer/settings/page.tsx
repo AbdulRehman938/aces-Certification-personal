@@ -14,6 +14,8 @@ interface NotificationCardProps {
   onToggle: () => void;
 }
 
+type AccountModalType = "profile" | "email" | "password" | null;
+
 function NotificationCard({
   label,
   description,
@@ -77,6 +79,8 @@ export default function Settings() {
 
   const [expertiseTags, setExpertiseTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
+  const [activeAccountModal, setActiveAccountModal] =
+    useState<AccountModalType>(null);
 
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -608,6 +612,39 @@ export default function Settings() {
 
     return () => window.clearTimeout(timerId);
   }, [passwordOtpSecondsLeft]);
+
+  const openProfileModal = () => {
+    handleEditClick();
+    setActiveAccountModal("profile");
+  };
+
+  const openEmailModal = () => {
+    setActiveAccountModal("email");
+    if (!isChangingEmail && !isSendingEmailOtp) {
+      void handleRequestEmailOtp();
+    }
+  };
+
+  const openPasswordModal = () => {
+    setActiveAccountModal("password");
+    if (!isChangingPassword && !isSendingPasswordOtp) {
+      void handleRequestPasswordOtp();
+    }
+  };
+
+  const closeActiveAccountModal = () => {
+    if (activeAccountModal === "profile") {
+      handleCancel();
+    }
+    if (activeAccountModal === "email") {
+      handleCancelEmailChange();
+    }
+    if (activeAccountModal === "password") {
+      handleCancelPasswordChange();
+    }
+    setActiveAccountModal(null);
+  };
+
   return (
     <div className="p-6 bg-light-gray min-h-screen">
       <div className="mb-8">
@@ -660,591 +697,698 @@ export default function Settings() {
 
       {activeTab === "account" && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
-            {(showProfileLoader || profileSuccessMessage) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading
-                  isLoading
-                  size="sm"
-                  progress={showProfileLoader ? profileLoadingProgress : 100}
-                  className="p-4"
-                />
-              </div>
-            )}
-            <div
-              className={
-                showProfileLoader || profileSuccessMessage
-                  ? "blur-sm pointer-events-none"
-                  : ""
-              }
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-secondary">
-                    Profile Information
-                  </h3>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Profile Picture
-                </label>
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 overflow-hidden">
-                    {profilePicturePreview ? (
-                      <img
-                        src={profilePicturePreview}
-                        alt="Profile preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg font-semibold text-zinc-600">
-                        {getInitials(firstName, lastName) || "PP"}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleProfilePictureChange}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={!isEditingProfile}
-                      className={`px-4 py-2 text-sm font-medium text-secondary border border-zinc-200 rounded-lg transition-colors ${
-                        isEditingProfile
-                          ? "hover:bg-zinc-50 cursor-pointer"
-                          : "opacity-50 cursor-not-allowed"
-                      }`}
-                    >
-                      Upload Photo
-                    </button>
-                    {profilePicture && (
-                      <button
-                        onClick={() => {
-                          setProfilePicture(null);
-                          setProfilePicturePreview("");
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
-                        }}
-                        disabled={!isEditingProfile}
-                        className={`ml-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg transition-colors ${
-                          isEditingProfile
-                            ? "hover:bg-red-50 cursor-pointer"
-                            : "opacity-50 cursor-not-allowed"
-                        }`}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    First Name
-                  </label>
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    disabled={!isEditingProfile}
-                    className={`w-full p-3 rounded-md text-sm border ${
-                      !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                    placeholder="Sarah"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    Last Name
-                  </label>
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    disabled={!isEditingProfile}
-                    className={`w-full p-3 rounded-md text-sm border ${
-                      !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
-                    }`}
-                    style={{ borderColor: "#E6E6E6" }}
-                    placeholder="Mitchell"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Expertise Tags
-                </label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {expertiseTags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 rounded-full text-sm text-secondary"
-                    >
-                      <span>{tag}</span>
-                      {isEditingProfile && (
-                        <button
-                          onClick={() =>
-                            setExpertiseTags(
-                              expertiseTags.filter((_, i) => i !== index),
-                            )
-                          }
-                          className="hover:bg-zinc-200 rounded-full p-0.5 transition-colors"
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M9 3L3 9M3 3L9 9"
-                              stroke="#262626"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-                {isEditingProfile && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && newTag.trim()) {
-                          e.preventDefault();
-                          setExpertiseTags([...expertiseTags, newTag.trim()]);
-                          setNewTag("");
-                        }
-                      }}
-                      placeholder="Add expertise tag"
-                      className="flex-1 px-4 py-2.5 border border-zinc-200 rounded-lg text-sm text-secondary placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 focus:border-transparent"
-                      style={{ borderColor: "#E6E6E6" }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (newTag.trim()) {
-                          setExpertiseTags([...expertiseTags, newTag.trim()]);
-                          setNewTag("");
-                        }
-                      }}
-                      className="px-4 py-2.5 bg-zinc-100 text-secondary rounded-lg hover:bg-zinc-200 transition-colors text-sm font-medium"
-                    >
-                      Add
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                {isEditingProfile ? (
-                  <>
-                    <button
-                      onClick={handleCancel}
-                      className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      variant="primary"
-                      onClick={handleSaveChanges}
-                      disabled={isSavingProfile}
-                    >
-                      {isSavingProfile ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </>
-                ) : (
-                  <Button variant="primary" onClick={handleEditClick}>
-                    Update Profile
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
-            {(isSendingEmailOtp || isSavingEmail || emailSuccessMessage) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
-            )}
-            <div
-              className={
-                isSendingEmailOtp || isSavingEmail || emailSuccessMessage
-                  ? "blur-sm pointer-events-none"
-                  : ""
-              }
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-secondary">
-                    Email Address
-                  </h3>
-                  <p className="text-xs text-gray mt-1">
-                    Change your email address
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Current Email
-                </label>
-                <input
-                  value={email}
-                  disabled
-                  className="w-full p-3 rounded-md text-sm border bg-zinc-50 cursor-not-allowed"
-                  style={{ borderColor: "#E6E6E6" }}
-                />
-              </div>
-
-              {!isChangingEmail ? (
-                <div className="mt-6 flex justify-end">
-                  <Button variant="primary" onClick={handleRequestEmailOtp}>
-                    Change Email
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="mt-6">
-                    <label className="block text-xs font-medium text-dull-gray mb-2">
-                      New Email Address
-                    </label>
-                    <input
-                      value={newEmail}
-                      onChange={(e) => {
-                        setNewEmail(e.target.value);
-                        setEmailError("");
-                      }}
-                      type="email"
-                      className={`w-full p-3 rounded-md text-sm border ${
-                        emailError ? "border-red" : ""
-                      }`}
-                      style={{
-                        borderColor: emailError ? "#ef4444" : "#E6E6E6",
-                      }}
-                      placeholder="Enter new email address"
-                    />
-                  </div>
-
-                  <div className="mt-4">
-                    <p className="text-xs text-gray">
-                      We sent an OTP email to your old email. Enter the 6-digit
-                      code below.
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      {emailOtp.map((digit, index) => (
-                        <input
-                          key={index}
-                          ref={(el) => {
-                            emailOtpRefs.current[index] = el;
-                          }}
-                          value={digit}
-                          onChange={(e) => {
-                            const value = e.target.value.slice(-1);
-                            setEmailOtp((prev) => {
-                              const next = [...prev];
-                              next[index] = value;
-                              return next;
-                            });
-                            setEmailError("");
-                            if (value && index < emailOtp.length - 1) {
-                              emailOtpRefs.current[index + 1]?.focus();
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === "Backspace" &&
-                              !emailOtp[index] &&
-                              index > 0
-                            ) {
-                              emailOtpRefs.current[index - 1]?.focus();
-                            }
-                          }}
-                          inputMode="text"
-                          maxLength={1}
-                          className={`w-10 h-10 text-center rounded-md text-sm border ${
-                            emailError ? "border-red" : ""
-                          }`}
-                          style={{
-                            borderColor: emailError ? "#ef4444" : "#E6E6E6",
-                          }}
-                          aria-label={`OTP digit ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {emailError && (
-                    <p className="text-xs text-red mt-2">{emailError}</p>
-                  )}
-
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={handleCancelEmailChange}
-                      disabled={isSavingEmail}
-                      className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      variant="primary"
-                      onClick={handleEmailChange}
-                      disabled={
-                        isSavingEmail ||
-                        !newEmail.trim() ||
-                        emailOtp.some((digit) => !digit.trim())
-                      }
-                    >
-                      {isSavingEmail ? "Updating..." : "Update Email"}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
-            {(isSendingPasswordOtp ||
-              isSavingPassword ||
-              passwordSuccessMessage) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
-            )}
-            <div
-              className={
-                isSendingPasswordOtp ||
-                isSavingPassword ||
-                passwordSuccessMessage
-                  ? "blur-sm pointer-events-none"
-                  : ""
-              }
-            >
-              <h3 className="text-lg font-medium text-secondary">
-                Security Settings
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-zinc-100 p-5">
+              <h3 className="text-base font-semibold text-secondary">
+                Profile Information
               </h3>
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    Current Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      value={currentPassword}
-                      onChange={(e) => {
-                        setCurrentPassword(e.target.value);
-                        setPasswordError("");
-                      }}
-                      disabled={!isChangingPassword}
-                      className="w-full p-3 pr-10 rounded-md text-sm border"
-                      style={{ borderColor: "#E6E6E6" }}
-                      placeholder="Enter current password"
-                      type={showCurrentPassword ? "text" : "password"}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword((prev) => !prev)}
-                      disabled={!isChangingPassword}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
-                      aria-label={
-                        showCurrentPassword ? "Hide password" : "Show password"
-                      }
-                    >
-                      {showCurrentPassword ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-dull-gray mb-2">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      value={newPasswordValue}
-                      onChange={(e) => {
-                        setNewPasswordValue(e.target.value);
-                        setPasswordError("");
-                      }}
-                      disabled={!isChangingPassword}
-                      className="w-full p-3 pr-10 rounded-md text-sm border"
-                      style={{ borderColor: "#E6E6E6" }}
-                      placeholder="Enter new password"
-                      type={showNewPassword ? "text" : "password"}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword((prev) => !prev)}
-                      disabled={!isChangingPassword}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
-                      aria-label={
-                        showNewPassword ? "Hide password" : "Show password"
-                      }
-                    >
-                      {showNewPassword ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
-                  </div>
-                </div>
+              <p className="text-sm text-gray mt-2">
+                Update your personal details, expertise, and profile photo.
+              </p>
+              <div className="mt-5">
+                <Button variant="primary" onClick={openProfileModal}>
+                  Update Profile
+                </Button>
               </div>
+            </div>
 
-              <div className="mt-6">
-                <label className="block text-xs font-medium text-dull-gray mb-2">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <input
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      setPasswordError("");
-                    }}
-                    disabled={!isChangingPassword}
-                    className="w-full p-3 pr-10 rounded-md text-sm border"
-                    style={{ borderColor: "#E6E6E6" }}
-                    placeholder="Confirm new password"
-                    type={showConfirmPassword ? "text" : "password"}
+            <div className="bg-white rounded-xl border border-zinc-100 p-5">
+              <h3 className="text-base font-semibold text-secondary">
+                Change Email
+              </h3>
+              <p className="text-sm text-gray mt-2">
+                Change your email with OTP verification sent to current email.
+              </p>
+              <div className="mt-5">
+                <Button variant="primary" onClick={openEmailModal}>
+                  Change Email
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-zinc-100 p-5">
+              <h3 className="text-base font-semibold text-secondary">
+                Change Password
+              </h3>
+              <p className="text-sm text-gray mt-2">
+                Update password securely using OTP verification.
+              </p>
+              <div className="mt-5">
+                <Button variant="primary" onClick={openPasswordModal}>
+                  Change Password
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {activeAccountModal === "profile" && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={closeActiveAccountModal}
+              />
+              <div className="relative w-[95%] max-w-5xl max-h-[90vh] overflow-y-auto">
+                <button
+                  className="absolute top-4 right-4 z-20"
+                  onClick={closeActiveAccountModal}
+                >
+                  <img
+                    src="/assets/imgs/admin/commons/cross.svg"
+                    alt="close"
+                    className="w-5 h-5"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    disabled={!isChangingPassword}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
-                    aria-label={
-                      showConfirmPassword ? "Hide password" : "Show password"
+                </button>
+
+                <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+                  {(showProfileLoader || profileSuccessMessage) && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+                      <Loading
+                        isLoading
+                        size="sm"
+                        progress={showProfileLoader ? profileLoadingProgress : 100}
+                        className="p-4"
+                      />
+                    </div>
+                  )}
+                  <div
+                    className={
+                      showProfileLoader || profileSuccessMessage
+                        ? "blur-sm pointer-events-none"
+                        : ""
                     }
                   >
-                    {showConfirmPassword ? (
-                      <EyeOff size={16} />
-                    ) : (
-                      <Eye size={16} />
-                    )}
-                  </button>
-                </div>
-              </div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-secondary">
+                          Profile Information
+                        </h3>
+                      </div>
+                    </div>
 
-              {isChangingPassword && (
-                <div className="mt-4">
-                  <p className="text-xs text-gray">
-                    We sent an OTP email to your current email. Enter the
-                    6-digit code below.
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    {passwordOtp.map((digit, index) => (
-                      <input
-                        key={index}
-                        ref={(el) => {
-                          passwordOtpRefs.current[index] = el;
-                        }}
-                        value={digit}
-                        onChange={(e) => {
-                          const value = e.target.value.slice(-1);
-                          setPasswordOtp((prev) => {
-                            const next = [...prev];
-                            next[index] = value;
-                            return next;
-                          });
-                          setPasswordError("");
-                          if (value && index < passwordOtp.length - 1) {
-                            passwordOtpRefs.current[index + 1]?.focus();
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Backspace" &&
-                            !passwordOtp[index] &&
-                            index > 0
-                          ) {
-                            passwordOtpRefs.current[index - 1]?.focus();
-                          }
-                        }}
-                        inputMode="text"
-                        maxLength={1}
-                        className={`w-10 h-10 text-center rounded-md text-sm border ${
-                          passwordError ? "border-red" : ""
-                        }`}
-                        style={{
-                          borderColor: passwordError ? "#ef4444" : "#E6E6E6",
-                        }}
-                        aria-label={`Password OTP digit ${index + 1}`}
-                      />
-                    ))}
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Profile Picture
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <div className="w-20 h-20 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 overflow-hidden">
+                          {profilePicturePreview ? (
+                            <img
+                              src={profilePicturePreview}
+                              alt="Profile preview"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-lg font-semibold text-zinc-600">
+                              {getInitials(firstName, lastName) || "PP"}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleProfilePictureChange}
+                            accept="image/*"
+                            className="hidden"
+                          />
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!isEditingProfile}
+                            className={`px-4 py-2 text-sm font-medium text-secondary border border-zinc-200 rounded-lg transition-colors ${
+                              isEditingProfile
+                                ? "hover:bg-zinc-50 cursor-pointer"
+                                : "opacity-50 cursor-not-allowed"
+                            }`}
+                          >
+                            Upload Photo
+                          </button>
+                          {profilePicture && (
+                            <button
+                              onClick={() => {
+                                setProfilePicture(null);
+                                setProfilePicturePreview("");
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = "";
+                                }
+                              }}
+                              disabled={!isEditingProfile}
+                              className={`ml-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg transition-colors ${
+                                isEditingProfile
+                                  ? "hover:bg-red-50 cursor-pointer"
+                                  : "opacity-50 cursor-not-allowed"
+                              }`}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          First Name
+                        </label>
+                        <input
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          disabled={!isEditingProfile}
+                          className={`w-full p-3 rounded-md text-sm border ${
+                            !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                          placeholder="Sarah"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          Last Name
+                        </label>
+                        <input
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          disabled={!isEditingProfile}
+                          className={`w-full p-3 rounded-md text-sm border ${
+                            !isEditingProfile ? "bg-zinc-50 cursor-not-allowed" : ""
+                          }`}
+                          style={{ borderColor: "#E6E6E6" }}
+                          placeholder="Mitchell"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Expertise Tags
+                      </label>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {expertiseTags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 rounded-full text-sm text-secondary"
+                          >
+                            <span>{tag}</span>
+                            {isEditingProfile && (
+                              <button
+                                onClick={() =>
+                                  setExpertiseTags(
+                                    expertiseTags.filter((_, i) => i !== index),
+                                  )
+                                }
+                                className="hover:bg-zinc-200 rounded-full p-0.5 transition-colors"
+                              >
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 12 12"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M9 3L3 9M3 3L9 9"
+                                    stroke="#262626"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                      {isEditingProfile && (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter" && newTag.trim()) {
+                                e.preventDefault();
+                                setExpertiseTags([...expertiseTags, newTag.trim()]);
+                                setNewTag("");
+                              }
+                            }}
+                            placeholder="Add expertise tag"
+                            className="flex-1 px-4 py-2.5 border border-zinc-200 rounded-lg text-sm text-secondary placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-zinc-300 focus:border-transparent"
+                            style={{ borderColor: "#E6E6E6" }}
+                          />
+                          <button
+                            onClick={() => {
+                              if (newTag.trim()) {
+                                setExpertiseTags([...expertiseTags, newTag.trim()]);
+                                setNewTag("");
+                              }
+                            }}
+                            className="px-4 py-2.5 bg-zinc-100 text-secondary rounded-lg hover:bg-zinc-200 transition-colors text-sm font-medium"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3">
+                      {isEditingProfile ? (
+                        <>
+                          <button
+                            onClick={closeActiveAccountModal}
+                            className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <Button
+                            variant="primary"
+                            onClick={handleSaveChanges}
+                            disabled={isSavingProfile}
+                          >
+                            {isSavingProfile ? "Saving..." : "Save Changes"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button variant="primary" onClick={handleEditClick}>
+                          Update Profile
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-2 text-xs text-gray">
-                    {passwordOtpSecondsLeft > 0 ? (
-                      <span>
-                        Resend OTP in {formatOtpTimer(passwordOtpSecondsLeft)}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleResendPasswordOtp}
-                        disabled={isSendingPasswordOtp}
-                        className="text-secondary underline disabled:opacity-50"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-                  </div>
                 </div>
-              )}
-
-              {passwordError && (
-                <p className="text-xs text-red mt-2">{passwordError}</p>
-              )}
-
-              <div className="mt-6 flex justify-end gap-3">
-                {isChangingPassword ? (
-                  <>
-                    <button
-                      onClick={handleCancelPasswordChange}
-                      disabled={isSavingPassword}
-                      className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      variant="primary"
-                      onClick={handlePasswordChange}
-                      disabled={isSavingPassword}
-                    >
-                      {isSavingPassword ? "Updating..." : "Update Password"}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="primary"
-                    onClick={handleRequestPasswordOtp}
-                    disabled={isSendingPasswordOtp}
-                  >
-                    {isSendingPasswordOtp ? "Sending..." : "Update Password"}
-                  </Button>
-                )}
               </div>
             </div>
-          </div>
+          )}
+
+          {activeAccountModal === "email" && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={closeActiveAccountModal}
+              />
+              <div className="relative w-[95%] max-w-2xl max-h-[90vh] overflow-y-auto">
+                <button
+                  className="absolute top-4 right-4 z-20"
+                  onClick={closeActiveAccountModal}
+                >
+                  <img
+                    src="/assets/imgs/admin/commons/cross.svg"
+                    alt="close"
+                    className="w-5 h-5"
+                  />
+                </button>
+
+                <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+                  {(isSendingEmailOtp || isSavingEmail || emailSuccessMessage) && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+                      <Loading isLoading size="sm" className="p-4" />
+                    </div>
+                  )}
+                  <div
+                    className={
+                      isSendingEmailOtp || isSavingEmail || emailSuccessMessage
+                        ? "blur-sm pointer-events-none"
+                        : ""
+                    }
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-secondary">
+                          Email Address
+                        </h3>
+                        <p className="text-xs text-gray mt-1">
+                          Change your email address
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Current Email
+                      </label>
+                      <input
+                        value={email}
+                        disabled
+                        className="w-full p-3 rounded-md text-sm border bg-zinc-50 cursor-not-allowed"
+                        style={{ borderColor: "#E6E6E6" }}
+                      />
+                    </div>
+
+                    {!isChangingEmail ? (
+                      <div className="mt-6 flex justify-end">
+                        <Button variant="primary" onClick={handleRequestEmailOtp}>
+                          Change Email
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-6">
+                          <label className="block text-xs font-medium text-dull-gray mb-2">
+                            New Email Address
+                          </label>
+                          <input
+                            value={newEmail}
+                            onChange={(e) => {
+                              setNewEmail(e.target.value);
+                              setEmailError("");
+                            }}
+                            type="email"
+                            className={`w-full p-3 rounded-md text-sm border ${
+                              emailError ? "border-red" : ""
+                            }`}
+                            style={{
+                              borderColor: emailError ? "#ef4444" : "#E6E6E6",
+                            }}
+                            placeholder="Enter new email address"
+                          />
+                        </div>
+
+                        <div className="mt-4">
+                          <p className="text-xs text-gray">
+                            We sent an OTP email to your old email. Enter the
+                            6-digit code below.
+                          </p>
+                          <div className="mt-3 flex gap-2">
+                            {emailOtp.map((digit, index) => (
+                              <input
+                                key={index}
+                                ref={(el) => {
+                                  emailOtpRefs.current[index] = el;
+                                }}
+                                value={digit}
+                                onChange={(e) => {
+                                  const value = e.target.value.slice(-1);
+                                  setEmailOtp((prev) => {
+                                    const next = [...prev];
+                                    next[index] = value;
+                                    return next;
+                                  });
+                                  setEmailError("");
+                                  if (value && index < emailOtp.length - 1) {
+                                    emailOtpRefs.current[index + 1]?.focus();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (
+                                    e.key === "Backspace" &&
+                                    !emailOtp[index] &&
+                                    index > 0
+                                  ) {
+                                    emailOtpRefs.current[index - 1]?.focus();
+                                  }
+                                }}
+                                inputMode="text"
+                                maxLength={1}
+                                className={`w-10 h-10 text-center rounded-md text-sm border ${
+                                  emailError ? "border-red" : ""
+                                }`}
+                                style={{
+                                  borderColor: emailError ? "#ef4444" : "#E6E6E6",
+                                }}
+                                aria-label={`OTP digit ${index + 1}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        {emailError && (
+                          <p className="text-xs text-red mt-2">{emailError}</p>
+                        )}
+
+                        <div className="mt-6 flex justify-end gap-3">
+                          <button
+                            onClick={closeActiveAccountModal}
+                            disabled={isSavingEmail}
+                            className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Cancel
+                          </button>
+                          <Button
+                            variant="primary"
+                            onClick={handleEmailChange}
+                            disabled={
+                              isSavingEmail ||
+                              !newEmail.trim() ||
+                              emailOtp.some((digit) => !digit.trim())
+                            }
+                          >
+                            {isSavingEmail ? "Updating..." : "Update Email"}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeAccountModal === "password" && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={closeActiveAccountModal}
+              />
+              <div className="relative w-[95%] max-w-3xl max-h-[90vh] overflow-y-auto">
+                <button
+                  className="absolute top-4 right-4 z-20"
+                  onClick={closeActiveAccountModal}
+                >
+                  <img
+                    src="/assets/imgs/admin/commons/cross.svg"
+                    alt="close"
+                    className="w-5 h-5"
+                  />
+                </button>
+
+                <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+                  {(isSendingPasswordOtp ||
+                    isSavingPassword ||
+                    passwordSuccessMessage) && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+                      <Loading isLoading size="sm" className="p-4" />
+                    </div>
+                  )}
+                  <div
+                    className={
+                      isSendingPasswordOtp ||
+                      isSavingPassword ||
+                      passwordSuccessMessage
+                        ? "blur-sm pointer-events-none"
+                        : ""
+                    }
+                  >
+                    <h3 className="text-lg font-medium text-secondary">
+                      Security Settings
+                    </h3>
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          Current Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            value={currentPassword}
+                            onChange={(e) => {
+                              setCurrentPassword(e.target.value);
+                              setPasswordError("");
+                            }}
+                            disabled={!isChangingPassword}
+                            className="w-full p-3 pr-10 rounded-md text-sm border"
+                            style={{ borderColor: "#E6E6E6" }}
+                            placeholder="Enter current password"
+                            type={showCurrentPassword ? "text" : "password"}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword((prev) => !prev)}
+                            disabled={!isChangingPassword}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
+                            aria-label={
+                              showCurrentPassword ? "Hide password" : "Show password"
+                            }
+                          >
+                            {showCurrentPassword ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dull-gray mb-2">
+                          New Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            value={newPasswordValue}
+                            onChange={(e) => {
+                              setNewPasswordValue(e.target.value);
+                              setPasswordError("");
+                            }}
+                            disabled={!isChangingPassword}
+                            className="w-full p-3 pr-10 rounded-md text-sm border"
+                            style={{ borderColor: "#E6E6E6" }}
+                            placeholder="Enter new password"
+                            type={showNewPassword ? "text" : "password"}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword((prev) => !prev)}
+                            disabled={!isChangingPassword}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
+                            aria-label={
+                              showNewPassword ? "Hide password" : "Show password"
+                            }
+                          >
+                            {showNewPassword ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <label className="block text-xs font-medium text-dull-gray mb-2">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            setPasswordError("");
+                          }}
+                          disabled={!isChangingPassword}
+                          className="w-full p-3 pr-10 rounded-md text-sm border"
+                          style={{ borderColor: "#E6E6E6" }}
+                          placeholder="Confirm new password"
+                          type={showConfirmPassword ? "text" : "password"}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          disabled={!isChangingPassword}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray disabled:opacity-50"
+                          aria-label={
+                            showConfirmPassword ? "Hide password" : "Show password"
+                          }
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isChangingPassword && (
+                      <div className="mt-4">
+                        <p className="text-xs text-gray">
+                          We sent an OTP email to your current email. Enter the
+                          6-digit code below.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          {passwordOtp.map((digit, index) => (
+                            <input
+                              key={index}
+                              ref={(el) => {
+                                passwordOtpRefs.current[index] = el;
+                              }}
+                              value={digit}
+                              onChange={(e) => {
+                                const value = e.target.value.slice(-1);
+                                setPasswordOtp((prev) => {
+                                  const next = [...prev];
+                                  next[index] = value;
+                                  return next;
+                                });
+                                setPasswordError("");
+                                if (value && index < passwordOtp.length - 1) {
+                                  passwordOtpRefs.current[index + 1]?.focus();
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "Backspace" &&
+                                  !passwordOtp[index] &&
+                                  index > 0
+                                ) {
+                                  passwordOtpRefs.current[index - 1]?.focus();
+                                }
+                              }}
+                              inputMode="text"
+                              maxLength={1}
+                              className={`w-10 h-10 text-center rounded-md text-sm border ${
+                                passwordError ? "border-red" : ""
+                              }`}
+                              style={{
+                                borderColor: passwordError ? "#ef4444" : "#E6E6E6",
+                              }}
+                              aria-label={`Password OTP digit ${index + 1}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs text-gray">
+                          {passwordOtpSecondsLeft > 0 ? (
+                            <span>
+                              Resend OTP in {formatOtpTimer(passwordOtpSecondsLeft)}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleResendPasswordOtp}
+                              disabled={isSendingPasswordOtp}
+                              className="text-secondary underline disabled:opacity-50"
+                            >
+                              Resend OTP
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {passwordError && (
+                      <p className="text-xs text-red mt-2">{passwordError}</p>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                      {isChangingPassword ? (
+                        <>
+                          <button
+                            onClick={closeActiveAccountModal}
+                            disabled={isSavingPassword}
+                            className="px-4 py-2 text-sm font-medium text-secondary border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Cancel
+                          </button>
+                          <Button
+                            variant="primary"
+                            onClick={handlePasswordChange}
+                            disabled={isSavingPassword}
+                          >
+                            {isSavingPassword ? "Updating..." : "Update Password"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          onClick={handleRequestPasswordOtp}
+                          disabled={isSendingPasswordOtp}
+                        >
+                          {isSendingPasswordOtp ? "Sending..." : "Update Password"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1388,4 +1532,3 @@ export default function Settings() {
     </div>
   );
 }
-
