@@ -166,6 +166,7 @@ function AssignAuditsReviewContent() {
     DUMMY_MAIN_SECTIONS[0]?.sections?.[0]?.name || null,
   );
   const [, setSelectedQuestionIndex] = useState<number>(0);
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
   const [finalDecision, setFinalDecision] = useState<
     "approved" | "conditional" | "rejected" | null
   >(null);
@@ -359,6 +360,7 @@ function AssignAuditsReviewContent() {
           );
           setActiveSubsection(mappedMainSections[0]?.sections?.[0]?.name || null);
           setSelectedQuestionIndex(0);
+          setShowAllQuestions(false);
         }
       } catch (error) {
         if (isCancelled) return;
@@ -850,6 +852,7 @@ function AssignAuditsReviewContent() {
                               onClick={() => {
                                 setActiveSubsection(s.name);
                                 setSelectedQuestionIndex(0);
+                                setShowAllQuestions(false);
                               }}
                             >
                               {s.name}
@@ -871,8 +874,20 @@ function AssignAuditsReviewContent() {
                   const selectedSection = mainSectionsData
                     .flatMap((ms: any) => ms.sections || [])
                     .find((s: any) => s.name === activeSubsection);
-                  const questionsCount =
-                    selectedSection?.questions?.length || 0;
+                  const allQuestions = Array.isArray(selectedSection?.questions)
+                    ? selectedSection.questions
+                    : [];
+                  const fileQuestions = allQuestions.filter((question: any) =>
+                    isFileQuestionType(question.questionType, question.responseType),
+                  );
+                  const hasFileQuestions = fileQuestions.length > 0;
+                  const visibleQuestions =
+                    showAllQuestions || !hasFileQuestions
+                      ? allQuestions
+                      : fileQuestions;
+                  const hasHiddenQuestions =
+                    hasFileQuestions && fileQuestions.length < allQuestions.length;
+                  const questionsCount = visibleQuestions.length;
 
                   return (
                     <div>
@@ -880,16 +895,30 @@ function AssignAuditsReviewContent() {
                         <h3 className="text-sm font-medium text-secondary leading-[21.6px]">
                           {activeSubsection}
                         </h3>
-                        <p
-                          className="text-sm font-normal"
-                          style={{ color: "#999999" }}
-                        >
-                          {questionsCount} questions to review
-                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-4 flex-wrap">
+                          <p
+                            className="text-sm font-normal"
+                            style={{ color: "#999999" }}
+                          >
+                            {questionsCount} questions to review
+                            {!showAllQuestions && hasHiddenQuestions
+                              ? " (file questions only)"
+                              : ""}
+                          </p>
+                          {!showAllQuestions && hasHiddenQuestions ? (
+                            <button
+                              type="button"
+                              className="text-sm font-medium text-secondary underline"
+                              onClick={() => setShowAllQuestions(true)}
+                            >
+                              See All
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
 
-                      {selectedSection?.questions?.length ? (
-                        selectedSection.questions.map((q: any, idx: number) => {
+                      {visibleQuestions.length ? (
+                        visibleQuestions.map((q: any, idx: number) => {
                           const questionId = String(q.id);
                           const noteValue =
                             auditorNotesByQuestion[questionId] ??
@@ -989,18 +1018,6 @@ function AssignAuditsReviewContent() {
 
                               <div>
                                 <h5 className="text-sm font-medium text-gray mb-2">
-                                  Reviewer Notes
-                                </h5>
-                                <div
-                                  className="p-4 rounded-md text-sm text-gray-700 border"
-                                  style={{ borderColor: "#E6E6E6" }}
-                                >
-                                  {q.reviewerNotes || "No reviewer notes available"}
-                                </div>
-                              </div>
-
-                              <div>
-                                <h5 className="text-sm font-medium text-gray mb-2">
                                   Auditor Notes
                                 </h5>
                                 <textarea
@@ -1062,7 +1079,9 @@ function AssignAuditsReviewContent() {
                       ) : (
                         <div className="mt-6 border border-zinc-100 rounded-md p-6">
                           <div className="text-sm text-gray-500">
-                            No questions available for this section.
+                            {showAllQuestions || !hasHiddenQuestions
+                              ? "No questions available for this section."
+                              : "No file questions found in this section. Click See All to view all questions."}
                           </div>
                         </div>
                       )}

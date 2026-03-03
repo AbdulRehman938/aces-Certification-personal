@@ -1477,7 +1477,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-100 p-6 mt-6 space-y-3">
+      {/* <div className="bg-white rounded-xl border border-zinc-100 p-6 mt-6 space-y-3">
         <h3 className="text-lg font-medium text-secondary">Your Permissions</h3>
         <p className="text-xs text-gray">
           As an reviewer, you can review assessments, verify evidence, and
@@ -1528,7 +1528,7 @@ export default function Settings() {
             <div className="text-sm font-medium">Submit review</div>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
