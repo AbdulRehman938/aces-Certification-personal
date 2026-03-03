@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -10,6 +10,10 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface AssignedAudit {
   id: string;
@@ -73,6 +77,43 @@ const assignedAuditsData: AssignedAudit[] = [
 
 export default function AssignSelfAssure() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchAssignedAssessments = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axiosInstance.get("/reviewers/assigned-assessments", {
+          params: {
+            page: 1,
+            limit: 10,
+            assessmentType: "assured",
+          },
+        });
+
+        if (isCancelled) return;
+        console.log("reviewer assigned assessments response:", response.data);
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch reviewer assigned assessments:", error);
+        if (axios.isAxiosError(error)) {
+          console.error("API message:", error.response?.data?.message);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchAssignedAssessments();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -285,7 +326,36 @@ export default function AssignSelfAssure() {
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 10 }).map((_, rowIndex) => (
+                  <tr
+                    key={`reviewer-assign-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`reviewer-assign-skeleton-cell-${rowIndex}-${column.id}`}
+                        className="px-2 md:px-4 py-2 md:py-4"
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-end" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 90 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -444,4 +514,3 @@ export default function AssignSelfAssure() {
     </div>
   );
 }
-

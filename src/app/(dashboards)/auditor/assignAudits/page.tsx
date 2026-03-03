@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -11,7 +11,8 @@ import {
 } from "@tanstack/react-table";
 import { axiosInstance } from "@/lib/axios";
 import axios from "axios";
-import { Loading } from "@/app/(dashboards)/admin/common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface AssignedAudit {
   id: string;
@@ -75,15 +76,7 @@ export default function AssignAudits() {
   const [activeTab, setActiveTab] = useState<"reviewer" | "admin">("reviewer");
   const [assignedAudits, setAssignedAudits] = useState<AssignedAudit[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showTableLoader, setShowTableLoader] = useState(false);
-  const [tableLoadingProgress, setTableLoadingProgress] = useState(0);
   const [error, setError] = useState("");
-  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const tableLoaderFinishTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
 
   useEffect(() => {
     const fetchAssignedAssessments = async () => {
@@ -137,38 +130,6 @@ export default function AssignAudits() {
 
     fetchAssignedAssessments();
   }, [activeTab]);
-
-  useEffect(() => {
-    if (tableLoaderIntervalRef.current) {
-      clearInterval(tableLoaderIntervalRef.current);
-      tableLoaderIntervalRef.current = null;
-    }
-    if (tableLoaderFinishTimeoutRef.current) {
-      clearTimeout(tableLoaderFinishTimeoutRef.current);
-      tableLoaderFinishTimeoutRef.current = null;
-    }
-
-    if (isLoading) {
-      setShowTableLoader(true);
-      setTableLoadingProgress(0);
-      tableLoaderIntervalRef.current = setInterval(() => {
-        setTableLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showTableLoader) {
-      setTableLoadingProgress(100);
-      tableLoaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowTableLoader(false);
-        setTableLoadingProgress(0);
-      }, 300);
-    }
-  }, [isLoading, showTableLoader]);
 
   const getStatusStyles = (status: string) => {
     const statusKey = status.toLowerCase();
@@ -427,18 +388,9 @@ export default function AssignAudits() {
       </div>
 
       {activeTab === "reviewer" && (
-        <div
-          className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
-            showTableLoader ? "flex flex-col flex-1" : ""
-          }`}
-        >
-          <div
-            className={`relative ${showTableLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-          >
-            <table
-              className={`w-full min-w-250 ${showTableLoader ? "h-full" : ""}`}
-              style={{ tableLayout: "fixed" }}
-            >
+        <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -461,9 +413,37 @@ export default function AssignAudits() {
                   </tr>
                 ))}
               </thead>
-              <tbody className={showTableLoader ? "h-full" : ""}>
-                {showTableLoader ? null : table.getRowModel().rows.length ===
-                  0 ? (
+              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 10 }).map((_, rowIndex) => (
+                    <tr
+                      key={`assign-audits-reviewer-skeleton-row-${rowIndex}`}
+                      className="border-b border-zinc-100 last:border-b-0"
+                    >
+                      {table.getVisibleLeafColumns().map((column) => (
+                        <td
+                          key={`assign-audits-reviewer-skeleton-cell-${rowIndex}-${column.id}`}
+                          className="px-2 md:px-4 py-2 md:py-4"
+                          style={{
+                            width: `${100 / table.getAllColumns().length}%`,
+                          }}
+                        >
+                          <div
+                            className={
+                              column.id === "action" ? "flex justify-end" : ""
+                            }
+                          >
+                            <Skeleton
+                              height={18}
+                              width={column.id === "action" ? 76 : "70%"}
+                              borderRadius={6}
+                            />
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : table.getRowModel().rows.length === 0 ? (
                   <tr>
                     <td
                       colSpan={columns.length}
@@ -497,34 +477,14 @@ export default function AssignAudits() {
                 )}
               </tbody>
             </table>
-
-            {showTableLoader && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loading
-                  isLoading
-                  size="sm"
-                  progress={tableLoadingProgress}
-                  className="p-4"
-                />
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {activeTab === "admin" && (
-        <div
-          className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
-            showTableLoader ? "flex flex-col flex-1" : ""
-          }`}
-        >
-          <div
-            className={`relative ${showTableLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-          >
-            <table
-              className={`w-full min-w-250 ${showTableLoader ? "h-full" : ""}`}
-              style={{ tableLayout: "fixed" }}
-            >
+        <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -547,9 +507,37 @@ export default function AssignAudits() {
                   </tr>
                 ))}
               </thead>
-              <tbody className={showTableLoader ? "h-full" : ""}>
-                {showTableLoader ? null : table.getRowModel().rows.length ===
-                  0 ? (
+              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 10 }).map((_, rowIndex) => (
+                    <tr
+                      key={`assign-audits-admin-skeleton-row-${rowIndex}`}
+                      className="border-b border-zinc-100 last:border-b-0"
+                    >
+                      {table.getVisibleLeafColumns().map((column) => (
+                        <td
+                          key={`assign-audits-admin-skeleton-cell-${rowIndex}-${column.id}`}
+                          className="px-2 md:px-4 py-2 md:py-4"
+                          style={{
+                            width: `${100 / table.getAllColumns().length}%`,
+                          }}
+                        >
+                          <div
+                            className={
+                              column.id === "action" ? "flex justify-end" : ""
+                            }
+                          >
+                            <Skeleton
+                              height={18}
+                              width={column.id === "action" ? 76 : "70%"}
+                              borderRadius={6}
+                            />
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : table.getRowModel().rows.length === 0 ? (
                   <tr>
                     <td
                       colSpan={columns.length}
@@ -583,17 +571,6 @@ export default function AssignAudits() {
                 )}
               </tbody>
             </table>
-
-            {showTableLoader && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loading
-                  isLoading
-                  size="sm"
-                  progress={tableLoadingProgress}
-                  className="p-4"
-                />
-              </div>
-            )}
           </div>
         </div>
       )}

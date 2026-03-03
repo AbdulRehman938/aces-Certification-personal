@@ -4,11 +4,11 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import Button from "../common/button";
-import { Loading } from "../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import {
   useReactTable,
   getCoreRowModel,
@@ -23,7 +23,7 @@ import { axiosInstance } from "@/lib/axios";
 interface PaymentCardProps {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
   change?: string;
   changeType?: "positive" | "negative";
 }
@@ -195,14 +195,6 @@ export default function PaymentPage() {
   const [isPaymentDetailsModalOpen, setIsPaymentDetailsModalOpen] =
     useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [showPageLoader, setShowPageLoader] = useState(false);
-  const [pageLoadingProgress, setPageLoadingProgress] = useState(0);
-  const pageLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const pageLoaderFinishTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
 
   const fetchMetrics = useCallback(async () => {
     setIsMetricsFetching(true);
@@ -270,40 +262,6 @@ export default function PaymentPage() {
   useEffect(() => {
     fetchMetrics();
   }, [fetchMetrics]);
-
-  const isPageFetching = isFetching || isMetricsFetching;
-
-  useEffect(() => {
-    if (pageLoaderIntervalRef.current) {
-      clearInterval(pageLoaderIntervalRef.current);
-      pageLoaderIntervalRef.current = null;
-    }
-    if (pageLoaderFinishTimeoutRef.current) {
-      clearTimeout(pageLoaderFinishTimeoutRef.current);
-      pageLoaderFinishTimeoutRef.current = null;
-    }
-
-    if (isPageFetching) {
-      setShowPageLoader(true);
-      setPageLoadingProgress(0);
-      pageLoaderIntervalRef.current = setInterval(() => {
-        setPageLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showPageLoader) {
-      setPageLoadingProgress(100);
-      pageLoaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowPageLoader(false);
-        setPageLoadingProgress(0);
-      }, 300);
-    }
-  }, [isPageFetching, showPageLoader]);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -611,19 +569,18 @@ export default function PaymentPage() {
     },
     onPaginationChange: setPagination,
   });
+  const amountSkeleton = (
+    <Skeleton
+      width={120}
+      height={28}
+      borderRadius={6}
+      baseColor="#E5E7EB"
+      highlightColor="#F3F4F6"
+    />
+  );
 
   return (
     <div className="relative p-3 md:p-6 bg-light-gray min-h-screen">
-      {showPageLoader && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-light-gray/80 backdrop-blur-sm">
-          <Loading
-            isLoading
-            size="lg"
-            progress={pageLoadingProgress}
-            className="p-6"
-          />
-        </div>
-      )}
       <div className="flex flex-row items-start justify-between mb-4 md:mb-6 gap-3">
         <div>
           <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
@@ -684,7 +641,7 @@ export default function PaymentPage() {
           label="Total Revenue"
           value={
             isMetricsFetching
-              ? "Loading..."
+              ? amountSkeleton
               : metrics
                 ? formatMoney(metrics.totalRevenue, "USD")
                 : "—"
@@ -715,7 +672,7 @@ export default function PaymentPage() {
           label="Monthly Revenue"
           value={
             isMetricsFetching
-              ? "Loading..."
+              ? amountSkeleton
               : metrics
                 ? formatMoney(metrics.monthlyRevenue, "USD")
                 : "—"
@@ -739,7 +696,7 @@ export default function PaymentPage() {
           label="Pending Payment"
           value={
             isMetricsFetching
-              ? "Loading..."
+              ? amountSkeleton
               : metrics
                 ? metrics.pendingPaymentsCount.toLocaleString("en-US")
                 : "—"
@@ -763,7 +720,7 @@ export default function PaymentPage() {
           label="Failed payment"
           value={
             isMetricsFetching
-              ? "Loading..."
+              ? amountSkeleton
               : metrics
                 ? metrics.failedPaymentsCount.toLocaleString("en-US")
                 : "—"
@@ -804,14 +761,40 @@ export default function PaymentPage() {
             </thead>
             <tbody>
               {isFetching ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="px-4 py-8 text-center text-gray text-sm"
+                Array.from({ length: pagination.pageSize }).map((_, rowIndex) => (
+                  <tr
+                    key={`payments-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
                   >
-                    Loading payments...
-                  </td>
-                </tr>
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`payments-skeleton-cell-${rowIndex}-${column.id}`}
+                        className={`px-2 md:px-4 py-2 md:py-4 ${
+                          column.id === "action" ? "text-center" : ""
+                        }`}
+                        style={{
+                          width: `${column.getSize()}px`,
+                          minWidth: `${column.columnDef.minSize || 100}px`,
+                          maxWidth: column.columnDef.maxSize
+                            ? `${column.columnDef.maxSize}px`
+                            : undefined,
+                        }}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-center" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 72 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
               ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
@@ -1077,4 +1060,3 @@ export default function PaymentPage() {
     </div>
   );
 }
-

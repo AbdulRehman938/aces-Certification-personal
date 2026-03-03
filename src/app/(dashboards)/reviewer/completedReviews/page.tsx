@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -9,6 +9,8 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface CompletedReview {
   id: string;
@@ -65,6 +67,17 @@ const completedReviewsData: CompletedReview[] = [
 
 export default function CompletedReviews() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -255,7 +268,36 @@ export default function CompletedReviews() {
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 6 }).map((_, rowIndex) => (
+                  <tr
+                    key={`completed-reviews-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`completed-reviews-skeleton-cell-${rowIndex}-${column.id}`}
+                        className="px-2 md:px-4 py-2 md:py-4"
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-center" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 70 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -294,4 +336,3 @@ export default function CompletedReviews() {
     </div>
   );
 }
-

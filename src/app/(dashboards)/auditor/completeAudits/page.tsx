@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -9,62 +9,141 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
+import { axiosInstance } from "@/lib/axios";
 
 interface CompletedAudit {
   id: string;
+  assessmentId: string;
   organization: string;
   certification: string;
-  finalResult: "Approved" | "Conditionally Approved" | "Rejected";
-  status: "Submitted" | "Close" | "Submitted";
+  status: string;
 }
 
-const completedAuditsData: CompletedAudit[] = [
-  {
-    id: "1",
-    organization: "Grand Hyatt Singapore",
-    certification: "ISO 14001 Environmental Certification",
-    finalResult: "Approved",
-    status: "Submitted",
-  },
-  {
-    id: "2",
-    organization: "Marina Bay Sands",
-    certification: "Carbon Neutral Certification",
-    finalResult: "Approved",
-    status: "Close",
-  },
-  {
-    id: "3",
-    organization: "Raffles Hotel",
-    certification: "Sustainable Supply Chain",
-    finalResult: "Approved",
-    status: "Submitted",
-  },
-  {
-    id: "4",
-    organization: "CapitaLand Group",
-    certification: "ESG Reporting Excellence",
-    finalResult: "Approved",
-    status: "Close",
-  },
-  {
-    id: "5",
-    organization: "Mandarin Oriental",
-    certification: "ISO 14001 Environmental Certification",
-    finalResult: "Approved",
-    status: "Close",
-  },
-  {
-    id: "6",
-    organization: "Far East Organization",
-    certification: "ESG Reporting Excellence",
-    finalResult: "Approved",
-    status: "Submitted",
-  },
-];
+type AuditApiItem = {
+  id?: string;
+  audit_id?: string;
+  auditId?: string;
+  assessment_id?: string;
+  assessmentId?: string;
+  computed_status?: string;
+  organization_name?: string;
+  organizationName?: string;
+  organization?: { name?: string } | string;
+  certificate_name?: string;
+  certificationName?: string;
+  certificateName?: string;
+  certificate?: { name?: string };
+  computedStatus?: string;
+  status?: string;
+  audit_status?: string;
+  auditStatus?: string;
+  assessment_status?: string;
+  state?: string;
+};
 
 export default function CompleteAudits() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [audits, setAudits] = useState<CompletedAudit[]>([]);
+  const [pageNumber] = useState(1);
+  const [limit] = useState(10);
+
+  const normalizeStatus = (value: string) => {
+    const normalized = value.trim().toLowerCase().replace(/_/g, " ");
+    if (normalized === "submitted") return "Submitted";
+    if (normalized === "closed" || normalized === "close") return "Close";
+    if (normalized === "in_progress" || normalized === "in progress")
+      return "In Progress";
+    if (normalized === "completed") return "Completed";
+    if (normalized === "pending") return "Pending";
+    return value ? value.replace(/_/g, " ") : "N/A";
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAudits = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axiosInstance.get("/audits", {
+          // Temporarily disabled until backend finalizes pagination params.
+          // params: {
+          //   limit,
+          //   pageNumber,
+          // },
+        });
+        console.log("auditor completed audits response:", response.data);
+
+        if (!isMounted) return;
+
+        const payload = response.data?.data;
+        const rawAudits: AuditApiItem[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : [];
+
+        const mappedAudits: CompletedAudit[] = rawAudits.map((audit, index) => {
+          const organizationName =
+            typeof audit.organization === "string"
+              ? audit.organization
+              : audit.organization?.name;
+          const assessmentId = String(
+            audit.assessment_id ?? audit.assessmentId ?? audit.id ?? "",
+          );
+          return {
+            id: String(
+              audit.id ??
+                audit.audit_id ??
+                audit.auditId ??
+                audit.assessment_id ??
+                audit.assessmentId ??
+                `audit-row-${index}`,
+            ),
+            assessmentId,
+            organization: String(
+              audit.organization_name ?? audit.organizationName ?? organizationName ?? "N/A",
+            ),
+            certification: String(
+              audit.certificate_name ??
+              audit.certificationName ??
+                audit.certificateName ??
+                audit.certificate?.name ??
+                "N/A",
+            ),
+            status: normalizeStatus(
+              String(
+                audit.computed_status ??
+                  audit.computedStatus ??
+                  audit.status ??
+                  audit.audit_status ??
+                  audit.auditStatus ??
+                  audit.assessment_status ??
+                  audit.state ??
+                  "",
+              ),
+            ),
+          };
+        });
+
+        setAudits(mappedAudits);
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("Failed to fetch completed audits:", error);
+        setAudits([]);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchAudits();
+    return () => {
+      isMounted = false;
+    };
+  }, [limit, pageNumber]);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -72,25 +151,10 @@ export default function CompleteAudits() {
         return "bg-green-50 text-green-600 border border-green-600";
       case "Close":
         return "bg-red-50 text-red-600 border border-red-600";
+      case "Completed":
+        return "bg-[#f2fff7] text-[#00B448] border border-[#00B448]";
       default:
         return "bg-[#e9e9e9] text-black border border-black";
-    }
-  };
-
-  const getResultStyles = (res: string) => {
-    switch (res) {
-      case "Approved":
-        return "bg-[#f2fff7] text-[#00B448] border border-[#00B448]";
-      case "Close":
-        return "bg-[#fef7e5] text-[#FF0909] border border-[#FF0909]";
-      case "Submitted":
-        return "bg-[#f2ff7] text-[#00B448] border border-[#00B448]";
-      case "Conditionally Approved":
-        return "bg-white text-[#FAAB00] border border-[#FAAB00]";
-      case "Rejected":
-        return "bg-[#fef7e5] text-[#FF0909] border border-[#FF0909]";
-      default:
-        return "bg-white text-black border border-black";
     }
   };
 
@@ -123,21 +187,6 @@ export default function CompleteAudits() {
         ),
       },
       {
-        accessorKey: "finalResult",
-        header: () => (
-          <span className="text-[12px] font-medium text-gray">
-            Final Result
-          </span>
-        ),
-        cell: ({ getValue }) => (
-          <span
-            className={`inline-flex items-center justify-center px-4 py-1.5 rounded-md text-sm font-medium leading-[100%] align-middle border min-w-[120px] md:min-w-[140px] text-center ${getResultStyles(getValue<string>())}`}
-          >
-            {getValue<string>()}
-          </span>
-        ),
-      },
-      {
         accessorKey: "status",
         header: () => (
           <span className="text-[12px] font-medium text-gray">Status</span>
@@ -157,13 +206,19 @@ export default function CompleteAudits() {
             Action
           </span>
         ),
-        cell: (info: any) => {
+        cell: ({ row }) => {
+          const rowData = row.original;
+          const reviewId = rowData.assessmentId || rowData.id;
           return (
             <div className="flex items-center justify-center gap-2 pl-8">
               <button
                 className="p-2 rounded-md border"
                 style={{ borderColor: "#9B9B9B" }}
-                onClick={() => router.push("/auditor/assignAudits/review")}
+                onClick={() =>
+                  router.push(
+                    `/auditor/assignAudits/review?id=${encodeURIComponent(reviewId)}`,
+                  )
+                }
               >
                 <svg
                   width="12"
@@ -208,7 +263,7 @@ export default function CompleteAudits() {
   );
 
   const table = useReactTable({
-    data: completedAuditsData,
+    data: audits,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -255,7 +310,36 @@ export default function CompleteAudits() {
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: limit }).map((_, rowIndex) => (
+                  <tr
+                    key={`completed-audits-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`completed-audits-skeleton-cell-${rowIndex}-${column.id}`}
+                        className="px-2 md:px-4 py-2 md:py-4"
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-center" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 70 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -294,4 +378,3 @@ export default function CompleteAudits() {
     </div>
   );
 }
-

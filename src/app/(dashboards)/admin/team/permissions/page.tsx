@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
 import { Loading } from "../../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 type ProfilePermission = {
   resource: string;
@@ -331,11 +333,6 @@ const PermissionsContent = () => {
 
   return (
     <div className="relative bg-light-gray min-h-screen p-3 md:p-6">
-      {isProfileLoading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-light-gray/80 backdrop-blur-sm">
-          <Loading isLoading size="lg" />
-        </div>
-      )}
       {showSaveLoader && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-light-gray/80 backdrop-blur-sm">
           <Loading
@@ -358,7 +355,7 @@ const PermissionsContent = () => {
         <button
           className="px-3 py-1.5 md:px-8 md:py-3 bg-dull-gray text-primary rounded-lg text-[10px] md:text-sm font-medium hover:bg-dull-gray/90 transition-colors shrink-0"
           onClick={handleSavePermissions}
-          disabled={isSavingPermissions}
+          disabled={isSavingPermissions || isProfileLoading}
           style={{
             boxShadow:
               "0px 3.91px 5.11px 0px rgba(142, 142, 142, 0.15), 0px 10.82px 14.12px 0px rgba(142, 142, 142, 0.22), 0px 26.06px 34px 0px rgba(142, 142, 142, 0.19), 0px 44.27px 112.79px 0px rgba(142, 142, 142, 0.34), inset 0px 1.05px 4.22px 2.11px rgba(142, 142, 142, 0.55), inset 0px 1.05px 18.97px 2.11px rgba(142, 142, 142, 0.55)",
@@ -402,36 +399,57 @@ const PermissionsContent = () => {
               </tr>
             </thead>
             <tbody>
-              {permissions.map((row) => (
-                <tr
-                  key={row.resource}
-                  className="border-b border-zinc-100 last:border-b-0 hover:bg-zinc-50 transition-colors"
-                >
-                  <td className="px-2 md:px-4 py-2 md:py-4">
-                    <span
-                      className="text-[12px] md:text-sm font-normal leading-[100%] align-middle text-secondary"
-                      style={{ letterSpacing: "1%" }}
+              {isProfileLoading
+                ? initialPermissions.map((_, rowIndex) => (
+                    <tr
+                      key={`permissions-skeleton-row-${rowIndex}`}
+                      className="border-b border-zinc-100 last:border-b-0"
                     >
-                      {row.pageName}
-                    </span>
-                  </td>
-                  {(["read", "write", "edit", "delete"] as const).map((key) => (
-                    <td
-                      key={key}
-                      className="px-1 md:px-2 py-2 md:py-4 text-center"
+                      <td className="px-2 md:px-4 py-2 md:py-4">
+                        <Skeleton height={18} width="60%" borderRadius={6} />
+                      </td>
+                      {["read", "write", "edit", "delete"].map((key) => (
+                        <td
+                          key={`permissions-skeleton-cell-${rowIndex}-${key}`}
+                          className="px-1 md:px-2 py-2 md:py-4 text-center"
+                        >
+                          <div className="flex justify-center">
+                            <Skeleton height={16} width={16} borderRadius={4} />
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                : permissions.map((row) => (
+                    <tr
+                      key={row.resource}
+                      className="border-b border-zinc-100 last:border-b-0 hover:bg-zinc-50 transition-colors"
                     >
-                      <input
-                        type="checkbox"
-                        checked={row[key]}
-                        onChange={() => handleToggle(row.resource, key)}
-                        disabled={key !== "read" && !row.read}
-                        className="h-4 w-4 accent-black cursor-pointer"
-                        aria-label={`${row.pageName} ${key}`}
-                      />
-                    </td>
+                      <td className="px-2 md:px-4 py-2 md:py-4">
+                        <span
+                          className="text-[12px] md:text-sm font-normal leading-[100%] align-middle text-secondary"
+                          style={{ letterSpacing: "1%" }}
+                        >
+                          {row.pageName}
+                        </span>
+                      </td>
+                      {(["read", "write", "edit", "delete"] as const).map((key) => (
+                        <td
+                          key={key}
+                          className="px-1 md:px-2 py-2 md:py-4 text-center"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={row[key]}
+                            onChange={() => handleToggle(row.resource, key)}
+                            disabled={key !== "read" && !row.read}
+                            className="h-4 w-4 accent-black cursor-pointer"
+                            aria-label={`${row.pageName} ${key}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
             </tbody>
           </table>
         </div>
@@ -447,4 +465,3 @@ export default function PermissionsPage() {
     </Suspense>
   );
 }
-

@@ -12,8 +12,9 @@ import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
 import Dropdown from "../../common/dropdown";
 import Button from "../../common/button";
-import { Loading } from "../../common/Loading";
 import AlertPop from "@/app/components/alertPop/AlertPop";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 type Question = {
   id: string;
@@ -69,6 +70,45 @@ interface IndustriesResponse {
     pageSize: number;
     totalPages: number;
   };
+}
+
+function FullPageSkeleton() {
+  return (
+    <div className="bg-light-gray p-3 md:p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="space-y-3">
+          <Skeleton width="28%" height={28} borderRadius={8} />
+          <Skeleton width="45%" height={16} borderRadius={6} />
+        </div>
+        <div className="bg-white rounded-xl border border-zinc-100 p-6 space-y-5">
+          <Skeleton width="30%" height={20} borderRadius={6} />
+          <Skeleton width="100%" height={44} borderRadius={8} />
+          <Skeleton width="100%" height={44} borderRadius={8} />
+          <Skeleton width="100%" height={120} borderRadius={8} />
+          <div className="flex justify-end gap-3">
+            <Skeleton width={120} height={40} borderRadius={8} />
+            <Skeleton width={140} height={40} borderRadius={8} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SavingOverlaySkeleton() {
+  return (
+    <div className="absolute inset-0 z-20 bg-light-gray/80 backdrop-blur-sm p-4 md:p-6">
+      <div className="h-full max-w-5xl mx-auto space-y-6">
+        <Skeleton width="22%" height={24} borderRadius={8} />
+        <div className="bg-white/80 rounded-xl p-6 space-y-4">
+          <Skeleton width="42%" height={18} borderRadius={6} />
+          <Skeleton width="100%" height={44} borderRadius={8} />
+          <Skeleton width="100%" height={44} borderRadius={8} />
+          <Skeleton width="100%" height={110} borderRadius={8} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CreateCertificationPageContent() {
@@ -1959,23 +1999,13 @@ function CreateCertificationPageContent() {
   };
 
   if (isLoadingCertificate) {
-    return (
-      <div className="bg-light-gray p-3 md:p-6">
-        <div className="flex items-center justify-center min-h-100">
-          <Loading isLoading size="lg" />
-        </div>
-      </div>
-    );
+    return <FullPageSkeleton />;
   }
 
   if (step === "details") {
     return (
       <div className="relative bg-light-gray p-3 md:p-6">
-        {isSaving && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-light-gray/80 backdrop-blur-sm">
-            <Loading isLoading size="lg" className="p-6" />
-          </div>
-        )}
+        {isSaving && <SavingOverlaySkeleton />}
 
         <div className="mb-4 md:mb-6">
           <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2">
@@ -2757,11 +2787,7 @@ function CreateCertificationPageContent() {
 
   return (
     <div className="relative bg-light-gray p-3 md:p-6">
-      {isSaving && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-light-gray/80 backdrop-blur-sm">
-          <Loading isLoading size="lg" className="p-6" />
-        </div>
-      )}
+      {isSaving && <SavingOverlaySkeleton />}
 
       <div className="mb-4 md:mb-6">
         <div className="flex items-center justify-between">
@@ -3908,16 +3934,9 @@ function CreateCertificationPageContent() {
 export default function CreateCertificationPage() {
   return (
     <Suspense
-      fallback={
-        <div className="bg-light-gray p-3 md:p-6">
-          <div className="flex items-center justify-center min-h-100">
-            <Loading isLoading size="lg" />
-          </div>
-        </div>
-      }
+      fallback={<FullPageSkeleton />}
     >
       <CreateCertificationPageContent />
     </Suspense>
   );
 }
-
