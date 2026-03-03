@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -10,6 +10,8 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
 
 interface AssignedAudit {
   id: string;
@@ -73,6 +75,37 @@ const assignedAuditsData: AssignedAudit[] = [
 
 export default function AssignSelfAssure() {
   const router = useRouter();
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchAssignedAssessments = async () => {
+      try {
+        const response = await axiosInstance.get("/reviewers/assigned-assessments", {
+          params: {
+            page: 1,
+            limit: 10,
+            assessmentType: "assured",
+          },
+        });
+
+        if (isCancelled) return;
+        console.log("reviewer assigned assessments response:", response.data);
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch reviewer assigned assessments:", error);
+        if (axios.isAxiosError(error)) {
+          console.error("API message:", error.response?.data?.message);
+        }
+      }
+    };
+
+    void fetchAssignedAssessments();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -444,4 +477,3 @@ export default function AssignSelfAssure() {
     </div>
   );
 }
-
