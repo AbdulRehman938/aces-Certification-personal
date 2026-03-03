@@ -13,6 +13,13 @@ interface MetricCardProps {
   value: string;
 }
 
+type ReviewerOption = {
+  id: string;
+  name: string;
+  profile_picture_url?: string;
+  tags: string[];
+};
+
 type AiFlaggedResponse = {
   id: string;
   ai_review_id?: string | null;
@@ -68,9 +75,6 @@ type AiFlagDetailApiResponse = {
   data?: AiFlagDetailData;
 };
 
-type FlagActionType = "approve" | "clarification" | "escalate" | null;
-const DEFAULT_ESCALATE_ASSESSMENT_ID = "36bf0264-765d-4967-80b3-7b03d5f8b111";
-
 const formatDateTime = (value?: string | null): string => {
   if (!value) return "N/A";
   const date = new Date(value);
@@ -124,6 +128,59 @@ const getRiskBadgeStyle = (riskLevel?: string | null) => {
     color: "#6B7280",
     borderColor: "#D1D5DB",
   };
+};
+
+const getInitials = (name: string): string => {
+  if (!name || name.trim() === "") return "";
+  const nameParts = name.trim().split(/\s+/);
+  if (nameParts.length === 1) {
+    return nameParts[0].charAt(0).toUpperCase();
+  }
+  return (
+    nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)
+  ).toUpperCase();
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string" &&
+    (error as { message: string }).message.trim()
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "message" in error.response.data &&
+    typeof (error.response.data as { message: unknown }).message === "string"
+  ) {
+    return (error.response.data as { message: string }).message;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    typeof error.response.data === "string" &&
+    error.response.data.trim()
+  ) {
+    return error.response.data;
+  }
+
+  return fallback;
 };
 
 function MetricCard({ icon, title, value }: MetricCardProps) {
@@ -182,18 +239,25 @@ function ReviewPageContent() {
   const canTakeFlagAction =
     hasActionPermission(["aiFlags"], "write") ||
     hasActionPermission(["aiFlags"], "edit");
+  const REVIEWER_PAGE_SIZE = 10;
 
   const [detail, setDetail] = useState<AiFlagDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [showLoader, setShowLoader] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [activeActionModal, setActiveActionModal] = useState<FlagActionType>(
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0);
+  const [isAssignReviewerModalOpen, setIsAssignReviewerModalOpen] =
+    useState(false);
+  const [selectedReviewer, setSelectedReviewer] = useState<string | null>(null);
+  const [reviewerOptions, setReviewerOptions] = useState<ReviewerOption[]>([]);
+  const [reviewerVisibleCount, setReviewerVisibleCount] = useState(10);
+  const [isLoadingReviewers, setIsLoadingReviewers] = useState(false);
+  const [reviewersError, setReviewersError] = useState<string | null>(null);
+  const [isAssigningReviewer, setIsAssigningReviewer] = useState(false);
+  const [assignReviewerError, setAssignReviewerError] = useState<string | null>(
     null,
   );
-  const [actionReason, setActionReason] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -234,7 +298,7 @@ function ReviewPageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [flagId]);
+  }, [flagId, detailRefreshKey]);
 
   useEffect(() => {
     if (loaderIntervalRef.current) {
@@ -331,91 +395,121 @@ function ReviewPageContent() {
       ? review.total_flags
       : flaggedResponses.length;
 
-  const actionTitleMap: Record<Exclude<FlagActionType, null>, string> = {
-    approve: "Approve Question",
-    clarification: "Request Clarification",
-    escalate: "Escalate to Audit",
-  };
-
-  const openActionModal = (action: Exclude<FlagActionType, null>) => {
-    if (!canTakeFlagAction) return;
-    setActiveActionModal(action);
-    setActionReason("");
-    setActionError("");
-  };
-
-  const closeActionModal = () => {
-    if (isSubmittingAction) return;
-    setActiveActionModal(null);
-    setActionReason("");
-    setActionError("");
-  };
-
-  const currentActionLabel = activeActionModal
-    ? actionTitleMap[activeActionModal]
-    : "";
-
-  const resolveAssessmentIdForEscalate = (): string => {
-    const candidates = [
-      detail?.assessmentId,
-      detail?.assessment_id,
-      detail?.certificateAssessmentId,
-      detail?.certificate_assessment_id,
-      review?.assessmentId,
-      review?.assessment_id,
-      review?.certificateAssessmentId,
-      review?.certificate_assessment_id,
-    ];
-
-    const resolved = candidates.find(
-      (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
-    );
-
-    return resolved
-      ? String(resolved).trim()
-      : DEFAULT_ESCALATE_ASSESSMENT_ID;
-  };
-
-  const handleActionSubmit = async () => {
-    if (!activeActionModal) return;
+  const resolveAssessmentId = (): string | null => {
+    const reviewCertificateAssessmentId =
+      review?.certificate_assessment_id || review?.certificateAssessmentId;
 
     if (
-      activeActionModal === "approve" ||
-      activeActionModal === "clarification"
+      typeof reviewCertificateAssessmentId === "string" &&
+      reviewCertificateAssessmentId.trim().length > 0
     ) {
-      closeActionModal();
-      return;
+      return reviewCertificateAssessmentId.trim();
     }
 
-    const reasonToSend = actionReason.trim();
-    if (!reasonToSend) {
-      setActionError("Reason is required.");
-      return;
-    }
+    return null;
+  };
 
-    setIsSubmittingAction(true);
-    setActionError("");
+  const canAssignReviewer = canTakeFlagAction && Boolean(resolveAssessmentId());
+
+  useEffect(() => {
+    if (!isAssignReviewerModalOpen || !canTakeFlagAction) return;
+
+    let isCancelled = false;
+
+    const fetchReviewers = async () => {
+      setIsLoadingReviewers(true);
+      setReviewersError(null);
+      try {
+        const response = await axiosInstance.get("/reviewers/list");
+        if (isCancelled) return;
+
+        const payload = response.data?.data;
+        const apiData = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : [];
+
+        const mappedData: ReviewerOption[] = apiData.map((reviewer: any) => ({
+          id: reviewer.id,
+          name: reviewer.name,
+          profile_picture_url:
+            reviewer.profile_picture || reviewer.profile_picture_url || "",
+          tags: reviewer.tags || [],
+        }));
+
+        setReviewerOptions(mappedData);
+        setReviewerVisibleCount(REVIEWER_PAGE_SIZE);
+      } catch (error) {
+        if (!isCancelled) {
+          setReviewersError(getApiErrorMessage(error, "Failed to load reviewers"));
+          setReviewerOptions([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingReviewers(false);
+        }
+      }
+    };
+
+    void fetchReviewers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [canTakeFlagAction, isAssignReviewerModalOpen]);
+
+  const handleReviewerScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const isNearBottom =
+      target.scrollHeight - target.scrollTop - target.clientHeight < 80;
+    if (!isNearBottom) return;
+    if (isLoadingReviewers) return;
+    setReviewerVisibleCount((prev) =>
+      Math.min(prev + REVIEWER_PAGE_SIZE, reviewerOptions.length),
+    );
+  };
+
+  const closeAssignReviewerModal = () => {
+    if (isAssigningReviewer) return;
+    setIsAssignReviewerModalOpen(false);
+    setSelectedReviewer(null);
+    setAssignReviewerError(null);
+  };
+
+  const handleAssignReviewer = async () => {
+    if (!canTakeFlagAction) return;
+    const assessmentId = resolveAssessmentId();
+    if (!assessmentId || !selectedReviewer) return;
+
+    setIsAssigningReviewer(true);
+    setAssignReviewerError(null);
 
     try {
-      if (activeActionModal === "escalate") {
-        const assessmentId = resolveAssessmentIdForEscalate();
-        await axiosInstance.post(
-          `/admin/assessments/${encodeURIComponent(assessmentId)}/escalate`,
-          { reason: reasonToSend },
-        );
-        console.log("Assessment escalated successfully", {
-          assessmentId,
-          reason: reasonToSend,
-        });
-      }
+      await axiosInstance.post("/reviewers/assign-assessment", {
+        assessmentId,
+        reviewerId: selectedReviewer,
+      });
 
-      setActiveActionModal(null);
-      setActionReason("");
+      setIsAssignReviewerModalOpen(false);
+      setSelectedReviewer(null);
+      setAssignReviewerError(null);
+      setDetailRefreshKey((prev) => prev + 1);
     } catch (error) {
-      console.error(`Failed to ${activeActionModal} assessment:`, error);
-      setActionError("Failed to escalate assessment. Please try again.");
+      console.error("Failed to assign reviewer:", error);
+      const apiMessage = getApiErrorMessage(error, "Failed to assign reviewer");
+      if (
+        typeof apiMessage === "string" &&
+        apiMessage.toLowerCase().includes("already assigned to a reviewer")
+      ) {
+        setAssignReviewerError(
+          "This assessment is already assigned to a reviewer.",
+        );
+      } else {
+        setAssignReviewerError(apiMessage);
+      }
     } finally {
-      setIsSubmittingAction(false);
+      setIsAssigningReviewer(false);
     }
   };
 
@@ -486,20 +580,16 @@ function ReviewPageContent() {
           </h4>
           <Button
             className={`shrink-0 px-4 py-2 md:px-8 md:py-2 ${
-              !canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""
+              !canAssignReviewer ? "opacity-60 cursor-not-allowed" : ""
             }`}
-            disabled={!canTakeFlagAction}
+            disabled={!canAssignReviewer}
+            onClick={() => {
+              setAssignReviewerError(null);
+              setSelectedReviewer(null);
+              setIsAssignReviewerModalOpen(true);
+            }}
           >
-            Improve All & Resolve
-          </Button>
-          <Button
-            variant="secondary"
-            className={`px-4 py-1 md:px-6 md:py-2 ${
-              !canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""
-            }`}
-            disabled={!canTakeFlagAction}
-          >
-            Escalated All Assessment
+            Assign to Reviewer
           </Button>
         </div>
       </div>
@@ -701,89 +791,195 @@ function ReviewPageContent() {
                 </div>
               </div>
 
-              <div className="p-4 md:p-6 pt-0">
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    className={`shrink-0 ${!canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""}`}
-                    disabled={!canTakeFlagAction}
-                    onClick={() => openActionModal("approve")}
-                  >
-                    Approve Question
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className={`px-4 py-2 md:px-6 md:py-3 ${!canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""}`}
-                    disabled={!canTakeFlagAction}
-                    onClick={() => openActionModal("clarification")}
-                  >
-                    Request Clarification
-                  </Button>
-                  <Button
-                    variant="custom"
-                    className={`px-4 py-2 md:px-6 md:py-3 text-secondary border border-black ${
-                      !canTakeFlagAction ? "opacity-60 cursor-not-allowed" : ""
-                    }`}
-                    style={{ backgroundColor: "#e9e9e9" }}
-                    disabled={!canTakeFlagAction}
-                    onClick={() => openActionModal("escalate")}
-                  >
-                    Escalate to Audit
-                  </Button>
-                </div>
-              </div>
             </div>
           );
         })
       )}
 
-      {activeActionModal && (
+      {isAssignReviewerModalOpen && canTakeFlagAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={closeActionModal} />
-          <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
-            <button
-              className="absolute top-4 right-4"
-              onClick={closeActionModal}
-              disabled={isSubmittingAction}
-            >
-              <img
-                src="/assets/imgs/admin/commons/cross.svg"
-                alt="close"
-                className="w-5 h-5"
-              />
-            </button>
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={closeAssignReviewerModal}
+          ></div>
 
-            <h3 className="text-lg font-medium text-secondary mb-3">Reason</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Add reason for {currentActionLabel.toLowerCase()}.
-            </p>
-
-            <textarea
-              className="w-full min-h-30 p-3 rounded-md text-sm border"
-              style={{ borderColor: "#E6E6E6" }}
-              placeholder="Write reason..."
-              value={actionReason}
-              onChange={(event) => setActionReason(event.target.value)}
-            />
-
-            {actionError ? (
-              <p className="mt-3 text-sm text-red-600">{actionError}</p>
-            ) : null}
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="secondary"
-                onClick={closeActionModal}
-                disabled={isSubmittingAction}
+          <div className="relative bg-white rounded-xl shadow-lg w-full max-w-xl mx-4 p-4 md:p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-lg md:text-xl font-semibold text-secondary mb-2">
+                  Assign Management Reviewer
+                </h3>
+                <p className="text-xs md:text-sm" style={{ color: "#999999" }}>
+                  Select a reviewer to review the assessment for{" "}
+                  {detail?.organizationName || "this organization"}
+                </p>
+              </div>
+              <button
+                onClick={closeAssignReviewerModal}
+                className="ml-4 p-1 hover:bg-zinc-100 rounded transition-colors"
+                disabled={isAssigningReviewer}
               >
-                Close
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void handleActionSubmit()}
-                disabled={isSubmittingAction}
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                    d="M5.47007 5.46983C5.6107 5.32938 5.80132 5.25049 6.00007 5.25049C6.19882 5.25049 6.38945 5.32938 6.53007 5.46983L18.5301 17.4698C18.6038 17.5385 18.6629 17.6213 18.7039 17.7133C18.7448 17.8053 18.7669 17.9046 18.7687 18.0053C18.7704 18.106 18.7519 18.206 18.7142 18.2994C18.6765 18.3928 18.6203 18.4776 18.5491 18.5489C18.4779 18.6201 18.3931 18.6762 18.2997 18.714C18.2063 18.7517 18.1063 18.7702 18.0056 18.7684C17.9048 18.7666 17.8055 18.7446 17.7135 18.7036C17.6215 18.6626 17.5387 18.6035 17.4701 18.5298L5.47007 6.52983C5.32962 6.3892 5.25073 6.19858 5.25073 5.99983C5.25073 5.80108 5.32962 5.61045 5.47007 5.46983Z"
+                    fill="#262626"
+                  />
+                  <path
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                    d="M18.5301 5.46983C18.6705 5.61045 18.7494 5.80108 18.7494 5.99983C18.7494 6.19858 18.6705 6.3892 18.5301 6.52983L6.53009 18.5298C6.38792 18.6623 6.19987 18.7344 6.00557 18.731C5.81127 18.7276 5.62588 18.6489 5.48847 18.5114C5.35106 18.374 5.27234 18.1887 5.26892 17.9944C5.26549 17.8 5.33761 17.612 5.47009 17.4698L17.4701 5.46983C17.6107 5.32938 17.8013 5.25049 18.0001 5.25049C18.1988 5.25049 18.3895 5.32938 18.5301 5.46983Z"
+                    fill="#262626"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-6 mt-6">
+              <div
+                style={{ background: "#F6F6F6" }}
+                className="px-4 py-3 rounded-lg"
               >
-                {isSubmittingAction ? "Submitting..." : "Submit"}
-              </Button>
+                <label className="block text-sm font-normal text-gray-500 mb-1">
+                  Certification
+                </label>
+                <div>
+                  <p className="text-base font-semibold text-secondary">
+                    {detail?.certificateName || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-normal text-gray-500 mb-3">
+                  Select Reviewer
+                </label>
+                <div
+                  className="space-y-3 max-h-[400px] overflow-y-auto"
+                  onScroll={handleReviewerScroll}
+                >
+                  {isLoadingReviewers && (
+                    <div className="text-xs text-gray px-2">Loading reviewers...</div>
+                  )}
+
+                  {reviewersError && (
+                    <div className="text-xs text-red-500 px-2">{reviewersError}</div>
+                  )}
+
+                  {reviewerOptions
+                    .slice(0, reviewerVisibleCount)
+                    .map((reviewer) => {
+                      const isSelected = selectedReviewer === reviewer.id;
+                      const hasProfilePicture =
+                        reviewer.profile_picture_url &&
+                        reviewer.profile_picture_url.trim() !== "";
+
+                      return (
+                        <button
+                          key={reviewer.id}
+                          onClick={() => setSelectedReviewer(reviewer.id)}
+                          className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                            isSelected
+                              ? "border-dull-gray bg-primary"
+                              : "border-zinc-200 hover:border-zinc-300 hover:bg-primary"
+                          }`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 overflow-hidden">
+                              {hasProfilePicture ? (
+                                <img
+                                  src={reviewer.profile_picture_url}
+                                  alt={reviewer.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-base font-semibold text-zinc-600">
+                                  {getInitials(reviewer.name)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-base font-semibold text-secondary mb-2">
+                                {reviewer.name}
+                              </h4>
+
+                              <div className="flex flex-wrap gap-1.5">
+                                {reviewer.tags.map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2 py-1 rounded-md text-[9px] md:text-xs font-normal text-secondary"
+                                    style={{ backgroundColor: "#e9e9e9" }}
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            {isSelected && (
+                              <div className="shrink-0">
+                                <svg
+                                  width="20"
+                                  height="20"
+                                  viewBox="0 0 20 20"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M10 0C4.48 0 0 4.48 0 10C0 15.52 4.48 20 10 20C15.52 20 20 15.52 20 10C20 4.48 15.52 0 10 0ZM8 15L3 10L4.41 8.59L8 12.17L15.59 4.58L17 6L8 15Z"
+                                    fill="#8E8E8E"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+
+            {assignReviewerError && (
+              <div className="mt-4 text-xs text-red-500">{assignReviewerError}</div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                onClick={closeAssignReviewerModal}
+                className="px-4 py-1.5 md:px-8 md:py-2 bg-white border border-black rounded-lg text-sm md:text-base font-medium text-secondary hover:bg-zinc-50 transition-colors w-[160px]"
+                disabled={isAssigningReviewer}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleAssignReviewer()}
+                disabled={
+                  !selectedReviewer || isAssigningReviewer || !canTakeFlagAction
+                }
+                className="px-4 py-1.5 md:px-8 md:py-2 bg-dull-gray text-primary rounded-lg hover:bg-dull-gray/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  fontFamily: "Public Sans",
+                  fontWeight: 600,
+                  fontStyle: "normal",
+                  fontSize: "16px",
+                  lineHeight: "24px",
+                  letterSpacing: "0%",
+                  verticalAlign: "middle",
+                  boxShadow:
+                    "0px 3.91px 5.11px 0px rgba(142, 142, 142, 0.15), 0px 10.82px 14.12px 0px rgba(142, 142, 142, 0.22), 0px 26.06px 34px 0px rgba(142, 142, 142, 0.19), 0px 44.27px 112.79px 0px rgba(142, 142, 142, 0.34), inset 0px 1.05px 4.22px 2.11px rgba(142, 142, 142, 0.55), inset 0px 1.05px 18.97px 2.11px rgba(142, 142, 142, 0.55)",
+                }}
+              >
+                {isAssigningReviewer ? "Assigning..." : "Assign Reviewer"}
+              </button>
             </div>
           </div>
         </div>
