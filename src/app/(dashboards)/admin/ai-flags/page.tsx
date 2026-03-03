@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
 import axios from "axios";
 import Dropdown from "../common/dropdown";
-import { Loading } from "../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import {
   useReactTable,
   getCoreRowModel,
@@ -57,14 +58,6 @@ export default function AIFlagsPage() {
   const [data, setData] = useState<AIFlag[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showTableLoader, setShowTableLoader] = useState(false);
-  const [tableLoadingProgress, setTableLoadingProgress] = useState(0);
-  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const tableLoaderFinishTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
   const [pagination, setPagination] = useState({
     pageIndex: 0,
     pageSize: 10,
@@ -376,38 +369,6 @@ export default function AIFlagsPage() {
     };
   }, [pagination.pageIndex, pagination.pageSize, statusFilter]);
 
-  useEffect(() => {
-    if (tableLoaderIntervalRef.current) {
-      clearInterval(tableLoaderIntervalRef.current);
-      tableLoaderIntervalRef.current = null;
-    }
-    if (tableLoaderFinishTimeoutRef.current) {
-      clearTimeout(tableLoaderFinishTimeoutRef.current);
-      tableLoaderFinishTimeoutRef.current = null;
-    }
-
-    if (isLoading) {
-      setShowTableLoader(true);
-      setTableLoadingProgress(0);
-      tableLoaderIntervalRef.current = setInterval(() => {
-        setTableLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showTableLoader) {
-      setTableLoadingProgress(100);
-      tableLoaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowTableLoader(false);
-        setTableLoadingProgress(0);
-      }, 300);
-    }
-  }, [isLoading, showTableLoader]);
-
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen flex flex-col">
       <div className="flex flex-row items-start justify-between mb-4 md:mb-6 gap-3">
@@ -480,18 +441,9 @@ export default function AIFlagsPage() {
         {loadError && <p className="text-xs text-red-500 mt-1">{loadError}</p>}
       </div>
 
-      <div
-        className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
-          showTableLoader ? "flex flex-col flex-1" : ""
-        }`}
-      >
-        <div
-          className={`relative ${showTableLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-        >
-          <table
-            className={`w-full min-w-250 ${showTableLoader ? "h-full" : ""}`}
-            style={{ tableLayout: "fixed" }}
-          >
+      <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
+        <div className="relative overflow-x-auto">
+          <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -513,8 +465,32 @@ export default function AIFlagsPage() {
                 </tr>
               ))}
             </thead>
-            <tbody className={showTableLoader ? "h-full" : ""}>
-              {showTableLoader ? null : table.getRowModel().rows.length === 0 ? (
+            <tbody>
+              {isLoading ? (
+                Array.from({ length: pagination.pageSize }).map((_, rowIndex) => (
+                  <tr
+                    key={`ai-flags-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`ai-flags-skeleton-cell-${rowIndex}-${column.id}`}
+                        className={`px-2 md:px-4 py-2 md:py-4 ${
+                          column.id === "action" ? "text-center" : ""
+                        }`}
+                      >
+                        <div className={column.id === "action" ? "flex justify-center" : ""}>
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 88 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -547,17 +523,6 @@ export default function AIFlagsPage() {
               )}
             </tbody>
           </table>
-
-          {showTableLoader && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loading
-                isLoading
-                size="sm"
-                progress={tableLoadingProgress}
-                className="p-4"
-              />
-            </div>
-          )}
         </div>
         <div className="px-2 md:px-4 py-3 md:py-4 border-t border-zinc-100 flex items-center justify-center overflow-x-auto">
           <div className="flex items-center gap-0.5 md:gap-1">

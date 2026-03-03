@@ -4,11 +4,12 @@ import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import React from "react";
 import Button from "../../common/button";
-import { Loading } from "../../common/Loading";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useUser } from "@/contexts/UserContext";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 type AssessmentDetails = {
   assessmentId: string;
@@ -145,7 +146,7 @@ function AssessmentDetailsContent() {
     useState<AssessmentDetails | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(assessmentId));
   const [showLoader, setShowLoader] = useState(Boolean(assessmentId));
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [, setLoadingProgress] = useState(0);
   const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -1111,8 +1112,24 @@ function AssessmentDetailsContent() {
 
   if (showLoader) {
     return (
-      <div className="bg-light-gray p-3 md:p-6 min-h-screen flex items-center justify-center">
-        <Loading isLoading progress={loadingProgress} />
+      <div className="bg-light-gray p-3 md:p-6 min-h-screen">
+        <div className="max-w-6xl mx-auto space-y-5">
+          <div className="space-y-3">
+            <Skeleton width="34%" height={28} borderRadius={8} />
+            <Skeleton width="52%" height={16} borderRadius={6} />
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Skeleton width={120} height={32} borderRadius={9999} />
+            <Skeleton width={140} height={32} borderRadius={9999} />
+            <Skeleton width={110} height={32} borderRadius={9999} />
+          </div>
+          <div className="bg-white rounded-xl border border-zinc-100 p-5 space-y-4">
+            <Skeleton width="28%" height={18} borderRadius={6} />
+            <Skeleton width="100%" height={80} borderRadius={8} />
+            <Skeleton width="100%" height={80} borderRadius={8} />
+            <Skeleton width="100%" height={80} borderRadius={8} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -2104,8 +2121,17 @@ export default function AssessmentDetailsPage() {
   return (
     <Suspense
       fallback={
-        <div className="bg-light-gray p-3 md:p-6 min-h-screen flex items-center justify-center">
-          <div className="text-secondary">Loading...</div>
+        <div className="bg-light-gray p-3 md:p-6 min-h-screen">
+          <div className="max-w-6xl mx-auto space-y-5">
+            <Skeleton width="34%" height={28} borderRadius={8} />
+            <Skeleton width="52%" height={16} borderRadius={6} />
+            <div className="bg-white rounded-xl border border-zinc-100 p-5 space-y-4">
+              <Skeleton width="30%" height={18} borderRadius={6} />
+              <Skeleton width="100%" height={80} borderRadius={8} />
+              <Skeleton width="100%" height={80} borderRadius={8} />
+              <Skeleton width="100%" height={80} borderRadius={8} />
+            </div>
+          </div>
         </div>
       }
     >

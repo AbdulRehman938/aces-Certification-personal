@@ -6,6 +6,8 @@ import Dropdown from "../common/dropdown";
 import Button from "../common/button";
 import { useUser } from "@/contexts/UserContext";
 import { axiosInstance } from "@/lib/axios";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface NotificationCardProps {
   label: string;
@@ -64,6 +66,62 @@ function NotificationCard({
           }`}
         />
       </button>
+    </div>
+  );
+}
+
+function NotificationSettingsSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton width={180} height={20} borderRadius={6} className="mb-4" />
+        <div className="space-y-3">
+          {[0, 1].map((index) => (
+            <div
+              key={`admin-notification-channel-skeleton-${index}`}
+              className="rounded-lg border border-zinc-100 bg-zinc-50 p-4"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 space-y-2">
+                  <Skeleton width="52%" height={14} borderRadius={6} />
+                  <Skeleton width="75%" height={12} borderRadius={6} />
+                </div>
+                <Skeleton width={44} height={24} borderRadius={9999} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Skeleton width={160} height={20} borderRadius={6} className="mb-4" />
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4].map((index) => (
+            <div
+              key={`admin-notification-type-skeleton-${index}`}
+              className="rounded-lg border border-zinc-100 bg-zinc-50 p-4"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 space-y-2">
+                  <Skeleton width="48%" height={14} borderRadius={6} />
+                  <Skeleton width="78%" height={12} borderRadius={6} />
+                </div>
+                <Skeleton width={44} height={24} borderRadius={9999} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Skeleton width={170} height={20} borderRadius={6} className="mb-4" />
+        <Skeleton width={180} height={42} borderRadius={8} />
+        <Skeleton width="55%" height={12} borderRadius={6} className="mt-2" />
+      </div>
+
+      <div className="flex justify-end">
+        <Skeleton width={128} height={40} borderRadius={8} />
+      </div>
     </div>
   );
 }
@@ -431,117 +489,125 @@ export default function SettingsPage() {
             General Settings
           </h2>
 
-          <div className="mb-6">
-            <h3 className="text-base font-semibold text-secondary mb-4">
-              Notification Channels
-            </h3>
-            <div className="space-y-3">
-              <NotificationCard
-                label="Email Notifications"
-                description="Receive notifications via email"
-                isEnabled={emailNotifications}
-                onToggle={() => setEmailNotifications(!emailNotifications)}
-                disabled={isNotificationControlsDisabled}
-              />
-              <NotificationCard
-                label="In-App Notifications"
-                description="Show notifications within the platform"
-                isEnabled={inAppNotifications}
-                onToggle={() => setInAppNotifications(!inAppNotifications)}
-                disabled={isNotificationControlsDisabled}
-              />
-            </div>
-          </div>
+          {isLoadingNotificationSettings ? (
+            <NotificationSettingsSkeleton />
+          ) : (
+            <>
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-secondary mb-4">
+                  Notification Channels
+                </h3>
+                <div className="space-y-3">
+                  <NotificationCard
+                    label="Email Notifications"
+                    description="Receive notifications via email"
+                    isEnabled={emailNotifications}
+                    onToggle={() => setEmailNotifications(!emailNotifications)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                  <NotificationCard
+                    label="In-App Notifications"
+                    description="Show notifications within the platform"
+                    isEnabled={inAppNotifications}
+                    onToggle={() => setInAppNotifications(!inAppNotifications)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                </div>
+              </div>
 
-          <div className="mb-6">
-            <h3 className="text-base font-semibold text-secondary mb-4">
-              Notification Types
-            </h3>
-            <div className="space-y-3">
-              <NotificationCard
-                label="Assessment Submissions"
-                description="When a new assessment is submitted"
-                isEnabled={assessmentSubmissions}
-                onToggle={() =>
-                  setAssessmentSubmissions(!assessmentSubmissions)
-                }
-                disabled={isNotificationControlsDisabled}
-              />
-              <NotificationCard
-                label="AI Flags"
-                description="When AI detects discrepancies"
-                isEnabled={aiFlags}
-                onToggle={() => setAiFlags(!aiFlags)}
-                disabled={isNotificationControlsDisabled}
-              />
-              <NotificationCard
-                label="Audit scheduling and results"
-                description="Audit scheduling and results"
-                isEnabled={auditScheduling}
-                onToggle={() => setAuditScheduling(!auditScheduling)}
-                disabled={isNotificationControlsDisabled}
-              />
-              <NotificationCard
-                label="Payment Events"
-                description="Payment confirmations and refunds"
-                isEnabled={paymentEvents}
-                onToggle={() => setPaymentEvents(!paymentEvents)}
-                disabled={isNotificationControlsDisabled}
-              />
-              <NotificationCard
-                label="Certificate Events"
-                description="Issuance, renewal, and expiry"
-                isEnabled={certificateEvents}
-                onToggle={() => setCertificateEvents(!certificateEvents)}
-                disabled={isNotificationControlsDisabled}
-              />
-            </div>
-          </div>
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-secondary mb-4">
+                  Notification Types
+                </h3>
+                <div className="space-y-3">
+                  <NotificationCard
+                    label="Assessment Submissions"
+                    description="When a new assessment is submitted"
+                    isEnabled={assessmentSubmissions}
+                    onToggle={() =>
+                      setAssessmentSubmissions(!assessmentSubmissions)
+                    }
+                    disabled={isNotificationControlsDisabled}
+                  />
+                  <NotificationCard
+                    label="AI Flags"
+                    description="When AI detects discrepancies"
+                    isEnabled={aiFlags}
+                    onToggle={() => setAiFlags(!aiFlags)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                  <NotificationCard
+                    label="Audit scheduling and results"
+                    description="Audit scheduling and results"
+                    isEnabled={auditScheduling}
+                    onToggle={() => setAuditScheduling(!auditScheduling)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                  <NotificationCard
+                    label="Payment Events"
+                    description="Payment confirmations and refunds"
+                    isEnabled={paymentEvents}
+                    onToggle={() => setPaymentEvents(!paymentEvents)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                  <NotificationCard
+                    label="Certificate Events"
+                    description="Issuance, renewal, and expiry"
+                    isEnabled={certificateEvents}
+                    onToggle={() => setCertificateEvents(!certificateEvents)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                </div>
+              </div>
 
-          <div className="mb-6">
-            <h3 className="text-base font-semibold text-secondary mb-4">
-              Reminder Frequency
-            </h3>
-            <div className="w-fit ">
-              <Dropdown
-                options={reminderFrequencyOptions}
-                value={reminderFrequency}
-                onChange={(e) => setReminderFrequency(e.target.value)}
-                disabled={isNotificationControlsDisabled}
-              />
-              <p className="text-xs text-gray mt-2">
-                How often to send reminder notifications for pending actions
-              </p>
-            </div>
-          </div>
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-secondary mb-4">
+                  Reminder Frequency
+                </h3>
+                <div className="w-fit ">
+                  <Dropdown
+                    options={reminderFrequencyOptions}
+                    value={reminderFrequency}
+                    onChange={(e) => setReminderFrequency(e.target.value)}
+                    disabled={isNotificationControlsDisabled}
+                  />
+                  <p className="text-xs text-gray mt-2">
+                    How often to send reminder notifications for pending actions
+                  </p>
+                </div>
+              </div>
 
-          {(notificationSettingsError || notificationSettingsSuccess) && (
-            <div className="mb-4">
-              {notificationSettingsError ? (
-                <p className="text-sm text-red-600">{notificationSettingsError}</p>
-              ) : null}
-              {notificationSettingsSuccess ? (
-                <p className="text-sm text-green-600">{notificationSettingsSuccess}</p>
-              ) : null}
-            </div>
+              {(notificationSettingsError || notificationSettingsSuccess) && (
+                <div className="mb-4">
+                  {notificationSettingsError ? (
+                    <p className="text-sm text-red-600">
+                      {notificationSettingsError}
+                    </p>
+                  ) : null}
+                  {notificationSettingsSuccess ? (
+                    <p className="text-sm text-green-600">
+                      {notificationSettingsSuccess}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  variant="primary"
+                  className={`text-white ${
+                    isNotificationControlsDisabled
+                      ? "opacity-60 cursor-not-allowed"
+                      : ""
+                  }`}
+                  disabled={isNotificationControlsDisabled}
+                  onClick={() => void handleSaveNotificationSettings()}
+                >
+                  {isSavingNotificationSettings ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </>
           )}
-
-          <div className="flex justify-end">
-            <Button
-              variant="primary"
-              className={`text-white ${
-                isNotificationControlsDisabled ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-              disabled={isNotificationControlsDisabled}
-              onClick={() => void handleSaveNotificationSettings()}
-            >
-              {isLoadingNotificationSettings
-                ? "Loading..."
-                : isSavingNotificationSettings
-                  ? "Saving..."
-                  : "Save Changes"}
-            </Button>
-          </div>
         </div>
       )}
     </div>

@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
-import { Loading } from "@/app/(dashboards)/admin/common/Loading";
 import { axiosInstance } from "@/lib/axios";
 import { useUser } from "@/contexts/UserContext";
 import {
@@ -12,6 +11,8 @@ import {
 } from "country-state-city";
 import Image from "next/image";
 import { Search, ChevronDown, Eye, EyeOff } from "lucide-react";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface NotificationCardProps {
   label: string;
@@ -46,6 +47,23 @@ function NotificationCard({
   );
 }
 
+function ModalActionSkeleton() {
+  return (
+    <div className="absolute inset-0 z-10 rounded-xl bg-white/85 backdrop-blur-sm p-6">
+      <div className="space-y-4">
+        <Skeleton width="34%" height={18} borderRadius={6} />
+        <Skeleton width="100%" height={44} borderRadius={8} />
+        <Skeleton width="100%" height={44} borderRadius={8} />
+        <Skeleton width="88%" height={44} borderRadius={8} />
+        <div className="flex justify-end gap-3 pt-2">
+          <Skeleton width={92} height={38} borderRadius={8} />
+          <Skeleton width={130} height={38} borderRadius={8} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<"account" | "notification">(
     "account",
@@ -56,6 +74,7 @@ export default function Settings() {
   const [auditDeadlineReminder, setAuditDeadlineReminder] = useState(true);
   const [reviewSubmissionAlerts, setReviewSubmissionAlerts] = useState(true);
   const [systemAnnouncements, setSystemAnnouncements] = useState(false);
+  const [isNotificationSaving, setIsNotificationSaving] = useState(false);
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [originalValues, setOriginalValues] = useState<{
@@ -703,6 +722,18 @@ export default function Settings() {
     setActiveAccountModal(null);
   };
 
+  const handleSaveNotificationSettings = async () => {
+    if (isNotificationSaving) return;
+    setIsNotificationSaving(true);
+    try {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 700);
+      });
+    } finally {
+      setIsNotificationSaving(false);
+    }
+  };
+
   return (
     <div className="p-6 bg-light-gray min-h-screen">
       <div className="mb-8">
@@ -819,14 +850,7 @@ export default function Settings() {
 
                 <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
                   {(showProfileLoader || profileSuccessMessage) && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                      <Loading
-                        isLoading
-                        size="sm"
-                        progress={showProfileLoader ? profileLoadingProgress : 100}
-                        className="p-4"
-                      />
-                    </div>
+                    <ModalActionSkeleton />
                   )}
                   <div
                     className={
@@ -1261,9 +1285,7 @@ export default function Settings() {
 
                 <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
                   {(isSendingEmailOtp || isSavingEmail || emailSuccessMessage) && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                      <Loading isLoading size="sm" className="p-4" />
-                    </div>
+                    <ModalActionSkeleton />
                   )}
                   <div
                     className={
@@ -1426,9 +1448,7 @@ export default function Settings() {
                   {(isSendingPasswordOtp ||
                     isSavingPassword ||
                     passwordSuccessMessage) && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                      <Loading isLoading size="sm" className="p-4" />
-                    </div>
+                    <ModalActionSkeleton />
                   )}
                   <div
                     className={
@@ -1641,41 +1661,50 @@ export default function Settings() {
       )}
 
       {activeTab === "notification" && (
-        <div className="bg-white rounded-xl border border-zinc-100 p-6">
-          <h3 className="text-lg font-medium text-secondary">
-            Notification Preferences
-          </h3>
-          <div className="mt-6 space-y-3">
-            <NotificationCard
-              label="New audit assigned"
-              description="Get notified when a new audit is assigned to you"
-              isEnabled={newAuditAssigned}
-              onToggle={() => setNewAuditAssigned(!newAuditAssigned)}
-            />
-            <NotificationCard
-              label="Audit deadline reminder"
-              description="Receive reminders before audit deadlines"
-              isEnabled={auditDeadlineReminder}
-              onToggle={() => setAuditDeadlineReminder(!auditDeadlineReminder)}
-            />
-            <NotificationCard
-              label="Review submission alerts"
-              description="Get alerts when reviews are submitted for your audits"
-              isEnabled={reviewSubmissionAlerts}
-              onToggle={() =>
-                setReviewSubmissionAlerts(!reviewSubmissionAlerts)
-              }
-            />
-            <NotificationCard
-              label="System announcements"
-              description="Receive platform updates and announcements"
-              isEnabled={systemAnnouncements}
-              onToggle={() => setSystemAnnouncements(!systemAnnouncements)}
-            />
-          </div>
+        <div className="bg-white rounded-xl border border-zinc-100 p-6 relative">
+          {isNotificationSaving && <ModalActionSkeleton />}
+          <div className={isNotificationSaving ? "blur-sm pointer-events-none" : ""}>
+            <h3 className="text-lg font-medium text-secondary">
+              Notification Preferences
+            </h3>
+            <div className="mt-6 space-y-3">
+              <NotificationCard
+                label="New audit assigned"
+                description="Get notified when a new audit is assigned to you"
+                isEnabled={newAuditAssigned}
+                onToggle={() => setNewAuditAssigned(!newAuditAssigned)}
+              />
+              <NotificationCard
+                label="Audit deadline reminder"
+                description="Receive reminders before audit deadlines"
+                isEnabled={auditDeadlineReminder}
+                onToggle={() => setAuditDeadlineReminder(!auditDeadlineReminder)}
+              />
+              <NotificationCard
+                label="Review submission alerts"
+                description="Get alerts when reviews are submitted for your audits"
+                isEnabled={reviewSubmissionAlerts}
+                onToggle={() =>
+                  setReviewSubmissionAlerts(!reviewSubmissionAlerts)
+                }
+              />
+              <NotificationCard
+                label="System announcements"
+                description="Receive platform updates and announcements"
+                isEnabled={systemAnnouncements}
+                onToggle={() => setSystemAnnouncements(!systemAnnouncements)}
+              />
+            </div>
 
-          <div className="mt-6 flex justify-end">
-            <Button variant="primary">Save Notification Settings</Button>
+            <div className="mt-6 flex justify-end">
+              <Button
+                variant="primary"
+                onClick={() => void handleSaveNotificationSettings()}
+                disabled={isNotificationSaving}
+              >
+                {isNotificationSaving ? "Saving..." : "Save Notification Settings"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -10,6 +10,7 @@ import axios from "axios";
 
 const getFileNameFromUrl = (value: string): string => {
   const fallback = "Attached document";
+  if (!value || value.startsWith("data:")) return fallback;
 
   try {
     const parsedUrl = new URL(value);
@@ -214,6 +215,32 @@ function AssignAuditsReviewContent() {
     });
   };
 
+  const parseFinalDecision = (
+    value?: string | null,
+  ): "approved" | "conditional" | "rejected" | null => {
+    const normalized = String(value || "")
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .trim();
+
+    if (normalized === "approved") return "approved";
+    if (
+      normalized === "conditional" ||
+      normalized === "conditionally approved" ||
+      normalized === "conditionallyapproved"
+    ) {
+      return "conditional";
+    }
+    if (normalized === "rejected") return "rejected";
+    return null;
+  };
+
+  const normalizedAssessmentStatus = assessmentStatus
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .trim();
+  const isCompletedAssessment = normalizedAssessmentStatus === "completed";
+
   useEffect(() => {
     if (!assessmentId) {
       setIsLoading(false);
@@ -241,10 +268,43 @@ function AssignAuditsReviewContent() {
         setCertificateName(payload.certificateName || "N/A");
         setAssessmentStatus(formatStatusLabel(payload.status));
 
+        const auditRecord =
+          payload.auditRecord && typeof payload.auditRecord === "object"
+            ? payload.auditRecord
+            : null;
+
+        const existingAuditSummary = String(
+          auditRecord?.audit_summary ?? auditRecord?.auditSummary ?? "",
+        );
+        const existingAuditFindings = String(
+          auditRecord?.audit_description ?? auditRecord?.auditDescription ?? "",
+        );
+        const existingAuditSummaryDoc = String(
+          auditRecord?.audit_summary_doc ?? auditRecord?.auditSummaryDoc ?? "",
+        ).trim();
+        const existingAuditStatus = parseFinalDecision(
+          String(auditRecord?.status ?? ""),
+        );
+
+        setAuditSummary(existingAuditSummary);
+        setAuditDescription(existingAuditFindings);
+        setFinalDecision(existingAuditStatus);
+        setSubmitReportError("");
+        setSubmitReportSuccess("");
+
+        if (existingAuditSummaryDoc) {
+          setAuditSummaryDoc(existingAuditSummaryDoc);
+          setAuditSummaryDocName(getFileNameFromUrl(existingAuditSummaryDoc));
+        } else {
+          setAuditSummaryDoc("");
+          setAuditSummaryDocName("");
+        }
+
         const auditDateFromApi =
           payload.auditRecord?.auditDate ||
           payload.auditRecord?.date ||
           payload.auditRecord?.scheduledAt ||
+          payload.auditDate ||
           null;
         setAuditDateLabel(formatDateLabel(auditDateFromApi));
 
@@ -486,6 +546,11 @@ function AssignAuditsReviewContent() {
   const handleAuditSummaryDocSelect = async (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
+    if (isCompletedAssessment) {
+      event.target.value = "";
+      return;
+    }
+
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
 
@@ -527,6 +592,10 @@ function AssignAuditsReviewContent() {
   const handleSubmitAuditReport = async () => {
     if (!assessmentId) {
       setSubmitReportError("Assessment id is missing.");
+      return;
+    }
+    if (isCompletedAssessment) {
+      setSubmitReportError("Audit report is already submitted for this assessment.");
       return;
     }
 
@@ -1021,10 +1090,15 @@ function AssignAuditsReviewContent() {
                                   Auditor Notes
                                 </h5>
                                 <textarea
-                                  className="w-full min-h-30 p-3 rounded-md text-sm border focus:outline-none focus:border-black"
+                                  className={`w-full min-h-30 p-3 rounded-md text-sm border ${
+                                    isCompletedAssessment
+                                      ? "bg-zinc-50 cursor-not-allowed"
+                                      : "focus:outline-none focus:border-black"
+                                  }`}
                                   style={{ borderColor: "#E6E6E6" }}
                                   placeholder="Add your notes here....."
                                   value={noteValue}
+                                  disabled={isCompletedAssessment}
                                   onChange={(event) =>
                                     handleAuditorNotesChange(
                                       questionId,
@@ -1034,33 +1108,35 @@ function AssignAuditsReviewContent() {
                                 ></textarea>
                               </div>
 
-                              <div className="mt-6 flex items-center gap-4">
-                                <Button
-                                  variant="custom"
-                                  className="border border-black rounded-lg px-6 py-2 font-semibold"
-                                  onClick={() => setShowSubmitModal(true)}
-                                >
-                                  Request Clarification
-                                </Button>
-                                <Button
-                                  variant="custom"
-                                  className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                  onClick={() => {
-                                    void handleAuditorNotesSave(questionId);
-                                  }}
-                                  disabled={
-                                    !assessmentId ||
-                                    Boolean(noteSaveFeedback?.isSaving) ||
-                                    !noteValue.trim()
-                                  }
-                                >
-                                  {noteSaveFeedback?.isSaving
-                                    ? "Saving..."
-                                    : hasSavedNotes
-                                      ? "Update Notes"
-                                      : "Add Notes"}
-                                </Button>
-                              </div>
+                              {!isCompletedAssessment ? (
+                                <div className="mt-6 flex items-center gap-4">
+                                  <Button
+                                    variant="custom"
+                                    className="border border-black rounded-lg px-6 py-2 font-semibold"
+                                    onClick={() => setShowSubmitModal(true)}
+                                  >
+                                    Request Clarification
+                                  </Button>
+                                  <Button
+                                    variant="custom"
+                                    className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={() => {
+                                      void handleAuditorNotesSave(questionId);
+                                    }}
+                                    disabled={
+                                      !assessmentId ||
+                                      Boolean(noteSaveFeedback?.isSaving) ||
+                                      !noteValue.trim()
+                                    }
+                                  >
+                                    {noteSaveFeedback?.isSaving
+                                      ? "Saving..."
+                                      : hasSavedNotes
+                                        ? "Update Notes"
+                                        : "Add Notes"}
+                                  </Button>
+                                </div>
+                              ) : null}
                               {noteSaveFeedback?.message ? (
                                 <p
                                   className={`text-sm ${
@@ -1090,7 +1166,7 @@ function AssignAuditsReviewContent() {
                 })()}
             </div>
           </div>
-          {showSubmitModal && (
+          {showSubmitModal && !isCompletedAssessment && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div
                 className="absolute inset-0 bg-black/40"
@@ -1158,10 +1234,15 @@ function AssignAuditsReviewContent() {
                   Audit Summary *
                 </label>
                 <textarea
-                  className="w-full min-h-30 p-4 rounded-md text-sm border focus:outline-none"
+                  className={`w-full min-h-30 p-4 rounded-md text-sm border ${
+                    isCompletedAssessment
+                      ? "bg-zinc-50 cursor-not-allowed"
+                      : "focus:outline-none"
+                  }`}
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Provide a high-level summary of the audits findings....."
                   value={auditSummary}
+                  disabled={isCompletedAssessment}
                   onChange={(event) => {
                     setAuditSummary(event.target.value);
                     if (submitReportError) setSubmitReportError("");
@@ -1175,10 +1256,15 @@ function AssignAuditsReviewContent() {
                   Audit Findings *
                 </label>
                 <textarea
-                  className="w-full min-h-30 p-4 rounded-md text-sm border focus:outline-none"
+                  className={`w-full min-h-30 p-4 rounded-md text-sm border ${
+                    isCompletedAssessment
+                      ? "bg-zinc-50 cursor-not-allowed"
+                      : "focus:outline-none"
+                  }`}
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Document your detailed findings, observations and recommendations....."
                   value={auditDescription}
+                  disabled={isCompletedAssessment}
                   onChange={(event) => {
                     setAuditDescription(event.target.value);
                     if (submitReportError) setSubmitReportError("");
@@ -1197,8 +1283,14 @@ function AssignAuditsReviewContent() {
             <div className="mt-4 space-y-4">
               <div
                 role="button"
-                onClick={() => setFinalDecision("approved")}
-                className={`flex items-start gap-4 p-4 rounded-md border ${finalDecision === "approved" ? "border-black" : "border-zinc-200"} cursor-pointer`}
+                onClick={() => {
+                  if (!isCompletedAssessment) {
+                    setFinalDecision("approved");
+                  }
+                }}
+                className={`flex items-start gap-4 p-4 rounded-md border ${
+                  finalDecision === "approved" ? "border-black" : "border-zinc-200"
+                } ${isCompletedAssessment ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
               >
                 <div className="shrink-0">
                   {finalDecision === "approved" ? (
@@ -1254,8 +1346,14 @@ function AssignAuditsReviewContent() {
 
               <div
                 role="button"
-                onClick={() => setFinalDecision("conditional")}
-                className={`flex items-start gap-4 p-4 rounded-md border ${finalDecision === "conditional" ? "border-black" : "border-zinc-200"} cursor-pointer`}
+                onClick={() => {
+                  if (!isCompletedAssessment) {
+                    setFinalDecision("conditional");
+                  }
+                }}
+                className={`flex items-start gap-4 p-4 rounded-md border ${
+                  finalDecision === "conditional" ? "border-black" : "border-zinc-200"
+                } ${isCompletedAssessment ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
               >
                 <div className="shrink-0">
                   {finalDecision === "conditional" ? (
@@ -1311,8 +1409,14 @@ function AssignAuditsReviewContent() {
 
               <div
                 role="button"
-                onClick={() => setFinalDecision("rejected")}
-                className={`flex items-start gap-4 p-4 rounded-md border ${finalDecision === "rejected" ? "border-black" : "border-zinc-200"} cursor-pointer`}
+                onClick={() => {
+                  if (!isCompletedAssessment) {
+                    setFinalDecision("rejected");
+                  }
+                }}
+                className={`flex items-start gap-4 p-4 rounded-md border ${
+                  finalDecision === "rejected" ? "border-black" : "border-zinc-200"
+                } ${isCompletedAssessment ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
               >
                 <div className="shrink-0">
                   {finalDecision === "rejected" ? (
@@ -1409,12 +1513,18 @@ function AssignAuditsReviewContent() {
                   type="file"
                   className="hidden"
                   accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  disabled={isCompletedAssessment}
                   onChange={handleAuditSummaryDocSelect}
                 />
                 <button
                   type="button"
-                  className="mt-4 px-4 py-2 text-sm border border-zinc-300 rounded-md text-secondary hover:bg-zinc-50"
+                  className={`mt-4 px-4 py-2 text-sm border border-zinc-300 rounded-md text-secondary ${
+                    isCompletedAssessment
+                      ? "cursor-not-allowed opacity-60"
+                      : "hover:bg-zinc-50"
+                  }`}
                   onClick={() => auditSummaryDocInputRef.current?.click()}
+                  disabled={isCompletedAssessment}
                 >
                   Select Document
                 </button>
@@ -1432,9 +1542,13 @@ function AssignAuditsReviewContent() {
               onClick={() => {
                 void handleSubmitAuditReport();
               }}
-              disabled={isSubmittingReport}
+              disabled={isSubmittingReport || isCompletedAssessment}
             >
-              {isSubmittingReport ? "Submitting..." : "Submit Audit Report"}
+              {isCompletedAssessment
+                ? "Audit Already Submitted"
+                : isSubmittingReport
+                  ? "Submitting..."
+                  : "Submit Audit Report"}
             </Button>
             {submitReportError ? (
               <p className="mt-3 text-sm text-red-600">{submitReportError}</p>

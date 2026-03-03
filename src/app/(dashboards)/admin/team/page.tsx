@@ -12,6 +12,8 @@ import {
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
 import { Loading } from "../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import { useUser } from "@/contexts/UserContext";
 
 type SubadminApiResponse = {
@@ -73,8 +75,6 @@ export default function TeamPage() {
   const [lastName, setLastName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
-  const [showLoader, setShowLoader] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
   const [showModalLoader, setShowModalLoader] = useState(false);
   const [modalLoadingProgress, setModalLoadingProgress] = useState(0);
   const [error, setError] = useState("");
@@ -87,10 +87,6 @@ export default function TeamPage() {
   const [editProfilePicturePreview, setEditProfilePicturePreview] =
     useState<string>("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
-  const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const modalLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
@@ -362,38 +358,6 @@ export default function TeamPage() {
   }, [fetchSubadmins]);
 
   useEffect(() => {
-    if (loaderIntervalRef.current) {
-      clearInterval(loaderIntervalRef.current);
-      loaderIntervalRef.current = null;
-    }
-    if (loaderFinishTimeoutRef.current) {
-      clearTimeout(loaderFinishTimeoutRef.current);
-      loaderFinishTimeoutRef.current = null;
-    }
-
-    if (isFetching) {
-      setShowLoader(true);
-      setLoadingProgress(0);
-      loaderIntervalRef.current = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showLoader) {
-      setLoadingProgress(100);
-      loaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowLoader(false);
-        setLoadingProgress(0);
-      }, 300);
-    }
-  }, [isFetching, showLoader]);
-
-  useEffect(() => {
     if (modalLoaderIntervalRef.current) {
       clearInterval(modalLoaderIntervalRef.current);
       modalLoaderIntervalRef.current = null;
@@ -558,18 +522,9 @@ export default function TeamPage() {
         </div>
       )}
 
-      <div
-        className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
-          showLoader ? "flex flex-col flex-1" : ""
-        }`}
-      >
-        <div
-          className={`relative ${showLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-        >
-          <table
-            className={`w-full min-w-250 ${showLoader ? "h-full" : ""}`}
-            style={{ tableLayout: "fixed" }}
-          >
+      <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
+        <div className="relative overflow-x-auto">
+          <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -591,8 +546,38 @@ export default function TeamPage() {
                 </tr>
               ))}
             </thead>
-            <tbody className={showLoader ? "h-full" : ""}>
-              {showLoader ? null : table.getRowModel().rows.length === 0 ? (
+            <tbody>
+              {isFetching ? (
+                Array.from({ length: limit }).map((_, rowIndex) => (
+                  <tr
+                    key={`team-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`team-skeleton-cell-${rowIndex}-${column.id}`}
+                        className={`px-2 md:px-4 py-2 md:py-4 ${
+                          column.id === "action"
+                            ? "px-2 md:px-8 text-center"
+                            : ""
+                        }`}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-center" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 72 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -627,17 +612,6 @@ export default function TeamPage() {
               )}
             </tbody>
           </table>
-
-          {showLoader && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loading
-                isLoading
-                size="sm"
-                progress={loadingProgress}
-                className="p-4"
-              />
-            </div>
-          )}
         </div>
 
         {total > 0 && (
@@ -1341,4 +1315,3 @@ export default function TeamPage() {
     </div>
   );
 }
-

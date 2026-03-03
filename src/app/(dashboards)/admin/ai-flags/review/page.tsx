@@ -4,8 +4,9 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
 import Button from "../../common/button";
-import { Loading } from "../../common/Loading";
 import { useUser } from "@/contexts/UserContext";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface MetricCardProps {
   icon: React.ReactNode;
@@ -245,7 +246,7 @@ function ReviewPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [showLoader, setShowLoader] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [, setLoadingProgress] = useState(0);
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
   const [isAssignReviewerModalOpen, setIsAssignReviewerModalOpen] =
     useState(false);
@@ -515,8 +516,44 @@ function ReviewPageContent() {
 
   if (showLoader) {
     return (
-      <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
-        <Loading isLoading size="sm" progress={loadingProgress} className="p-4" />
+      <div className="p-3 md:p-6 bg-light-gray min-h-screen">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="space-y-3">
+            <Skeleton width="24%" height={16} borderRadius={6} />
+            <Skeleton width="38%" height={28} borderRadius={8} />
+            <Skeleton width="54%" height={14} borderRadius={6} />
+          </div>
+          <div className="bg-white rounded-xl p-4 md:p-4 shadow-sm">
+            <Skeleton width="26%" height={18} borderRadius={6} />
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Skeleton width={130} height={38} borderRadius={8} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={`ai-flags-review-metric-skeleton-${idx}`}
+                className="bg-white rounded-xl p-4 shadow-sm border border-zinc-100"
+              >
+                <Skeleton width={34} height={34} borderRadius={8} />
+                <Skeleton width="55%" height={14} className="mt-3" />
+                <Skeleton width="40%" height={22} className="mt-2" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div
+                key={`ai-flags-response-skeleton-${idx}`}
+                className="bg-white rounded-xl shadow-sm p-6 space-y-3"
+              >
+                <Skeleton width="70%" height={18} />
+                <Skeleton width="100%" height={14} />
+                <Skeleton width="90%" height={14} />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -599,9 +636,13 @@ function ReviewPageContent() {
           <h2 className="text-lg md:text-xl font-semibold text-secondary mb-1">
             AI Analysis Summary
           </h2>
-          <span className="text-[11px] md:text-[13px] font-normal text-gray leading-[18px] align-middle">
-            {isLoading ? "Loading..." : analysisSummary}
-          </span>
+          <div className="text-[11px] md:text-[13px] font-normal text-gray leading-[18px] align-middle">
+            {isLoading ? (
+              <Skeleton width="55%" height={14} borderRadius={6} />
+            ) : (
+              analysisSummary
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -699,8 +740,18 @@ function ReviewPageContent() {
       </div>
 
       {isLoading && !flaggedResponses.length ? (
-        <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-gray">
-          Loading flagged responses...
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div
+              key={`ai-flags-loading-response-${idx}`}
+              className="bg-white rounded-xl shadow-sm p-6 space-y-3"
+            >
+              <Skeleton width="68%" height={18} borderRadius={6} />
+              <Skeleton width="100%" height={14} borderRadius={6} />
+              <Skeleton width="92%" height={14} borderRadius={6} />
+              <Skeleton width="86%" height={14} borderRadius={6} />
+            </div>
+          ))}
         </div>
       ) : flaggedResponses.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-gray">
@@ -866,7 +917,22 @@ function ReviewPageContent() {
                   onScroll={handleReviewerScroll}
                 >
                   {isLoadingReviewers && (
-                    <div className="text-xs text-gray px-2">Loading reviewers...</div>
+                    <div className="space-y-2 px-1">
+                      {Array.from({ length: 3 }).map((_, idx) => (
+                        <div
+                          key={`reviewer-option-skeleton-${idx}`}
+                          className="p-3 border border-zinc-200 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Skeleton circle width={40} height={40} />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton width="45%" height={14} />
+                              <Skeleton width="70%" height={12} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
 
                   {reviewersError && (
@@ -992,8 +1058,35 @@ export default function ReviewPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
-          <div className="text-secondary">Loading...</div>
+        <div className="p-3 md:p-6 bg-light-gray min-h-screen">
+          <div className="max-w-6xl mx-auto space-y-6">
+            <Skeleton width="24%" height={16} borderRadius={6} />
+            <Skeleton width="36%" height={28} borderRadius={8} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div
+                  key={`ai-flags-review-fallback-metric-${idx}`}
+                  className="bg-white rounded-xl p-4 shadow-sm border border-zinc-100"
+                >
+                  <Skeleton width={34} height={34} borderRadius={8} />
+                  <Skeleton width="55%" height={14} className="mt-3" />
+                  <Skeleton width="40%" height={22} className="mt-2" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div
+                  key={`ai-flags-review-fallback-row-${idx}`}
+                  className="bg-white rounded-xl shadow-sm p-6 space-y-3"
+                >
+                  <Skeleton width="68%" height={18} borderRadius={6} />
+                  <Skeleton width="100%" height={14} borderRadius={6} />
+                  <Skeleton width="92%" height={14} borderRadius={6} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       }
     >

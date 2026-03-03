@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { getApiErrorMessage } from "@/lib/api-error";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import {
   fetchNotifications,
   markAllNotificationsAsRead,
@@ -282,7 +284,52 @@ export default function DashboardNotificationsPage() {
           )}
 
           {isLoading && (
-            <div className="py-12 text-sm text-gray-500">Loading...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div
+                  key={`notification-skeleton-${index}`}
+                  className="w-full rounded-xl border border-zinc-100 bg-zinc-50 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      <Skeleton
+                        circle
+                        width={36}
+                        height={36}
+                        baseColor="#E5E7EB"
+                        highlightColor="#F3F4F6"
+                      />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton
+                          width="40%"
+                          height={14}
+                          baseColor="#E5E7EB"
+                          highlightColor="#F3F4F6"
+                        />
+                        <Skeleton
+                          width="85%"
+                          height={12}
+                          baseColor="#E5E7EB"
+                          highlightColor="#F3F4F6"
+                        />
+                        <Skeleton
+                          width="70%"
+                          height={12}
+                          baseColor="#E5E7EB"
+                          highlightColor="#F3F4F6"
+                        />
+                      </div>
+                    </div>
+                    <Skeleton
+                      width={90}
+                      height={12}
+                      baseColor="#E5E7EB"
+                      highlightColor="#F3F4F6"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           {!isLoading && !error && notifications.length === 0 && (

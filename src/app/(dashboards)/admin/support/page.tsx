@@ -2,14 +2,14 @@
 
 import {
   useEffect,
-  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
 } from "react";
 import { useUser } from "@/contexts/UserContext";
 import { axiosInstance } from "@/lib/axios";
-import { Loading } from "../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface SupportTicketCardProps {
   title: string;
@@ -275,12 +275,6 @@ export default function SupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [showLoader, setShowLoader] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const loaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const loaderFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
 
   const updateTicketStatusLocally = (
     setter: Dispatch<SetStateAction<SupportTicket[]>>,
@@ -374,38 +368,6 @@ export default function SupportPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (loaderIntervalRef.current) {
-      clearInterval(loaderIntervalRef.current);
-      loaderIntervalRef.current = null;
-    }
-    if (loaderFinishTimeoutRef.current) {
-      clearTimeout(loaderFinishTimeoutRef.current);
-      loaderFinishTimeoutRef.current = null;
-    }
-
-    if (isLoading) {
-      setShowLoader(true);
-      setLoadingProgress(0);
-      loaderIntervalRef.current = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showLoader) {
-      setLoadingProgress(100);
-      loaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowLoader(false);
-        setLoadingProgress(0);
-      }, 300);
-    }
-  }, [isLoading, showLoader]);
-
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
       <div className="mb-4 md:mb-6">
@@ -432,15 +394,51 @@ export default function SupportPage() {
       ) : null}
 
       <div className="space-y-4">
-        {showLoader ? (
-          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6 flex items-center justify-center min-h-[140px]">
-            <Loading
-              isLoading
-              size="sm"
-              progress={loadingProgress}
-              className="p-4"
-            />
-          </div>
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`support-ticket-skeleton-${index}`}
+              className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6"
+            >
+              <div className="flex flex-col gap-4">
+                <Skeleton
+                  width="45%"
+                  height={20}
+                  baseColor="#E5E7EB"
+                  highlightColor="#F3F4F6"
+                />
+                <div className="flex flex-wrap gap-4">
+                  <Skeleton
+                    width={130}
+                    height={14}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                  <Skeleton
+                    width={180}
+                    height={14}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                  <Skeleton
+                    width={120}
+                    height={14}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Skeleton
+                    width={140}
+                    height={34}
+                    borderRadius={8}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                </div>
+              </div>
+            </div>
+          ))
         ) : tickets.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6 text-sm text-gray">
             No support tickets found.
