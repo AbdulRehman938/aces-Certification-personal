@@ -80,7 +80,7 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
       },
       {
         label: "Messages",
-        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        icon: "/assets/imgs/admin/dashboard/chat.svg",
         href: "/admin/messages",
         resources: [],
       },
@@ -126,7 +126,7 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
       },
       {
         label: "Messages",
-        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        icon: "/assets/imgs/admin/dashboard/chat.svg",
         href: "/auditor/messages",
       },
       {
@@ -164,7 +164,7 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
       },
       {
         label: "Messages",
-        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        icon: "/assets/imgs/admin/dashboard/chat.svg",
         href: "/reviewer/messages",
       },
       {

@@ -136,6 +136,7 @@ function AssignSelfAssureReviewContent() {
     const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [organizationName, setOrganizationName] = useState("Acme Corporation");
+    const [certificateId, setCertificateId] = useState("");
     const [certificateName, setCertificateName] = useState("ISO 27001:2022");
     const [assessmentStatus, setAssessmentStatus] = useState("Assigned");
     const [auditDateLabel, setAuditDateLabel] = useState("N/A");
@@ -179,6 +180,9 @@ function AssignSelfAssureReviewContent() {
                 if (!payload || typeof payload !== "object") return;
 
                 setOrganizationName(payload.organizationName || "N/A");
+                setCertificateId(
+                    String(payload.certificateId || payload.certificate_id || "").trim(),
+                );
                 setCertificateName(payload.certificateName || "N/A");
                 setAssessmentStatus(formatStatusLabel(payload.status));
 
@@ -388,9 +392,37 @@ function AssignSelfAssureReviewContent() {
         <div className="p-3 md:p-6 bg-light-gray min-h-screen">
             
             <div className="mb-4 md:mb-6">
-                <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary leading-[21.6px] align-middle mb-1 md:mb-2">
-                    Self-assured Certificates
-                </h1>
+                <div className="flex items-start justify-between gap-3 mb-1 md:mb-2">
+                    <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary leading-[21.6px] align-middle">
+                        Self-assured Certificates
+                    </h1>
+                    {certificateId || assessmentId ? (
+                        <button
+                            type="button"
+                            className="text-sm font-medium text-[#2563EB] underline underline-offset-4 hover:text-[#1D4ED8] transition-colors"
+                            onClick={() => {
+                                const params = new URLSearchParams();
+                                if (certificateId) {
+                                    params.set("certificateId", certificateId);
+                                }
+                                if (assessmentId) {
+                                    params.set("assessmentId", assessmentId);
+                                }
+                                if (certificateName) {
+                                    params.set("certificateCode", certificateName);
+                                }
+                                const query = params.toString();
+                                router.push(
+                                    query
+                                        ? `/reviewer/certificate-details?${query}`
+                                        : "/reviewer/certificate-details",
+                                );
+                            }}
+                        >
+                            Details
+                        </button>
+                    ) : null}
+                </div>
                 <p className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px] align-middle">
                     View and manage all Assigned Assurance to you
                 </p>

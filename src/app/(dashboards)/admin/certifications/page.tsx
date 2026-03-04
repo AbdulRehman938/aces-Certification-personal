@@ -401,12 +401,21 @@ export default function CertificationsPage() {
         </span>
       ),
       cell: ({ row }) => (
-        <span
-          className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray block wrap-break-word"
+        <button
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams();
+            params.set("certificateId", row.original.id);
+            if (row.original.certificationName) {
+              params.set("certificateCode", row.original.certificationName);
+            }
+            router.push(`/admin/certificate-details?${params.toString()}`);
+          }}
+          className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray block wrap-break-word underline text-left cursor-pointer"
           style={{ letterSpacing: "1%" }}
         >
           {row.original.certificationName}
-        </span>
+        </button>
       ),
       enableSorting: false,
       enableHiding: false,
@@ -414,7 +423,7 @@ export default function CertificationsPage() {
       minSize: 240,
       maxSize: 320,
     }),
-    [],
+    [router],
   );
 
   const columns = useMemo<ColumnDef<Certification>[]>(

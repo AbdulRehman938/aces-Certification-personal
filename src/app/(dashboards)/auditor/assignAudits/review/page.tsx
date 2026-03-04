@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, useRef, type ChangeEvent } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
 import { Loading } from "@/app/(dashboards)/admin/common/Loading";
 import { DUMMY_MAIN_SECTIONS } from "@/lib/dummyMainSections";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
 import axios from "axios";
 
@@ -144,6 +144,7 @@ const toDataUrl = (file: File): Promise<string> =>
   });
 
 function AssignAuditsReviewContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("id");
   const [isLoading, setIsLoading] = useState(Boolean(assessmentId));
@@ -173,6 +174,7 @@ function AssignAuditsReviewContent() {
   >(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [organizationName, setOrganizationName] = useState("Acme Corporation");
+  const [certificateId, setCertificateId] = useState("");
   const [certificateName, setCertificateName] = useState("ISO 27001:2022");
   const [assessmentStatus, setAssessmentStatus] = useState("Assigned");
   const [auditDateLabel, setAuditDateLabel] = useState("N/A");
@@ -265,6 +267,9 @@ function AssignAuditsReviewContent() {
         if (!payload || typeof payload !== "object") return;
 
         setOrganizationName(payload.organizationName || "N/A");
+        setCertificateId(
+          String(payload.certificateId || payload.certificate_id || "").trim(),
+        );
         setCertificateName(payload.certificateName || "N/A");
         setAssessmentStatus(formatStatusLabel(payload.status));
 
@@ -701,13 +706,30 @@ function AssignAuditsReviewContent() {
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
       <div className="mb-4 md:mb-6">
-        <div className="flex flex-row items-center gap-3 mb-1 md:mb-2">
-          <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary leading-[21.6px] align-middle">
-            Assigned Audits
-          </h1>
-          <div className="px-3 py-1.5 bg-[#e9e9e9] rounded-full">
-            <span className="text-sm font-medium text-secondary">Reviewer</span>
+        <div className="flex items-start justify-between gap-3 mb-1 md:mb-2">
+          <div className="flex flex-row items-center gap-3">
+            <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary leading-[21.6px] align-middle">
+              Assigned Audits
+            </h1>
+            <div className="px-3 py-1.5 bg-[#e9e9e9] rounded-full">
+              <span className="text-sm font-medium text-secondary">Reviewer</span>
+            </div>
           </div>
+          {certificateId ? (
+            <button
+              type="button"
+              className="text-sm font-medium text-[#2563EB] underline underline-offset-4 hover:text-[#1D4ED8] transition-colors"
+              onClick={() =>
+                router.push(
+                  `/auditor/certificate-details?certificateId=${encodeURIComponent(
+                    certificateId,
+                  )}&certificateCode=${encodeURIComponent(certificateName)}`,
+                )
+              }
+            >
+              Details
+            </button>
+          ) : null}
         </div>
         <p className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px] align-middle">
           View and manage all audits assigned to you

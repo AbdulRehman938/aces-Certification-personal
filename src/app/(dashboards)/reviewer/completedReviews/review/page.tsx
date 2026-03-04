@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
 import { DUMMY_MAIN_SECTIONS } from "@/lib/dummyMainSections";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Question {
   id: string;
@@ -23,11 +23,16 @@ interface MainSection {
   sections: Section[];
 }
 
-export default function CompletedReviewsReview() {
+function CompletedReviewsReviewContent() {
   const router = useRouter();
-  useEffect(() => {
-    // router exists but is not currently used for navigation in this file
-  }, [router]);
+  const searchParams = useSearchParams();
+  const assessmentId = String(
+    searchParams.get("assessmentId") || searchParams.get("id") || "",
+  ).trim();
+  const certificateId = String(searchParams.get("certificateId") || "").trim();
+  const certificateCode = String(
+    searchParams.get("certificateCode") || searchParams.get("code") || "",
+  ).trim();
   const [activeButton, setActiveButton] = useState<"assessment" | "submit">(
     "assessment",
   );
@@ -56,10 +61,36 @@ export default function CompletedReviewsReview() {
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
       <div className="mb-4 md:mb-6">
-        <div className="flex flex-row items-center gap-3 mb-1 md:mb-2">
+        <div className="flex items-start justify-between gap-3 mb-1 md:mb-2">
           <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary leading-[21.6px] align-middle">
             Completed Reviews
           </h1>
+          {assessmentId || certificateId ? (
+            <button
+              type="button"
+              className="text-sm font-medium text-[#2563EB] underline underline-offset-4 hover:text-[#1D4ED8] transition-colors"
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (certificateId) {
+                  params.set("certificateId", certificateId);
+                }
+                if (assessmentId) {
+                  params.set("assessmentId", assessmentId);
+                }
+                if (certificateCode) {
+                  params.set("certificateCode", certificateCode);
+                }
+                const query = params.toString();
+                router.push(
+                  query
+                    ? `/reviewer/certificate-details?${query}`
+                    : "/reviewer/certificate-details",
+                );
+              }}
+            >
+              Details
+            </button>
+          ) : null}
         </div>
         <p className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px] align-middle">
           View and manage all reviews assigned to you
@@ -863,5 +894,19 @@ export default function CompletedReviewsReview() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CompletedReviewsReview() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
+          <div className="text-secondary">Loading...</div>
+        </div>
+      }
+    >
+      <CompletedReviewsReviewContent />
+    </Suspense>
   );
 }
