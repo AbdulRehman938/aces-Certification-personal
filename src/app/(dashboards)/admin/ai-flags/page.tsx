@@ -18,6 +18,9 @@ import {
 
 type AIFlag = {
   id: string;
+  certificateId?: string;
+  assessmentId?: string;
+  certificateCode?: string;
   organisation: string;
   certification: string;
   type: string;
@@ -31,6 +34,12 @@ type AiFlagsApiItem = {
   id: string;
   organization_name?: string;
   certificate_name?: string;
+  certificate_id?: string;
+  certificateId?: string;
+  assessment_id?: string;
+  assessmentId?: string;
+  certificate_assessment_id?: string;
+  certificateAssessmentId?: string;
   assessment_type?: string;
   status?: string;
   summary?: string;
@@ -114,7 +123,7 @@ export default function AIFlagsPage() {
         ),
         cell: ({ getValue }) => (
           <span
-            className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray underline cursor-pointer"
+            className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray"
             style={{ letterSpacing: "1%" }}
           >
             {getValue<string>()}
@@ -323,6 +332,17 @@ export default function AIFlagsPage() {
 
           return {
             id: flag.id,
+            certificateId: String(
+              flag.certificate_id || flag.certificateId || "",
+            ).trim() || undefined,
+            assessmentId: String(
+              flag.assessment_id ||
+                flag.assessmentId ||
+                flag.certificate_assessment_id ||
+                flag.certificateAssessmentId ||
+                "",
+            ).trim() || undefined,
+            certificateCode: String(flag.certificate_name || "").trim() || undefined,
             organisation: flag.organization_name || "N/A",
             certification: flag.certificate_name || "N/A",
             type: flag.assessment_type || "N/A",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import React from "react";
 import Button from "../../common/button";
@@ -138,6 +138,7 @@ type ReviewerOption = {
 };
 
 function AssessmentDetailsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const assessmentId = searchParams.get("id");
   const { profile } = useUser();
@@ -1137,19 +1138,47 @@ function AssessmentDetailsContent() {
   return (
     <div className="bg-light-gray p-3 md:p-6 min-h-screen">
       <div className="mb-4">
-        <h2
-          className="text-secondary mb-1"
-          style={{
-            fontFamily: "Public Sans",
-            fontWeight: 6,
-            fontSize: "24px",
-            lineHeight: "21.6px",
-            letterSpacing: "0%",
-            verticalAlign: "middle",
-          }}
-        >
-          {assessmentData.organisation}
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2
+            className="text-secondary mb-1"
+            style={{
+              fontFamily: "Public Sans",
+              fontWeight: 6,
+              fontSize: "24px",
+              lineHeight: "21.6px",
+              letterSpacing: "0%",
+              verticalAlign: "middle",
+            }}
+          >
+            {assessmentData.organisation}
+          </h2>
+          {assessmentDetails?.certificateId || assessmentId ? (
+            <button
+              type="button"
+              className="text-sm font-medium text-[#2563EB] underline underline-offset-4 hover:text-[#1D4ED8] transition-colors shrink-0"
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (assessmentDetails?.certificateId) {
+                  params.set("certificateId", assessmentDetails.certificateId);
+                }
+                if (assessmentId) {
+                  params.set("assessmentId", assessmentId);
+                }
+                if (assessmentData.certification) {
+                  params.set("certificateCode", assessmentData.certification);
+                }
+                const query = params.toString();
+                router.push(
+                  query
+                    ? `/admin/certificate-details?${query}`
+                    : "/admin/certificate-details",
+                );
+              }}
+            >
+              Details
+            </button>
+          ) : null}
+        </div>
         <p
           style={{
             fontFamily: "Public Sans",
