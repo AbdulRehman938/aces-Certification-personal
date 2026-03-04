@@ -79,6 +79,12 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         resources: [],
       },
       {
+        label: "Messages",
+        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        href: "/admin/messages",
+        resources: [],
+      },
+      {
         label: "Setting",
         icon: "/assets/imgs/admin/dashboard/setting.svg",
         href: "/admin/settings",
@@ -119,6 +125,11 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         href: "/auditor/notifications",
       },
       {
+        label: "Messages",
+        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        href: "/auditor/messages",
+      },
+      {
         label: "Setting",
         icon: "/assets/imgs/auditor/sidebar/setting.svg",
         href: "/auditor/settings",
@@ -150,6 +161,11 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         label: "Notifications",
         icon: "/assets/imgs/admin/dashboard/bell.svg",
         href: "/reviewer/notifications",
+      },
+      {
+        label: "Messages",
+        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        href: "/reviewer/messages",
       },
       {
         label: "Setting",
