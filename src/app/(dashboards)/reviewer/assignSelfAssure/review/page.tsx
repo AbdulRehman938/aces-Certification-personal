@@ -1,13 +1,131 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Button from "@/app/(dashboards)/admin/common/button";
 import { DUMMY_MAIN_SECTIONS } from "@/lib/dummyMainSections";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
 
-export default function AssignSelfAssureReview() {
+const getFileNameFromUrl = (value: string): string => {
+    const fallback = "Attached document";
+    if (!value || value.startsWith("data:")) return fallback;
+
+    try {
+        const parsedUrl = new URL(value);
+        const fromPath = parsedUrl.pathname.split("/").filter(Boolean).pop();
+        return fromPath ? decodeURIComponent(fromPath) : fallback;
+    } catch {
+        const fromPath = value
+            .split("?")[0]
+            .split("#")[0]
+            .split("/")
+            .filter(Boolean)
+            .pop();
+        return fromPath ? decodeURIComponent(fromPath) : fallback;
+    }
+};
+
+const normalizeAttachments = (value: any): Array<{ name: string; url: string }> => {
+    if (!value) return [];
+    const list = Array.isArray(value) ? value : [value];
+
+    return list
+        .map((item: any, index: number) => {
+            if (!item) return null;
+            if (typeof item === "string") {
+                const fileUrl = item.trim();
+                if (!fileUrl) return null;
+                return { name: getFileNameFromUrl(fileUrl), url: fileUrl };
+            }
+
+            if (typeof item === "object") {
+                const fileUrl =
+                    item.url || item.fileUrl || item.path || item.link || item.downloadUrl;
+                if (typeof fileUrl !== "string" || !fileUrl.trim()) return null;
+
+                const fileName =
+                    item.name ||
+                    item.fileName ||
+                    item.originalName ||
+                    item.title ||
+                    `Document ${index + 1}`;
+
+                return { name: String(fileName), url: fileUrl.trim() };
+            }
+
+            return null;
+        })
+        .filter(Boolean) as Array<{ name: string; url: string }>;
+};
+
+const extractQuestionAttachments = (question: any): Array<{ name: string; url: string }> => {
+    const knownAttachmentSources = [
+        question?.attachments,
+        question?.files,
+        question?.documents,
+        question?.file,
+        question?.uploadedFiles,
+        question?.answerFiles,
+    ];
+
+    for (const source of knownAttachmentSources) {
+        const mapped = normalizeAttachments(source);
+        if (mapped.length > 0) return mapped;
+    }
+
+    const answer = question?.applicantAnswer;
+
+    if (typeof answer === "string") {
+        const trimmed = answer.trim();
+        if (!trimmed) return [];
+
+        try {
+            const parsed = JSON.parse(trimmed);
+            const parsedMapped = normalizeAttachments(parsed);
+            if (parsedMapped.length > 0) return parsedMapped;
+        } catch {
+            // applicantAnswer is not JSON, continue with URL check
+        }
+
+        if (/^https?:\/\//i.test(trimmed)) {
+            return normalizeAttachments(trimmed);
+        }
+    }
+
+    if (Array.isArray(answer) || (answer && typeof answer === "object")) {
+        return normalizeAttachments(answer);
+    }
+
+    return [];
+};
+
+const formatStatusLabel = (value?: string | null): string => {
+    const raw = String(value || "").trim();
+    if (!raw) return "N/A";
+    return raw
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const formatDateLabel = (value?: string | null): string => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+    });
+};
+
+function AssignSelfAssureReviewContent() {
     const router = useRouter();
-    const [activeButton, setActiveButton] = useState<'assessment' | 'submit'>('assessment');
+    const searchParams = useSearchParams();
+    const assessmentId = searchParams.get("id");
+    const [isLoading, setIsLoading] = useState(Boolean(assessmentId));
     const [mainSectionsData, setMainSectionsData] = useState(DUMMY_MAIN_SECTIONS);
     const [expandedMain, setExpandedMain] = useState<{ [key: string]: boolean }>(() =>
         Object.fromEntries(DUMMY_MAIN_SECTIONS.map((ms: any) => [ms.id, ms.isExpanded || false]))
@@ -17,7 +135,10 @@ export default function AssignSelfAssureReview() {
     );
     const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
-    const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+    const [organizationName, setOrganizationName] = useState("Acme Corporation");
+    const [certificateName, setCertificateName] = useState("ISO 27001:2022");
+    const [assessmentStatus, setAssessmentStatus] = useState("Assigned");
+    const [auditDateLabel, setAuditDateLabel] = useState("N/A");
     const [reviewerNotesByQuestion, setReviewerNotesByQuestion] = useState<
         Record<string, string>
     >({});
@@ -38,7 +159,171 @@ export default function AssignSelfAssureReview() {
         });
     };
 
-    const handleReviewerNotesSave = (questionId: string) => {
+    useEffect(() => {
+        if (!assessmentId) {
+            setIsLoading(false);
+            console.warn("Assessment id is missing in query params");
+            return;
+        }
+
+        let isCancelled = false;
+
+        const fetchAssessmentById = async () => {
+            setIsLoading(true);
+            try {
+                const response = await axiosInstance.get(`/audits/assessment/${assessmentId}`);
+                if (isCancelled) return;
+                console.log("reviewer assessment by id response:", response.data);
+
+                const payload = response.data?.data;
+                if (!payload || typeof payload !== "object") return;
+
+                setOrganizationName(payload.organizationName || "N/A");
+                setCertificateName(payload.certificateName || "N/A");
+                setAssessmentStatus(formatStatusLabel(payload.status));
+
+                const auditDateFromApi =
+                    payload.auditRecord?.auditDate ||
+                    payload.auditRecord?.date ||
+                    payload.auditRecord?.scheduledAt ||
+                    payload.auditDate ||
+                    null;
+                setAuditDateLabel(formatDateLabel(auditDateFromApi));
+
+                const mainSections = Array.isArray(payload.sections) ? payload.sections : [];
+
+                const mappedMainSections = mainSections
+                    .map((mainSection: any, mainIndex: number) => {
+                        const sectionItems = Array.isArray(mainSection.sections)
+                            ? mainSection.sections
+                            : [];
+
+                        const mappedSections = sectionItems.flatMap(
+                            (section: any, sectionIndex: number) => {
+                                const subSections = Array.isArray(section.subSections)
+                                    ? section.subSections
+                                    : [];
+
+                                const sourceSubSections =
+                                    subSections.length > 0
+                                        ? subSections
+                                        : [
+                                            {
+                                                subSectionId: section.sectionId,
+                                                subSectionName: section.sectionName,
+                                                questions: section.questions || [],
+                                            },
+                                        ];
+
+                                return sourceSubSections.map((subSection: any, subIndex: number) => {
+                                    const questions = Array.isArray(subSection.questions)
+                                        ? subSection.questions
+                                        : [];
+
+                                    return {
+                                        id:
+                                            subSection.subSectionId ||
+                                            section.sectionId ||
+                                            `section-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}`,
+                                        name:
+                                            subSection.subSectionName ||
+                                            section.sectionName ||
+                                            `Section ${sectionIndex + 1}`,
+                                        questions: questions.map((question: any, questionIndex: number) => ({
+                                            id:
+                                                question.questionId ||
+                                                `question-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}-${questionIndex + 1}`,
+                                            text: question.questionText || `Question ${questionIndex + 1}`,
+                                            applicantAnswer:
+                                                typeof question.applicantAnswer === "string"
+                                                    ? question.applicantAnswer
+                                                    : question.applicantAnswer == null
+                                                        ? "N/A"
+                                                        : JSON.stringify(question.applicantAnswer),
+                                            aiSummary:
+                                                question.aiReview?.summary || "No AI analysis available",
+                                            auditorNotes: question.auditorNotes || "",
+                                            attachments: extractQuestionAttachments(question),
+                                        })),
+                                    };
+                                });
+                            },
+                        );
+
+                        return {
+                            id: mainSection.mainSectionId || `main-${mainIndex + 1}`,
+                            name: mainSection.mainSectionName || `Main Section ${mainIndex + 1}`,
+                            isExpanded: mainIndex === 0,
+                            sections: mappedSections,
+                        };
+                    })
+                    .filter((section: any) => section.sections.length > 0);
+
+                if (!mappedMainSections.length) return;
+
+                setMainSectionsData(mappedMainSections);
+                setExpandedMain(
+                    Object.fromEntries(
+                        mappedMainSections.map((mainSection: any, index: number) => [
+                            mainSection.id,
+                            index === 0,
+                        ]),
+                    ),
+                );
+                setActiveSubsection(mappedMainSections[0]?.sections?.[0]?.name || null);
+                setSelectedQuestionIndex(0);
+
+                const nextReviewerNotesByQuestion: Record<string, string> = {};
+                const nextHasSavedReviewerNotes: Record<string, boolean> = {};
+
+                mappedMainSections.forEach((mainSection: any) => {
+                    (mainSection.sections || []).forEach((section: any) => {
+                        (section.questions || []).forEach((question: any) => {
+                            const questionId = String(question.id || "");
+                            if (!questionId) return;
+
+                            const noteValue =
+                                typeof question.auditorNotes === "string"
+                                    ? question.auditorNotes
+                                    : "";
+                            nextReviewerNotesByQuestion[questionId] = noteValue;
+                            nextHasSavedReviewerNotes[questionId] = Boolean(noteValue.trim());
+                        });
+                    });
+                });
+
+                setReviewerNotesByQuestion(nextReviewerNotesByQuestion);
+                setHasSavedReviewerNotes(nextHasSavedReviewerNotes);
+                setNoteSaveFeedbackByQuestion({});
+            } catch (error) {
+                if (isCancelled) return;
+                console.error("Failed to fetch audits assessment by id:", error);
+                if (axios.isAxiosError(error)) {
+                    console.error("API message:", error.response?.data?.message);
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        void fetchAssessmentById();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [assessmentId]);
+
+    const handleReviewerNotesSave = async (questionId: string) => {
+        if (!assessmentId) {
+            setNoteSaveFeedbackByQuestion((prev) => ({
+                ...prev,
+                [questionId]: { type: "error", message: "Assessment id is missing." },
+            }));
+            return;
+        }
+
         const noteValue = (reviewerNotesByQuestion[questionId] || '').trim();
         if (!noteValue) {
             setNoteSaveFeedbackByQuestion((prev) => ({
@@ -53,14 +338,51 @@ export default function AssignSelfAssureReview() {
             [questionId]: { type: 'success', message: '', isSaving: true },
         }));
 
-        setTimeout(() => {
+        try {
+            await axiosInstance.patch(
+                `/audits/assessment/${encodeURIComponent(assessmentId)}/questions/${encodeURIComponent(questionId)}/auditor-notes`,
+                {
+                    auditorNotes: noteValue,
+                },
+            );
+
             setHasSavedReviewerNotes((prev) => ({ ...prev, [questionId]: true }));
+            setMainSectionsData((prev) =>
+                prev.map((mainSection: any) => ({
+                    ...mainSection,
+                    sections: (mainSection.sections || []).map((section: any) => ({
+                        ...section,
+                        questions: (section.questions || []).map((question: any) =>
+                            String(question.id) === questionId
+                                ? { ...question, auditorNotes: noteValue }
+                                : question,
+                        ),
+                    })),
+                })),
+            );
             setNoteSaveFeedbackByQuestion((prev) => ({
                 ...prev,
                 [questionId]: { type: 'success', message: 'Notes saved successfully.' },
             }));
-        }, 250);
+        } catch (error) {
+            let message = "Failed to save notes";
+            if (axios.isAxiosError(error)) {
+                message = error.response?.data?.message || message;
+            }
+            setNoteSaveFeedbackByQuestion((prev) => ({
+                ...prev,
+                [questionId]: { type: "error", message },
+            }));
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
+                <div className="text-secondary">Loading...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-3 md:p-6 bg-light-gray min-h-screen">
@@ -94,7 +416,7 @@ export default function AssignSelfAssureReview() {
                     
                     <div className="flex-1 min-w-0">
                         <h2 className="text-[15px] md:text-[17px] font-medium text-secondary mb-2">
-                            Acme Corporation
+                            {organizationName}
                         </h2>
                         <div className="flex flex-row items-center gap-4">
                             
@@ -103,7 +425,7 @@ export default function AssignSelfAssureReview() {
                                     <path d="M10.0002 6.66699V1.66699H5.00016C4.55814 1.66699 4.13421 1.84259 3.82165 2.15515C3.50909 2.46771 3.3335 2.89163 3.3335 3.33366V16.667C3.3335 17.109 3.50909 17.5329 3.82165 17.8455C4.13421 18.1581 4.55814 18.3337 5.00016 18.3337H15.0002C15.4422 18.3337 15.8661 18.1581 16.1787 17.8455C16.4912 17.5329 16.6668 17.109 16.6668 16.667V8.33366H11.6668C11.2248 8.33366 10.8009 8.15806 10.4883 7.8455C10.1758 7.53294 10.0002 7.10902 10.0002 6.66699ZM6.87516 9.58366H13.1252C13.2909 9.58366 13.4499 9.64951 13.5671 9.76672C13.6843 9.88393 13.7502 10.0429 13.7502 10.2087C13.7502 10.3744 13.6843 10.5334 13.5671 10.6506C13.4499 10.7678 13.2909 10.8337 13.1252 10.8337H6.87516C6.7094 10.8337 6.55043 10.7678 6.43322 10.6506C6.31601 10.5334 6.25016 10.3744 6.25016 10.2087C6.25016 10.0429 6.31601 9.88393 6.43322 9.76672C6.55043 9.64951 6.7094 9.58366 6.87516 9.58366ZM6.87516 11.8753H13.1252C13.2909 11.8753 13.4499 11.9412 13.5671 12.0584C13.6843 12.1756 13.7502 12.3346 13.7502 12.5003C13.7502 12.6661 13.6843 12.8251 13.5671 12.9423C13.4499 13.0595 13.2909 13.1253 13.1252 13.1253H6.87516C6.7094 13.1253 6.55043 13.0595 6.43322 12.9423C6.31601 12.8251 6.25016 12.6661 6.25016 12.5003C6.25016 12.3346 6.31601 12.1756 6.43322 12.0584C6.55043 11.9412 6.7094 11.8753 6.87516 11.8753ZM6.87516 14.167H13.1252C13.2909 14.167 13.4499 14.2328 13.5671 14.35C13.6843 14.4673 13.7502 14.6262 13.7502 14.792C13.7502 14.9578 13.6843 15.1167 13.5671 15.2339C13.4499 15.3511 13.2909 15.417 13.1252 15.417H6.87516C6.7094 15.417 6.55043 15.3511 6.43322 15.2339C6.31601 15.1167 6.25016 14.9578 6.25016 14.792C6.25016 14.6262 6.31601 14.4673 6.43322 14.35C6.55043 14.2328 6.7094 14.167 6.87516 14.167ZM11.2502 6.66699V2.08366L16.2502 7.08366H11.6668C11.5563 7.08366 11.4503 7.03976 11.3722 6.96162C11.2941 6.88348 11.2502 6.7775 11.2502 6.66699Z" fill="#999999" />
                                 </svg>
                                 <span className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px]">
-                                    ISO 27001:2022
+                                    {certificateName}
                                 </span>
                             </div>
 
@@ -114,7 +436,7 @@ export default function AssignSelfAssureReview() {
                                     <path d="M5.8335 2.5V5M14.1668 2.5V5" stroke="#999999" strokeWidth="2" strokeLinecap="round" />
                                 </svg>
                                 <span className="text-[13px] md:text-[15px] font-normal text-gray leading-[21.6px]">
-                                    Jan 15, 2024
+                                    {auditDateLabel}
                                 </span>
                             </div>
                         </div>
@@ -129,7 +451,7 @@ export default function AssignSelfAssureReview() {
                         }}
                     >
                         <span className="inline-flex items-center justify-center px-4 py-1 rounded-md text-sm font-medium bg-green-50 text-green-600 border border-green-600">
-                            Assigned
+                            {assessmentStatus}
                         </span>
                     </button>
                 </div>
@@ -206,7 +528,6 @@ export default function AssignSelfAssureReview() {
                                 .flatMap((ms: any) => ms.sections || [])
                                 .find((s: any) => s.name === activeSubsection);
                             const questionsCount = selectedSection?.questions?.length || 0;
-                            const question = selectedSection?.questions?.[selectedQuestionIndex] || null;
 
                             return (
                                 <div>
@@ -218,8 +539,13 @@ export default function AssignSelfAssureReview() {
                                     {selectedSection?.questions?.length ? (
                                         selectedSection.questions.map((q: any, idx: number) => {
                                             const questionId = String(q.id);
-                                            const noteValue = reviewerNotesByQuestion[questionId] || "";
-                                            const hasSavedNotes = hasSavedReviewerNotes[questionId] || false;
+                                            const noteValue =
+                                                reviewerNotesByQuestion[questionId] ??
+                                                q.auditorNotes ??
+                                                "";
+                                            const hasSavedNotes =
+                                                hasSavedReviewerNotes[questionId] ||
+                                                Boolean(String(q.auditorNotes || "").trim());
                                             const noteSaveFeedback = noteSaveFeedbackByQuestion[questionId];
 
                                             return (
@@ -244,58 +570,39 @@ export default function AssignSelfAssureReview() {
                                                     <div>
                                                         <h5 className="text-sm font-medium text-gray leading-[21.6px] mb-2">Applicant Response</h5>
                                                         <div className="min-h-[80px] p-4 rounded-md text-sm text-gray-700" style={{ border: "1px solid #E6E6E6" }}>
-                                                            Yes, we have a comprehensive information security policy that was last reviewed in Q3 2024. The policy covers data classification, access control, incident response, and employee responsibilities.
+                                                            {q.applicantAnswer || "N/A"}
                                                         </div>
                                                     </div>
 
                                                     
                                                     <div>
                                                         <h5 className="text-sm font-medium text-gray mb-2">Attached Documents</h5>
-                                                        <div className="flex gap-3 flex-wrap">
-                                                            <button className="flex items-center gap-1 px-3 py-2 rounded-md text-sm" style={{ background: "#F6F6F6" }}>
-                                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                    <g clipPath="url(#clip0_566_2624)">
-                                                                        <path fillRule="evenodd" clipRule="evenodd" d="M8.55746 2.08333C8.55746 2.02808 8.53551 1.93602 8.49644 1.93602C8.45737 1.89695 8.40438 1.875 8.34912 1.875H2.51579C1.908 1.875 1.32511 2.11644 0.895335 2.54621C0.465564 2.97598 0.224121 3.55888 0.224121 4.16667V15.8333C0.224121 16.4411 0.465564 17.024 0.895335 17.4538C1.32511 17.8836 1.908 18.125 2.51579 18.125H10.8491C11.4569 18.125 12.0398 17.8836 12.4696 17.4538C12.8993 17.024 13.1408 16.4411 13.1408 15.8333V7.6225C13.1408 7.56725 13.1188 7.51426 13.0798 7.47519C13.0407 7.43612 12.9877 7.41417 12.9325 7.41417H9.18246C9.01669 7.41417 8.85772 7.34832 8.74051 7.23111C8.6233 7.1139 8.55746 6.78917V2.08333ZM9.18246 10.2083C9.34822 10.2083 9.50719 10.2742 9.6244 10.3914C9.74161 10.5086 9.80746 10.6676 9.80746 10.8333C9.80746 10.9991 9.74161 11.1581 9.6244 11.2753C9.50719 11.3925 9.34822 11.4583 9.18246 11.4583H4.18245C4.01669 11.4583 3.85772 11.3925 3.74051 11.2753C3.6233 11.1581 3.55745 10.9991 3.55745 10.8333C3.55745 10.6676 3.6233 10.5086 3.74051 10.3914C3.85772 10.2742 4.01669 10.2083 4.18245 10.2083H9.18246ZM9.18246 13.5417C9.34822 13.5417 9.50719 13.6075 9.6244 13.7247C9.74161 13.8419 9.80746 14.0009 9.80746 14.1667C9.80746 14.3324 9.74161 14.4914 9.6244 14.6086C9.50719 14.7258 9.34822 14.7917 9.18246 14.7917H4.18245C4.01669 14.7917 3.85772 14.7258 3.74051 14.6086C3.6233 14.4914 3.55745 14.3324 3.55745 14.1667C3.55745 14.0009 3.6233 13.8419 3.74051 13.7247C3.85772 13.6075 4.01669 13.5417 4.18245 13.5417H9.18246ZM9.18246 14.167H13.1252C13.2909 14.167 13.4499 14.2328 13.5671 14.35C13.6843 14.4673 13.7502 14.6262 13.7502 14.792C13.7502 14.9578 13.6843 15.1167 13.5671 15.2339C13.4499 15.3511 13.2909 15.417 13.1252 15.417H9.18246C9.01669 15.417 8.85772 15.3511 8.74051 15.2339C8.6233 15.1167 8.55746 14.9578 8.55746 14.792C8.55746 14.6262 8.6233 14.4673 8.74051 14.35C8.55043 14.2328 9.01669 14.167 9.18246 14.167ZM11.2502 6.66699V2.08366L16.2502 7.08366H11.6668C11.5563 7.08366 11.4503 7.03976 11.3722 6.96162C11.2941 6.88348 11.2502 6.7775 11.2502 6.66699Z" fill="#262626" />
-                                                                        <path d="M9.80737 2.35322C9.80737 2.19988 9.96821 2.10238 10.0874 2.19822C10.1885 2.27988 10.2782 2.37488 10.3565 2.48322L12.8674 5.98072C12.924 6.06072 12.8624 6.16405 12.764 6.16405H10.0157C9.96045 6.16405 9.90746 6.1421 9.86839 6.10303C9.82932 6.06396 9.80737 6.01097 9.80737 5.95572V2.35322Z" fill="black" />
-                                                                    </g>
-                                                                    <defs>
-                                                                        <clipPath id="clip0_566_2624">
-                                                                            <rect width="20" height="20" fill="white" />
-                                                                        </clipPath>
-                                                                    </defs>
-                                                                </svg>
-                                                                <span className="mr-3">ems_overview.pdf</span>
-                                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="cursor-pointer" onClick={() => setShowDocumentPreview(true)}>
-                                                                    <g clip-path="url(#clip0_702_4088)">
-                                                                        <path d="M10 12.5C11.3807 12.5 12.5 11.3807 12.5 10C12.5 8.61929 11.3807 7.5 10 7.5C8.61929 7.5 7.5 8.61929 7.5 10C7.5 11.3807 8.61929 12.5 10 12.5Z" fill="#262626" />
-                                                                        <path d="M19.3372 9.7875C18.6021 7.88603 17.326 6.24164 15.6665 5.05755C14.007 3.87347 12.0369 3.20161 9.99973 3.125C7.96256 3.20161 5.99248 3.87347 4.33299 5.05755C2.67349 6.24164 1.39733 7.88603 0.662234 9.7875C0.612589 9.92482 0.612589 10.0752 0.662234 10.2125C1.39733 12.114 2.67349 13.7584 4.33299 14.9424C5.99248 16.1265 7.96256 16.7984 9.99973 16.875C12.0369 16.7984 14.007 16.1265 15.6665 14.9424C17.326 13.7584 18.6021 12.114 19.3372 10.2125C19.3869 10.0752 19.3869 9.92482 19.3372 9.7875ZM9.99973 14.0625C9.19625 14.0625 8.41081 13.8242 7.74273 13.3778C7.07466 12.9315 6.55396 12.297 6.24647 11.5547C5.93899 10.8123 5.85854 9.99549 6.01529 9.20745C6.17205 8.4194 6.55896 7.69553 7.12711 7.12738C7.69526 6.55923 8.41913 6.17231 9.20718 6.01556C9.99523 5.85881 10.8121 5.93926 11.5544 6.24674C12.2967 6.55422 12.9312 7.07492 13.3776 7.743C13.824 8.41107 14.0622 9.19651 14.0622 10C14.0606 11.0769 13.632 12.1093 12.8705 12.8708C12.109 13.6323 11.0767 14.0608 9.99973 14.0625Z" fill="#262626" />
-                                                                    </g>
-                                                                    <defs>
-                                                                        <clipPath id="clip0_702_4088">
-                                                                            <rect width="20" height="20" fill="white" />
-                                                                        </clipPath>
-                                                                    </defs>
-                                                                </svg>
-
-                                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
-                                                                    <g clipPath="url(#clip0_566_2628)">
-                                                                        <path d="M6.68205 12.9788C6.57094 12.9788 6.46677 12.9616 6.36955 12.9272C6.27233 12.8927 6.18205 12.8336 6.09871 12.7497L3.09871 9.74968C2.93205 9.58301 2.85205 9.38857 2.85871 9.16634C2.86538 8.94412 2.94538 8.74968 3.09871 8.58301C3.26538 8.41634 3.46344 8.32968 3.69288 8.32301C3.92233 8.31634 4.1201 8.39607 4.28621 8.56218L5.84871 10.1247V4.16634C5.84871 3.93023 5.92871 3.73246 6.08871 3.57301C6.24871 3.41357 6.44649 3.33357 6.68205 3.33301C6.9176 3.33246 7.11566 3.41246 7.27621 3.57301C7.43677 3.73357 7.51649 3.93134 7.51538 4.16634V10.1247L9.07788 8.56218C9.24455 8.39551 9.4426 8.31551 9.67205 8.32218C9.90149 8.32884 10.0993 8.41579 10.2654 8.58301C10.4182 8.74968 10.4982 8.94412 10.5054 9.16634C10.5126 9.38857 10.4326 9.58301 10.2654 9.74968L7.26538 12.7497C7.18205 12.833 7.09177 12.8922 6.99455 12.9272C6.89733 12.9622 6.79316 12.9794 6.68205 12.9788ZM1.68205 16.6663C1.22371 16.6663 0.831492 16.5033 0.505381 16.1772C0.17927 15.8511 0.0159364 15.4586 0.0153809 14.9997V13.333C0.0153809 13.0969 0.0953809 12.8991 0.255381 12.7397C0.415381 12.5802 0.613159 12.5002 0.848714 12.4997C1.08427 12.4991 1.28233 12.5791 1.44288 12.7397C1.60344 12.9002 1.68316 13.098 1.68205 13.333V14.9997H11.682V13.333C11.682 13.0969 11.762 12.8991 11.922 12.7397C12.082 12.5802 12.2798 12.5002 12.5154 12.4997C12.7509 12.4991 12.949 12.5791 13.1095 12.7397C13.2701 12.9002 13.3498 13.098 13.3487 13.333V14.9997H11.682H1.68205ZM1.68205 16.6663C1.22371 16.6663 0.831492 16.5033 0.505381 16.1772C0.17927 15.8511 0.0159364 15.4586 0.0153809 14.9997V13.333C0.0153809 13.0969 0.0953809 12.8991 0.255381 12.7397C0.415381 12.5802 0.613159 12.5002 0.848714 12.4997C1.08427 12.4991 1.28233 12.5791 1.44288 12.7397C1.60344 12.9002 1.68316 13.098 1.68205 13.333V14.9997H11.682V13.333C11.682 13.0969 11.762 12.8991 11.922 12.7397C12.082 12.5802 12.2798 12.5002 12.5154 12.4997C12.7509 12.4991 12.949 12.5791 13.1095 12.7397C13.2701 12.9002 13.3498 13.098 13.3487 13.333V14.9997C13.3487 15.458 13.1857 15.8505 12.8595 16.1772C12.5334 16.5038 12.1409 16.6669 11.682 16.6663H1.68205Z" fill="#262626" />
-                                                                    </g>
-                                                                    <defs>
-                                                                        <clipPath id="clip0_566_2628">
-                                                                            <rect width="20" height="20" fill="white" />
-                                                                        </clipPath>
-                                                                    </defs>
-                                                                </svg>
-                                                            </button>
-                                                        </div>
+                                                        {Array.isArray(q.attachments) && q.attachments.length > 0 ? (
+                                                            <div className="flex gap-2 flex-wrap">
+                                                                {q.attachments.map((attachment: any, fileIndex: number) => (
+                                                                    <a
+                                                                        key={`${questionId}-attachment-${fileIndex}`}
+                                                                        href={attachment.url}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className="inline-flex items-center px-3 py-2 rounded-md text-sm bg-[#F6F6F6] max-w-full"
+                                                                    >
+                                                                        <span className="truncate max-w-[260px]">
+                                                                            {attachment.name || getFileNameFromUrl(attachment.url)}
+                                                                        </span>
+                                                                    </a>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-sm text-gray-500">No documents attached.</p>
+                                                        )}
                                                     </div>
 
                                                     
                                                     <div>
                                                         <h5 className="text-sm font-medium text-gray mb-2">AI Analysis</h5>
                                                         <div className="p-4 rounded-md text-sm text-gray-700 border" style={{ borderColor: "#E6E6E6" }}>
-                                                            Policy document appears comprehensive. Version control evident. Recommend verifying approval signatures.
+                                                            {q.aiSummary || "No AI analysis available"}
                                                         </div>
                                                     </div>
 
@@ -306,7 +613,7 @@ export default function AssignSelfAssureReview() {
                                                     <div>
                                                         <h5 className="text-sm font-medium text-gray mb-2">Auditor Notes</h5>
                                                         <div className="p-4 rounded-md text-sm text-gray-700 border" style={{ borderColor: "#E6E6E6" }}>
-                                                            Policy structure follows ISO requirements. Check section 4.3 for scope definition.
+                                                            {q.auditorNotes || "No auditor notes available"}
                                                         </div>
                                                     </div>
 
@@ -394,52 +701,20 @@ export default function AssignSelfAssureReview() {
                 )}
             </div>
 
-            {showDocumentPreview && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-                    <div
-                        className="absolute inset-0 bg-black/40"
-                        onClick={() => setShowDocumentPreview(false)}
-                    />
-                    <div className="bg-white rounded-lg w-full max-w-2xl h-[90vh] shadow-lg z-10 flex flex-col">
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold">Environmental_Policy_2024.pdf</h3>
-                            <button
-                                onClick={() => setShowDocumentPreview(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                            </button>
-                        </div>
-                        
-                        <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
-                            <div className="text-center">
-                                <h4 className="text-xl font-semibold text-gray-400 mb-2">Document Preview</h4>
-                                <p className="text-gray-400 mb-2">Environmental_Policy_2024.pdf</p>
-                                <p className="text-sm text-gray-500">
-                                    This is a placeholder for the actual document preview.<br/>
-                                    In production, a PDF viewer or image display would be shown here.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end items-center gap-2 p-6 border-t border-gray-200">
-                            <button className="p-1 hover:bg-gray-100 rounded border border-gray-300">
-                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12.5 5L7.5 10L12.5 15" stroke="#262626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                            </button>
-                            <span className="text-xs text-gray-500 px-2">Page 1 of 5</span>
-                            <button className="p-1 hover:bg-gray-100 rounded border border-gray-300">
-                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M7.5 5L12.5 10L7.5 15" stroke="#262626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
+    );
+}
+
+export default function AssignSelfAssureReview() {
+    return (
+        <Suspense
+            fallback={
+                <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
+                    <div className="text-secondary">Loading...</div>
+                </div>
+            }
+        >
+            <AssignSelfAssureReviewContent />
+        </Suspense>
     );
 }
