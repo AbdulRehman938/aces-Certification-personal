@@ -17,12 +17,14 @@ import {
   Sparkles,
   HelpCircle,
   Check,
+  PartyPopper,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { axiosInstance } from "@/lib/axios";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { RxCross2 } from "react-icons/rx";
 
 interface Question {
   id: string;
@@ -38,6 +40,7 @@ interface Question {
   response_type: string | null;
   response_value: any;
   ai_description?: string;
+  hint?: string;
 }
 
 interface AssessmentData {
@@ -131,9 +134,16 @@ export function AssessmentPage() {
   const [assessmentScoreResult, setAssessmentScoreResult] = useState<any>(null);
   const [showAiReviewModal, setShowAiReviewModal] = useState(false);
   const [isAiReviewLoading, setIsAiReviewLoading] = useState(false);
+  const [flaggedQuestions, setFlaggedQuestions] = useState<any[]>([]);
+  const [showFlagsModal, setShowFlagsModal] = useState(false);
 
   const [isFileUploading, setIsFileUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [urlToOriginalName, setUrlToOriginalName] = useState<
+    Record<string, string>
+  >({});
 
   const [messageModal, setMessageModal] = useState<{
     show: boolean;
@@ -200,7 +210,7 @@ export function AssessmentPage() {
         }
       } catch (detailErr) {
         console.warn(
-          "⚠️ [Assessment] Could not load extra details, continuing with questions...",
+          "[Assessment] Could not load extra details, continuing with questions...",
           detailErr,
         );
         setLoadingProgress(45);
@@ -248,10 +258,34 @@ export function AssessmentPage() {
         setActiveQuestionIndex(0);
       }
 
+      const storedNames = localStorage.getItem(`file_names_${assessmentId}`);
+      if (storedNames) {
+        try {
+          setUrlToOriginalName(JSON.parse(storedNames));
+        } catch (e) {
+          console.error("Failed to parse stored file names", e);
+        }
+      }
+
       setLoadingProgress(100);
+
+      try {
+        const flagsRes = await axiosInstance.get(
+          `/assessments/${assessmentId}/flagged-questions`,
+        );
+        if (flagsRes.data?.success) {
+          setFlaggedQuestions(flagsRes.data.data || []);
+          if ((flagsRes.data.data || []).length > 0) {
+            setShowFlagsModal(true);
+          }
+        }
+      } catch (flagErr) {
+        console.warn("Could not fetch flagged questions", flagErr);
+      }
+
       setTimeout(() => setIsLoading(false), 800);
     } catch (err: any) {
-      console.error("❌ Assessment Init Error:", err);
+      console.error("Assessment Init Error:", err);
       setError(
         err?.response?.data?.message ||
           err.message ||
@@ -370,7 +404,6 @@ export function AssessmentPage() {
     if (!activeQuestion) return false;
 
     const val = activeQuestion.response_value;
-    const desc = activeQuestion.ai_description;
 
     const hasMainAnswer =
       activeQuestion.question_type === "boolean"
@@ -379,10 +412,9 @@ export function AssessmentPage() {
           ? !!val && val.trim() !== ""
           : !!val;
 
-    const hasDescription =
-      activeQuestion.question_type === "text" || (!!desc && desc.trim() !== "");
+    const hasDescription = activeQuestion.question_type === "text" || true;
 
-    return !!hasMainAnswer && !!hasDescription;
+    return !!hasMainAnswer;
   }, [activeQuestion]);
 
   const handleResponseChange = (value: any) => {
@@ -484,16 +516,16 @@ export function AssessmentPage() {
         !activeQuestion.answer_id.startsWith("local_")
       ) {
         const patchUrl = `/assessments/${assessment.id}/answers/${activeQuestion.answer_id}`;
-        console.log("🔄 Updating answer:", patchUrl);
+        console.log("Updating answer:", patchUrl);
         const res = await axiosInstance.patch(patchUrl, {
           response_type: apiResponseType,
           response_value: valToSave,
         });
         if (res.data?.success) {
-          console.log("✅ Answer updated successfully");
+          console.log("Answer updated successfully");
         }
       } else {
-        console.log("🆕 Creating new answer for question:", activeQuestion.id);
+        console.log("Creating new answer for question:", activeQuestion.id);
         const res = await axiosInstance.post(
           `/assessments/${assessment.id}/answers`,
           {
@@ -509,7 +541,7 @@ export function AssessmentPage() {
 
         if (res.data?.success && res.data.data?.length > 0) {
           updatedAnswerId = res.data.data[0].id;
-          console.log("✅ Answer created successfully, ID:", updatedAnswerId);
+          console.log("Answer created successfully, ID:", updatedAnswerId);
         }
       }
 
@@ -527,7 +559,7 @@ export function AssessmentPage() {
         moveToNext(newQuestions, draftedQuestionIds, skippedQuestionIds);
       }, 500);
     } catch (e: any) {
-      console.error("❌ Failed to save answer:", e);
+      console.error("Failed to save answer:", e);
       setSaveStatus("error");
       showMessage(
         "Save Error",
@@ -593,7 +625,7 @@ export function AssessmentPage() {
         router.push(`${base}`);
       }, 1000);
     } catch (e: any) {
-      console.error("❌ Save & Exit Error:", e);
+      console.error("Save & Exit Error:", e);
       setSaveStatus("error");
       showMessage(
         "Save Error",
@@ -624,10 +656,12 @@ export function AssessmentPage() {
     setActiveQuestionIndex((prev) => Math.max(0, prev - 1));
   };
 
-  const handleFileUpload = async (file: File | null) => {
-    if (!file) return;
+  const handleFileUpload = async (files: FileList | File | null) => {
+    if (!files) return;
 
-    // Validation
+    const fileList = files instanceof FileList ? Array.from(files) : [files];
+    if (fileList.length === 0) return;
+
     const allowedTypes = [
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -637,53 +671,73 @@ export function AssessmentPage() {
     ];
     const maxSize = 10 * 1024 * 1024;
 
-    if (!allowedTypes.includes(file.type)) {
+    const invalidFile = fileList.find(
+      (file) => !allowedTypes.includes(file.type),
+    );
+    if (invalidFile) {
       showMessage(
         "Invalid File Type",
-        "Only PDF, DOCX, and Excel files (max 10MB) are allowed.",
+        `File "${invalidFile.name}" has an invalid type. Only PDF, DOCX, and Excel files (max 10MB) are allowed.`,
       );
       return;
     }
 
-    if (file.size > maxSize) {
-      showMessage("File Too Large", "Maximum size is 10MB.");
+    const largeFile = fileList.find((file) => file.size > maxSize);
+    if (largeFile) {
+      showMessage("File Too Large", `File "${largeFile.name}" exceeds 10MB.`);
       return;
     }
 
     try {
-      const isDuplicate = questions.some((q) => {
-        if (!q.response_value || typeof q.response_value !== "string")
-          return false;
-        if (q.id === activeQuestion.id) return false;
-        const existingName = q.response_value.split("/").pop();
-        return existingName?.toLowerCase() === file.name.toLowerCase();
-      });
+      setIsFileUploading(true);
+      const newUrls: string[] = [];
 
-      if (isDuplicate) {
-        showMessage(
-          "Duplicate Filename",
-          `A file named "${file.name}" has already been uploaded for another question. Please rename the file or upload a different one.`,
-          "error",
+      for (const file of fileList) {
+        const isDuplicate = Object.values(urlToOriginalName).some(
+          (name) => name.toLowerCase() === file.name.toLowerCase(),
         );
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        return;
+
+        if (isDuplicate) {
+          showMessage(
+            "Duplicate Filename",
+            `A file named "${file.name}" has already been uploaded. Please rename the file or upload a different one.`,
+            "error",
+          );
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append("document", file);
+
+        const response = await axiosInstance.post<{
+          url: string;
+        }>("/uploads/documents", formData);
+
+        const url = response.data?.url;
+        if (url) {
+          newUrls.push(url);
+          console.log("File uploaded successfully:", url);
+
+          const updatedMapping = { ...urlToOriginalName, [url]: file.name };
+          setUrlToOriginalName(updatedMapping);
+          if (assessment) {
+            localStorage.setItem(
+              `file_names_${assessment.id}`,
+              JSON.stringify(updatedMapping),
+            );
+          }
+        }
       }
 
-      setIsFileUploading(true);
-      const formData = new FormData();
-      formData.append("document", file);
-
-      const response = await axiosInstance.post<{
-        url: string;
-      }>("/uploads/documents", formData);
-
-      const url = response.data?.url;
-      if (url) {
-        handleResponseChange(url);
-        console.log("✅ File uploaded successfully:", url);
+      if (newUrls.length > 0) {
+        const currentVal = activeQuestion?.response_value || "";
+        const updatedVal = currentVal
+          ? `${currentVal},${newUrls.join(",")}`
+          : newUrls.join(",");
+        handleResponseChange(updatedVal);
       }
     } catch (error: any) {
-      console.error("❌ Failed to upload document:", error);
+      console.error("Failed to upload document:", error);
       showMessage(
         "Upload Failed",
         error?.response?.data?.message ||
@@ -691,14 +745,49 @@ export function AssessmentPage() {
       );
     } finally {
       setIsFileUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleDeleteFile = (e: React.MouseEvent) => {
+  const handleDeleteFile = (urlToDelete: string) => {
+    const currentVal = activeQuestion?.response_value || "";
+    const updatedVal = currentVal
+      .split(",")
+      .filter((url: string) => url !== urlToDelete)
+      .join(",");
+    handleResponseChange(updatedVal);
+
+    const updatedMapping = { ...urlToOriginalName };
+    delete updatedMapping[urlToDelete];
+    setUrlToOriginalName(updatedMapping);
+    if (assessment) {
+      localStorage.setItem(
+        `file_names_${assessment.id}`,
+        JSON.stringify(updatedMapping),
+      );
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    handleResponseChange("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files);
     }
   };
 
@@ -736,11 +825,9 @@ export function AssessmentPage() {
   const filteredSuggestions = aiSuggestions;
 
   const applyAiSuggestion = () => {
-    if (selectedAiValue) {
+    if (selectedAiValue && activeQuestion?.question_type === "text") {
+      handleResponseChange(selectedAiValue);
       handleDescriptionChange(selectedAiValue);
-      if (activeQuestion.question_type === "text") {
-        handleResponseChange(selectedAiValue);
-      }
       setShowAiModal(false);
       setSelectedAiValue(null);
     }
@@ -752,7 +839,7 @@ export function AssessmentPage() {
     setIsLoading(true);
     setLoadingProgress(50);
     try {
-      console.log("🚀 Submitting assessment to AI:");
+      console.log("Submitting assessment to AI:");
       setLoadingProgress(70);
       await axiosInstance.post(`/assessments/${assessment.id}/submit`, {});
       setLoadingProgress(100);
@@ -845,12 +932,50 @@ export function AssessmentPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen w-full bg-white fixed inset-0 z-50">
-        <LoadingScreen
-          isLoading={isLoading}
-          progress={loadingProgress}
-          size="lg"
-        />
+      <div className="flex h-screen bg-white font-sans overflow-hidden">
+        <aside className="w-90 border-r border-[#F0F0F0] flex flex-col bg-white shrink-0">
+          <div className="p-6 border-b border-[#F0F0F0] space-y-4">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+          <div className="flex-1 p-6 space-y-6">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <div className="pl-4 space-y-2">
+                  <Skeleton className="h-3 w-3/4" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <main className="flex-1 flex flex-col bg-white overflow-y-auto">
+          <div className="max-w-4xl mx-auto w-full p-8 lg:p-12 space-y-8">
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <Skeleton className="h-8 w-1/2" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+
+            <div className="space-y-4 pt-8">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
+            </div>
+
+            <div className="flex justify-between pt-12">
+              <Skeleton className="h-12 w-32 rounded-xl" />
+              <div className="flex gap-4">
+                <Skeleton className="h-12 w-32 rounded-xl" />
+                <Skeleton className="h-12 w-48 rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -970,24 +1095,35 @@ export function AssessmentPage() {
                               >
                                 <div
                                   className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    isActive
-                                      ? "border-[#1A1A1A]"
+                                    isSectionDone || isActive
+                                      ? "border-[#1A1A1A] bg-zinc-900"
                                       : "border-[#D4D4D4] group-hover/item:border-[#A3A3A3]"
-                                  }`}
+                                  } ${isSectionDone && !isActive ? "bg-zinc-900" : ""}`}
                                 >
-                                  {isActive && (
-                                    <div className="w-2.5 h-2.5 bg-[#1A1A1A] rounded-full" />
-                                  )}
+                                  {isSectionDone ? (
+                                    <Check className="w-2.5 h-2.5 text-white stroke-3" />
+                                  ) : isActive ? (
+                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                  ) : null}
                                 </div>
                                 <span
                                   className={`text-[12px] font-medium text-left transition-colors truncate ${
                                     isActive
                                       ? "text-[#1A1A1A] font-bold"
-                                      : "text-[#666666] group-hover/item:text-[#1A1A1A]"
+                                      : isSectionDone
+                                        ? "text-[#1A1A1A]"
+                                        : "text-[#666666] group-hover/item:text-[#1A1A1A]"
                                   }`}
                                 >
                                   {section.name}
                                 </span>
+                                {section.questions.some((sq) =>
+                                  flaggedQuestions.some(
+                                    (fq) => fq.id === sq.id,
+                                  ),
+                                ) && (
+                                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shrink-0" />
+                                )}
                               </button>
                             );
                           })}
@@ -1027,7 +1163,47 @@ export function AssessmentPage() {
                       {activeQuestion?.sub_section_name ||
                         activeQuestion?.section_name}
                     </h3>
+                    <button
+                      onClick={fetchAiSuggestions}
+                      className="p-2.5 bg-white hover:bg-zinc-50 rounded-lg shadow-sm border border-gray-100 transition-all group"
+                      title="Get AI Guidance"
+                    >
+                      <Sparkles className="w-5 h-5 text-zinc-900 group-hover:scale-110 transition-transform" />
+                    </button>
                   </div>
+
+                  {flaggedQuestions.some(
+                    (fq) => fq.id === activeQuestion?.id,
+                  ) &&
+                    (() => {
+                      const flag = flaggedQuestions.find(
+                        (fq) => fq.id === activeQuestion?.id,
+                      );
+                      return (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="p-4 bg-red-50 border border-red-100 rounded-xl mb-4 space-y-2 shadow-sm"
+                        >
+                          <div className="flex items-center gap-2 text-red-600">
+                            <AlertCircle className="w-4 h-4" />
+                            <p className="text-[11px] font-bold uppercase tracking-wider">
+                              Attention Required
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-red-800">
+                              Flag Reason: {flag?.flag_reason}
+                            </p>
+                            {flag?.ai_suggestion && (
+                              <p className="text-xs font-medium text-red-700 leading-relaxed italic">
+                                AI Suggestion: "{flag.ai_suggestion}"
+                              </p>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })()}
 
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 bg-[#F2F4F7] rounded-full flex items-center justify-center shrink-0">
@@ -1035,132 +1211,158 @@ export function AssessmentPage() {
                         Q:{activeQuestionIndex + 1}
                       </span>
                     </div>
-                    <h4 className="text-[17px] font-bold text-zinc-900 leading-snug pt-2">
-                      {activeQuestion?.question_text}
-                      {activeQuestion?.is_compulsory && (
-                        <span className="text-red-500 ml-1">*</span>
+                    <div className="flex flex-col gap-1 w-full pt-2">
+                      <h4 className="text-[17px] font-bold text-zinc-900 leading-snug">
+                        {activeQuestion?.question_text}
+                        {activeQuestion?.is_compulsory && (
+                          <span className="text-red-500 ml-1">*</span>
+                        )}
+                      </h4>
+                      {activeQuestion?.hint && (
+                        <p className="text-sm font-medium text-[#667085]">
+                          Hint: {activeQuestion.hint}
+                        </p>
                       )}
-                    </h4>
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-10 pl-14 relative">
                   {activeQuestion?.question_type === "boolean" && (
-                    <div className="grid grid-cols-1 gap-6 max-w-3xl">
-                      {["Yes", "No"].map((opt) => {
-                        const isSelected =
-                          activeQuestion.response_value === opt;
-                        const helpText =
-                          opt === "Yes"
-                            ? "If you select Yes, Document is required"
-                            : "If you select No, May affect certification score";
+                    <div className="relative max-w-3xl">
+                      <div className="grid grid-cols-1 gap-6">
+                        {["Yes", "No"].map((opt) => {
+                          const isSelected =
+                            activeQuestion.response_value === opt;
+                          const helpText = opt === "Yes" ? "" : "";
 
-                        return (
-                          <div key={opt} className="space-y-2">
-                            <button
-                              onClick={() => handleResponseChange(opt)}
-                              className={`w-full flex items-center gap-4 p-5 rounded-xl border transition-all text-left ${
-                                isSelected
-                                  ? "border-zinc-900 bg-white ring-1 ring-zinc-900"
-                                  : "border-[#EAECF0] bg-[#F9FAFB] hover:border-[#D0D5DD]"
-                              }`}
-                            >
-                              <div
-                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                          return (
+                            <div key={opt} className="space-y-2">
+                              <button
+                                onClick={() => handleResponseChange(opt)}
+                                className={`w-full flex items-center gap-4 p-5 rounded-xl border transition-all text-left ${
                                   isSelected
-                                    ? "border-zinc-900"
-                                    : "border-[#D0D5DD] bg-white"
+                                    ? "border-zinc-900 bg-white ring-1 ring-zinc-900"
+                                    : "border-[#EAECF0] bg-[#F9FAFB] hover:border-[#D0D5DD]"
                                 }`}
                               >
-                                {isSelected && (
-                                  <div className="w-2.5 h-2.5 bg-zinc-900 rounded-full" />
-                                )}
-                              </div>
-                              <span className="text-[17px] font-bold text-zinc-900">
-                                {opt}
-                              </span>
-                            </button>
-                            <p className="text-[13px] font-medium text-[#667085] pl-1">
-                              {helpText}
-                            </p>
-                          </div>
-                        );
-                      })}
+                                <div
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                                    isSelected
+                                      ? "border-zinc-900"
+                                      : "border-[#D0D5DD] bg-white"
+                                  }`}
+                                >
+                                  {isSelected && (
+                                    <div className="w-2.5 h-2.5 bg-zinc-900 rounded-full" />
+                                  )}
+                                </div>
+                                <span className="text-[17px] font-bold text-zinc-900">
+                                  {opt}
+                                </span>
+                              </button>
+                              <p className="text-[13px] font-medium text-[#667085] pl-1">
+                                {helpText}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
                   {(activeQuestion?.question_type === "file" ||
                     activeQuestion?.question_type === "pdf") && (
-                    <div
-                      onClick={() =>
-                        !isFileUploading && fileInputRef.current?.click()
-                      }
-                      className="border-2 border-dashed border-[#D0D5DD] rounded-2xl p-12 flex flex-col items-center text-center space-y-4 hover:bg-[#F9FAFB] transition-all cursor-pointer group"
-                    >
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept=".pdf,.docx,.doc,.xls,.xlsx"
-                        onChange={(e) =>
-                          handleFileUpload(e.target.files?.[0] || null)
+                    <div className="relative group max-w-3xl">
+                      <div
+                        onClick={() =>
+                          !isFileUploading && fileInputRef.current?.click()
                         }
-                      />
-                      <div className="w-12 h-12 flex items-center justify-center">
-                        {isFileUploading ? (
-                          <Loader2 className="w-8 h-8 text-[#98A2B3] animate-spin" />
-                        ) : (
-                          <Upload className="w-8 h-8 text-[#98A2B3]" />
-                        )}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center text-center space-y-4 transition-all cursor-pointer group ${
+                          isDragging
+                            ? "border-zinc-900 bg-zinc-50 scale-[1.01] shadow-md"
+                            : "border-[#D0D5DD] hover:bg-[#F9FAFB]"
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          className="hidden"
+                          accept=".pdf,.docx,.doc,.xls,.xlsx"
+                          multiple
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                        />
+                        <div className="w-12 h-12 flex items-center justify-center">
+                          {isFileUploading ? (
+                            <Loader2 className="w-8 h-8 text-[#98A2B3] animate-spin" />
+                          ) : (
+                            <Upload className="w-8 h-8 text-[#98A2B3]" />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[17px] font-medium text-[#475467]">
+                            {activeQuestion.response_value
+                              ? `${activeQuestion.response_value.split(",").length} File(s) Selected`
+                              : "Click to upload or drag and drop"}
+                          </p>
+                          <p className="text-xs font-normal text-[#98A2B3]">
+                            PDF, DOC, DOCX, XLS, XLSX (max 10MB)
+                          </p>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-[17px] font-medium text-[#475467]">
-                          {activeQuestion.response_value
-                            ? "File Selected"
-                            : "Click to upload or drag and drop"}
-                        </p>
-                        <p className="text-xs font-normal text-[#98A2B3]">
-                          PDF, DOC, DOCX, XLS, XLSX (max 10MB)
-                        </p>
-                      </div>
+
                       {activeQuestion.response_value && (
-                        <div className="mt-4 flex items-center justify-between gap-3 p-3 bg-white border border-[#EAECF0] rounded-xl shadow-sm w-full max-w-md mx-auto group/file">
-                          <div className="flex items-center gap-2 truncate">
-                            <FileText className="w-5 h-5 text-[#98A2B3] shrink-0" />
-                            <span className="text-sm font-medium text-[#344054] truncate">
-                              {activeQuestion.response_value.split("/").pop()}
-                            </span>
-                          </div>
-                          <button
-                            onClick={handleDeleteFile}
-                            className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                            title="Remove file"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                        <div className="mt-6 space-y-3 w-full max-w-3xl">
+                          {activeQuestion.response_value
+                            .split(",")
+                            .map((fileUrl: string, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-3 p-4 bg-white border border-[#EAECF0] rounded-xl shadow-sm group/file hover:border-zinc-300 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 truncate">
+                                  <FileText className="w-5 h-5 text-[#98A2B3] shrink-0" />
+                                  <div className="flex flex-col truncate">
+                                    <span className="text-sm font-semibold text-[#344054] truncate">
+                                      {urlToOriginalName[fileUrl] ||
+                                        fileUrl.split("/").pop()}
+                                    </span>
+                                    <span className="text-[10px] font-medium text-[#98A2B3]">
+                                      Uploaded Document • {idx + 1}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteFile(fileUrl);
+                                  }}
+                                  className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                                  title="Remove file"
+                                >
+                                  <X className="w-4.5 h-4.5" />
+                                </button>
+                              </div>
+                            ))}
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div className="w-full max-w-3xl mb-0">
-                    <textarea
-                      className="w-full min-h-40 p-6 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl resize-none text-[15px] font-medium text-zinc-900 placeholder:text-[#98A2B3] focus:outline-none focus:ring-1 focus:ring-zinc-900 transition-all"
-                      placeholder="Enter your answer"
-                      value={
-                        activeQuestion?.ai_description ||
-                        (activeQuestion?.question_type === "text"
-                          ? activeQuestion.response_value
-                          : "") ||
-                        ""
-                      }
-                      onChange={(e) => {
-                        handleDescriptionChange(e.target.value);
-                        if (activeQuestion.question_type === "text")
+                  {activeQuestion?.question_type === "text" && (
+                    <div className="w-full max-w-3xl mb-0 relative group">
+                      <textarea
+                        className="w-full min-h-40 p-6 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl resize-none text-[15px] font-medium text-zinc-900 placeholder:text-[#98A2B3] focus:outline-none focus:ring-1 focus:ring-zinc-900 transition-all"
+                        placeholder="Enter your answer"
+                        value={activeQuestion?.response_value || ""}
+                        onChange={(e) => {
                           handleResponseChange(e.target.value);
-                      }}
-                    />
-                    {showAiButton && (
+                          handleDescriptionChange(e.target.value);
+                        }}
+                      />
                       <div className="mt-3 flex flex-wrap items-start justify-end gap-2">
                         <AnimatePresence>
                           {saveStatus === "error" && (
@@ -1185,16 +1387,9 @@ export function AssessmentPage() {
                             </motion.div>
                           )}
                         </AnimatePresence>
-                        <button
-                          onClick={fetchAiSuggestions}
-                          className="ml-auto p-2.5 bg-white hover:bg-zinc-50 rounded-lg shadow-sm transition-colors group"
-                          title="AI Suggestions"
-                        >
-                          <Sparkles className="w-7 h-7 text-zinc-900 group-hover:scale-110 transition-transform" />
-                        </button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1264,17 +1459,23 @@ export function AssessmentPage() {
               initial={{ opacity: 0, scale: 0.9, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              className="bg-white rounded-4xl w-full max-w-2xl h-125 shadow-2xl overflow-hidden flex flex-col"
+              className="bg-white rounded-4xl w-full max-w-2xl max-h-[85vh] shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="p-8 pb-0 text-center space-y-3 bg-primary/50 shrink-0">
+              <div className="p-8 pb-4 text-center space-y-2 bg-white shrink-0 border-b border-zinc-50 relative">
                 <h2 className="text-2xl font-semibold text-zinc-900 tracking-tight">
                   AI Suggestions
                 </h2>
-                <p className="text-gray-400 font-medium text-base">
+                <p className="text-gray-400 font-medium text-sm">
                   Here are AI suggestion answers for you
                 </p>
+                <button
+                  onClick={() => setShowAiModal(false)}
+                  className="absolute right-6 top-6 p-2 hover:bg-zinc-100 rounded-full transition-colors"
+                >
+                  <RxCross2 className="w-5 h-5 text-gray" />
+                </button>
               </div>
-              <div className="px-8 py-2 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="px-8 py-4 space-y-4 flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {isAiLoading ? (
                   <div className="h-full flex flex-col items-center justify-center gap-4 text-zinc-400">
                     <Loader2 className="w-8 h-8 animate-spin" />
@@ -1286,21 +1487,23 @@ export function AssessmentPage() {
                   <div className="py-2 grid grid-cols-1 gap-3">
                     {filteredSuggestions.map((suggestion, idx) => {
                       const isSelected = selectedAiValue === suggestion;
+                      const isTextType =
+                        activeQuestion?.question_type === "text";
                       return (
                         <div
                           key={idx}
-                          onClick={() => setSelectedAiValue(suggestion)}
-                          className={`form-dropdown-item h-auto py-4 group cursor-ponter ${
+                          onClick={() => {
+                            if (isTextType) setSelectedAiValue(suggestion);
+                          }}
+                          className={`form-dropdown-item h-auto py-4 group ${
+                            isTextType ? "cursor-pointer" : "cursor-default"
+                          } ${
                             isSelected
                               ? "form-dropdown-item-active"
                               : "form-dropdown-item-inactive"
                           }`}
                         >
-                          <p
-                            className={`text-sm leading-relaxed ${
-                              isSelected ? "text-secondary" : "text-secondary"
-                            }`}
-                          >
+                          <p className="text-sm leading-relaxed text-secondary">
                             "{suggestion}"
                           </p>
                         </div>
@@ -1313,20 +1516,22 @@ export function AssessmentPage() {
                   </div>
                 )}
               </div>
-              <div className="p-8 flex gap-4 mx-auto w-full max-w-md">
+              <div className="p-8 py-6 flex gap-4 mx-auto w-full max-w-md justify-center shrink-0 border-t border-zinc-50 bg-white">
                 <Button
                   onClick={() => setShowAiModal(false)}
-                  className="flex-1 h-12 w-full max-w-50 bg-white border-2 border-secondary text-secondary rounded-xl hover:bg-gray-100"
+                  className={`${activeQuestion?.question_type === "text" ? "flex-1" : "w-full"} h-12 bg-white border-2 border-secondary text-secondary rounded-xl hover:bg-zinc-50 cursor-pointer`}
                 >
                   Close
                 </Button>
-                <Button
-                  onClick={applyAiSuggestion}
-                  disabled={!selectedAiValue}
-                  className="flex-1 h-12 w-full max-w-50 bg-zinc-900 text-white font-semibold rounded-xl hover:bg-black shadow-xl text-sm"
-                >
-                  Done
-                </Button>
+                {activeQuestion?.question_type === "text" && (
+                  <Button
+                    onClick={applyAiSuggestion}
+                    disabled={!selectedAiValue}
+                    className="flex-1 h-12 bg-zinc-900 text-white font-semibold rounded-xl hover:bg-black shadow-xl text-sm cursor-pointer"
+                  >
+                    Done
+                  </Button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -1339,20 +1544,20 @@ export function AssessmentPage() {
             <motion.div
               initial={{ opacity: 0, y: 100, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              className="bg-white rounded-[56px] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden"
+              className="bg-white rounded-[40px] w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[85vh] overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="p-8 pb-6 text-center border-b border-gray-100 bg-primary/50">
+              <div className="p-8 pb-6 text-center border-b border-gray-100 bg-white shrink-0">
                 <div className="space-y-4">
                   {assessmentScoreResult && (
                     <div className="flex flex-col items-center justify-center">
                       <div className="relative">
-                        <span className="text-6xl font-semibold text-zinc-900 tracking-tighter">
+                        <span className="text-5xl font-semibold text-zinc-900 tracking-tighter">
                           {assessmentScoreResult.score}
-                          <span className="text-2xl ml-0.5 opacity-40">%</span>
+                          <span className="text-xl ml-0.5 opacity-40">%</span>
                         </span>
                       </div>
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.2em] mt-1">
+                      <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-[0.2em] mt-1">
                         Overall Assessment Score
                       </p>
                     </div>
@@ -1372,9 +1577,33 @@ export function AssessmentPage() {
                     </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => setShowAiReviewModal(false)}
+                  className="absolute right-8 top-8 p-2 hover:bg-zinc-100 rounded-full transition-colors"
+                >
+                  <RxCross2 className="w-6 h-6 text-gray" />
+                </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {assessmentScoreResult?.score !== undefined &&
+                  assessmentScoreResult.score < 50 && (
+                    <div className="bg-red-50 border border-red-100 rounded-2xl p-6 space-y-2">
+                      <div className="flex items-center gap-2 text-red-600">
+                        <AlertCircle className="w-5 h-5" />
+                        <p className="text-sm font-bold uppercase tracking-wider">
+                          Assessment Failed
+                        </p>
+                      </div>
+                      <p className="text-sm font-medium text-red-800 leading-relaxed">
+                        Your score of {assessmentScoreResult.score}% is below
+                        the minimum passing criteria for this certificate. You
+                        must restart the assessment to retry and improve your
+                        score.
+                      </p>
+                    </div>
+                  )}
+
                 <div className="bg-zinc-50 border border-gray-100 rounded-2xl p-6 space-y-1.5">
                   <p className="text-[9px] font-semibold text-gray-400 tracking-widest uppercase">
                     Summary Review
@@ -1447,18 +1676,101 @@ export function AssessmentPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 border-t border-gray-100 flex gap-3 bg-primary/50">
+              <div className="p-6 border-t border-gray-100 flex gap-3 bg-white shrink-0">
                 <Button
                   onClick={() => router.push(`${base}`)}
-                  className="flex-1 h-12 bg-white border border-gray-200 text-zinc-800 font-semibold rounded-xl hover:bg-gray-50 transition-all text-xs"
+                  className="flex-1 h-12 bg-white border border-gray-200 text-zinc-800 font-semibold rounded-xl hover:bg-gray-50 transition-all text-xs cursor-pointer"
                 >
                   Back to Dashboard
                 </Button>
                 <Button
                   onClick={() => router.push(`${base}/certificate`)}
-                  className="flex-1 h-12 bg-zinc-900 text-white font-semibold rounded-xl hover:bg-black shadow-xl shadow-zinc-900/20 text-xs"
+                  className={`flex-1 h-12 font-semibold rounded-xl text-xs transition-all cursor-pointer ${
+                    assessmentScoreResult?.score !== undefined &&
+                    assessmentScoreResult.score < 50
+                      ? "bg-red-600 hover:bg-red-700 text-white shadow-red-900/20 shadow-xl"
+                      : "bg-zinc-900 hover:bg-black text-white shadow-zinc-900/20 shadow-xl"
+                  }`}
                 >
-                  Get Another Certificate
+                  {assessmentScoreResult?.score !== undefined &&
+                  assessmentScoreResult.score < 50
+                    ? "Restart Assessment"
+                    : "Get Another Certificate"}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Flagged Questions Modal */}
+      <AnimatePresence>
+        {showFlagsModal && flaggedQuestions.length > 0 && (
+          <div className="fixed inset-0 z-[251] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-4xl w-full max-w-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-8 pb-4 text-center space-y-3 bg-red-50/50 shrink-0 border-b border-red-100">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 mb-2">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-zinc-900 tracking-tight">
+                  Improvement Required
+                </h2>
+                <p className="text-gray-500 font-medium text-xs max-w-sm mx-auto">
+                  Our AI team has flagged {flaggedQuestions.length} response
+                  {flaggedQuestions.length > 1 ? "s" : ""} that need improvement
+                  before your certification can be finalized.
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {flaggedQuestions.map((fq, idx) => (
+                  <div
+                    key={fq.id}
+                    className="p-4 bg-white border border-gray-100 rounded-2xl hover:border-red-200 transition-colors cursor-pointer group"
+                    onClick={() => {
+                      const qIdx = questions.findIndex((q) => q.id === fq.id);
+                      if (qIdx !== -1) {
+                        setActiveQuestionIndex(qIdx);
+                        const q = questions[qIdx];
+                        setExpandedMainSections((prev) =>
+                          prev.includes(q.main_section_name)
+                            ? prev
+                            : [...prev, q.main_section_name],
+                        );
+                        setShowFlagsModal(false);
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <div className="flex-1">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                          Question {idx + 1}
+                        </p>
+                        <h4 className="text-sm font-bold text-zinc-800 leading-snug group-hover:text-red-700 transition-colors">
+                          {fq.question_text}
+                        </h4>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors shrink-0 mt-1" />
+                    </div>
+                    <div className="bg-red-50/50 rounded-xl p-3 border border-red-50">
+                      <p className="text-[11px] font-semibold text-red-800 italic">
+                        "{fq.flag_reason}"
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-6 border-t border-gray-100 bg-white shrink-0">
+                <Button
+                  onClick={() => setShowFlagsModal(false)}
+                  className="w-full h-12 bg-zinc-900 hover:bg-black text-white font-bold rounded-xl shadow-xl shadow-zinc-900/10 text-sm"
+                >
+                  Start Improving
                 </Button>
               </div>
             </motion.div>
@@ -1473,65 +1785,74 @@ export function AssessmentPage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-4xl w-full max-w-lg shadow-2xl p-8 text-center space-y-6 relative overflow-hidden"
+              className="bg-white rounded-4xl w-full max-w-lg shadow-2xl relative overflow-hidden max-h-[85vh] flex flex-col"
             >
-              <div className="w-20 h-20 bg-zinc-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-zinc-50/30">
-                <div className="text-4xl animate-bounce">🎊</div>
-              </div>
-              <div className="space-y-1.5">
-                <h2 className="text-xl font-semibold text-zinc-900 tracking-tight">
-                  Assessment Ready
-                </h2>
-                <p className="text-gray-400 font-medium text-xs leading-relaxed max-w-70 mx-auto">
-                  Excellent work! Your responses are ready. Finalize your
-                  certification by submitting for review.
-                </p>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { l: "Status", v: assessmentScoreResult?.status || "Done" },
-                  {
-                    l: "Score",
-                    v: assessmentScoreResult?.score
-                      ? `${assessmentScoreResult.score}%`
-                      : "Pending",
-                  },
-                  {
-                    l: "Badge",
-                    v: assessmentScoreResult?.badge_name || "Locked",
-                  },
-                ].map((x) => (
-                  <div
-                    key={x.l}
-                    className="bg-gray-50 border border-gray-100 rounded-2xl p-3"
-                  >
-                    <p className="text-[9px] font-semibold text-gray-400  tracking-widest">
-                      {x.l}
-                    </p>
-                    <p className="text-sm font-semibold text-zinc-900">{x.v}</p>
+              <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="p-8 text-center space-y-6">
+                  <div className="w-20 h-20 bg-zinc-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-zinc-50/30">
+                    <PartyPopper className="w-8 h-8 text-yellow-500 animate-bounce" />
                   </div>
-                ))}
-              </div>
-              <div className="flex flex-col gap-3 pt-2">
-                <Button
-                  onClick={handleSubmitAll}
-                  className="w-full h-12 bg-zinc-900 hover:bg-black text-white font-semibold rounded-xl shadow-xl shadow-zinc-900/40 text-sm whitespace-nowrap"
-                >
-                  Submit Assessment
-                </Button>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    onClick={() => setShowSuccessModal(false)}
-                    className="h-12 bg-white border border-gray-200 text-zinc-900 font-semibold rounded-xl hover:bg-gray-50 text-sm whitespace-nowrap"
-                  >
-                    Review Answers
-                  </Button>
-                  <Button
-                    onClick={() => setShowQuitWarning(true)}
-                    className="h-12 bg-white border border-gray-200 text-zinc-400 font-semibold rounded-xl hover:text-primary text-sm whitespace-nowrap"
-                  >
-                    Close
-                  </Button>
+                  <div className="space-y-1.5">
+                    <h2 className="text-xl font-semibold text-zinc-900 tracking-tight">
+                      Assessment Ready
+                    </h2>
+                    <p className="text-gray-400 font-medium text-xs leading-relaxed max-w-70 mx-auto">
+                      Excellent work! Your responses are ready. Finalize your
+                      certification by submitting for review.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      {
+                        l: "Status",
+                        v: assessmentScoreResult?.status || "Done",
+                      },
+                      {
+                        l: "Score",
+                        v: assessmentScoreResult?.score
+                          ? `${assessmentScoreResult.score}%`
+                          : "Pending",
+                      },
+                      {
+                        l: "Badge",
+                        v: assessmentScoreResult?.badge_name || "Locked",
+                      },
+                    ].map((x) => (
+                      <div
+                        key={x.l}
+                        className="bg-gray-50 border border-gray-100 rounded-2xl p-3"
+                      >
+                        <p className="text-[9px] font-semibold text-gray-400  tracking-widest">
+                          {x.l}
+                        </p>
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {x.v}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <Button
+                      onClick={handleSubmitAll}
+                      className="w-full h-12 bg-zinc-900 hover:bg-black text-white font-semibold rounded-xl shadow-xl shadow-zinc-900/40 text-sm whitespace-nowrap"
+                    >
+                      Submit Assessment
+                    </Button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        onClick={() => setShowSuccessModal(false)}
+                        className="h-12 bg-white border border-gray-200 text-zinc-900 font-semibold rounded-xl hover:bg-gray-50 text-sm whitespace-nowrap"
+                      >
+                        Review Answers
+                      </Button>
+                      <Button
+                        onClick={() => setShowQuitWarning(true)}
+                        className="h-12 bg-white border border-gray-200 text-zinc-400 font-semibold rounded-xl hover:text-primary text-sm whitespace-nowrap"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1546,36 +1867,40 @@ export function AssessmentPage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-6 shadow-2xl"
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden max-h-[85vh] flex flex-col"
             >
-              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500">
-                <AlertCircle className="w-8 h-8" />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-xl font-semibold text-zinc-900">
-                  Are you sure?
-                </h3>
-                <p className="text-gray-400 font-medium text-sm">
-                  Unsubmitted answers will be lost. You can resume later from
-                  where you left off if questions were saved.
-                </p>
-              </div>
-              <div className="flex flex-col gap-2.5">
-                <Button
-                  onClick={() => {
-                    localStorage.removeItem("pending_assessment_ids");
-                    router.push(base);
-                  }}
-                  className="h-12 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl shadow-lg text-sm whitespace-nowrap"
-                >
-                  Yes, Quit Now
-                </Button>
-                <Button
-                  onClick={() => setShowQuitWarning(false)}
-                  className="h-12 bg-white border border-gray-200 text-zinc-900 hover:text-primary font-semibold rounded-xl text-sm whitespace-nowrap"
-                >
-                  No, Keep Working
-                </Button>
+              <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="p-8 text-center space-y-6">
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500">
+                    <AlertCircle className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-xl font-semibold text-zinc-900">
+                      Are you sure?
+                    </h3>
+                    <p className="text-gray-400 font-medium text-sm">
+                      Unsubmitted answers will be lost. You can resume later
+                      from where you left off if questions were saved.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2.5">
+                    <Button
+                      onClick={() => {
+                        localStorage.removeItem("pending_assessment_ids");
+                        router.push(base);
+                      }}
+                      className="h-12 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl shadow-lg text-sm whitespace-nowrap"
+                    >
+                      Yes, Quit Now
+                    </Button>
+                    <Button
+                      onClick={() => setShowQuitWarning(false)}
+                      className="h-12 bg-white border border-gray-200 text-zinc-900 hover:text-primary font-semibold rounded-xl text-sm whitespace-nowrap"
+                    >
+                      No, Keep Working
+                    </Button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1590,50 +1915,54 @@ export function AssessmentPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-6 shadow-2xl"
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden max-h-[85vh] flex flex-col"
             >
-              <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
-                  messageModal.type === "error"
-                    ? "bg-red-50 text-red-500"
-                    : messageModal.type === "success"
-                      ? "bg-blue-50 text-blue-500"
-                      : "bg-blue-50 text-blue-500"
-                }`}
-              >
-                {messageModal.type === "error" ? (
-                  <AlertCircle className="w-8 h-8" />
-                ) : messageModal.type === "success" ? (
-                  <Check className="w-8 h-8" />
-                ) : (
-                  <HelpCircle className="w-8 h-8" />
-                )}
+              <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="p-8 text-center space-y-6">
+                  <div
+                    className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+                      messageModal.type === "error"
+                        ? "bg-red-50 text-red-500"
+                        : messageModal.type === "success"
+                          ? "bg-blue-50 text-blue-500"
+                          : "bg-blue-50 text-blue-500"
+                    }`}
+                  >
+                    {messageModal.type === "error" ? (
+                      <AlertCircle className="w-8 h-8" />
+                    ) : messageModal.type === "success" ? (
+                      <Check className="w-8 h-8" />
+                    ) : (
+                      <HelpCircle className="w-8 h-8" />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-xl font-semibold text-zinc-900">
+                      {messageModal.title}
+                    </h3>
+                    <p className="text-gray-400 font-medium text-sm">
+                      {messageModal.message}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (messageModal.onConfirm) {
+                        messageModal.onConfirm();
+                      }
+                      setMessageModal((prev) => ({ ...prev, show: false }));
+                    }}
+                    className={`w-full h-12 font-semibold rounded-xl text-sm ${
+                      messageModal.type === "error"
+                        ? "bg-red-500 hover:bg-red-600 text-white"
+                        : messageModal.type === "success"
+                          ? "bg-zinc-900 hover:bg-black text-white"
+                          : "bg-zinc-900 hover:bg-black text-white"
+                    }`}
+                  >
+                    {messageModal.buttonText || "Got it"}
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <h3 className="text-xl font-semibold text-zinc-900">
-                  {messageModal.title}
-                </h3>
-                <p className="text-gray-400 font-medium text-sm">
-                  {messageModal.message}
-                </p>
-              </div>
-              <Button
-                onClick={() => {
-                  if (messageModal.onConfirm) {
-                    messageModal.onConfirm();
-                  }
-                  setMessageModal((prev) => ({ ...prev, show: false }));
-                }}
-                className={`w-full h-12 font-semibold rounded-xl text-sm ${
-                  messageModal.type === "error"
-                    ? "bg-red-500 hover:bg-red-600 text-white"
-                    : messageModal.type === "success"
-                      ? "bg-zinc-900 hover:bg-black text-white"
-                      : "bg-zinc-900 hover:bg-black text-white"
-                }`}
-              >
-                {messageModal.buttonText || "Got it"}
-              </Button>
             </motion.div>
           </div>
         )}
@@ -1655,4 +1984,3 @@ export function AssessmentPage() {
     </div>
   );
 }
-

@@ -11,7 +11,7 @@ import { FiUploadCloud, FiFileText } from "react-icons/fi";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
 import { persistOrganizationId } from "@/lib/auth-utils";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
 import { Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -94,6 +94,8 @@ export function ProfilePage() {
     id: "",
     user_id: "",
     name: "",
+    first_name: "",
+    last_name: "",
     email: "",
     contact_no: "",
     company_size: "",
@@ -108,6 +110,8 @@ export function ProfilePage() {
     legal_country: "",
     description: "",
     legal_document_url: "",
+    position: "",
+    department: "",
   });
 
   const router = useRouter();
@@ -233,22 +237,34 @@ export function ProfilePage() {
     validationSchema,
     onSubmit: async (values, { setSubmitting }) => {
       try {
-        const payload = {
-          name: values.name,
-          contact_no: values.contact_no,
-          website: values.website || null,
-          organization_type: values.company_size || null,
-          company_size: values.organization_type || null,
-          legal_city: values.legal_city || null,
-          legal_state: values.legal_state || null,
-          legal_country: values.legal_country || null,
-          description: values.description || null,
-          legal_document_url: values.legal_document_url || null,
-          industry_ids: values.industry_ids ?? [],
-          logo_url: values.logo || null,
-        };
+        if (isEmployee) {
+          const payload = {
+            first_name: values.first_name,
+            last_name: values.last_name,
+            position: values.position,
+            department: values.department,
+            profile_picture_url: values.logo || null,
+          };
 
-        await axiosInstance.patch("/organization/profile", payload);
+          await axiosInstance.patch("/employee/profile", payload);
+        } else {
+          const payload = {
+            name: values.name,
+            contact_no: values.contact_no,
+            website: values.website || null,
+            organization_type: values.organization_type || null,
+            company_size: values.company_size || null,
+            legal_city: values.legal_city || null,
+            legal_state: values.legal_state || null,
+            legal_country: values.legal_country || null,
+            description: values.description || null,
+            legal_document_url: values.legal_document_url || null,
+            industry_ids: values.industry_ids ?? [],
+            logo_url: values.logo || null,
+          };
+
+          await axiosInstance.patch("/organization/profile", payload);
+        }
 
         setInitialValues(values);
 
@@ -257,7 +273,9 @@ export function ProfilePage() {
           const currentProfile = stored ? JSON.parse(stored) : {};
           const updatedProfile = {
             ...currentProfile,
-            name: values.name,
+            name: isEmployee
+              ? `${values.first_name} ${values.last_name}`.trim()
+              : values.name,
             logo: values.logo,
           };
           localStorage.setItem(
@@ -589,11 +607,17 @@ export function ProfilePage() {
                 id: data.id || "",
                 user_id: data.user_id || "",
                 name: displayName,
+                first_name: data.first_name || "",
+                last_name: data.last_name || "",
                 email: data.email || "",
                 contact_no: data.contact_no || "",
-                company_size: data.organization_type || "",
+                company_size: data.company_size || "",
                 website: data.website || "",
-                logo: data.logo || "",
+                logo:
+                  data.logo ||
+                  data.profile_picture ||
+                  data.profile_picture_url ||
+                  "",
                 industry_ids: Array.isArray(data.industry_ids)
                   ? data.industry_ids
                   : [],
@@ -601,13 +625,15 @@ export function ProfilePage() {
                   typeof data.total_branches === "number"
                     ? data.total_branches
                     : 0,
-                organization_type: data.company_size || "",
+                organization_type: data.organization_type || "",
                 business_id: data.business_id || "",
                 legal_city: data.legal_city || "",
                 legal_state: data.legal_state || "",
                 legal_country: data.legal_country || "",
                 description: data.description || "",
                 legal_document_url: data.legal_document_url || "",
+                position: data.position || "",
+                department: data.department || "",
               });
 
               if (data.contact_no) {
@@ -853,8 +879,45 @@ export function ProfilePage() {
 
   if (isLoadingProfile) {
     return (
-      <div className="flex items-center justify-center py-20 min-h-[200px]">
-        <LoadingScreen isLoading={true} progress={loadingProgress} size="lg" />
+      <div className="min-h-full bg-gray-50/20 p-4 font-sans md:p-6 lg:p-8 lg:pt-3">
+        <div className="mx-auto max-w-7xl space-y-8">
+          <header className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </header>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-white p-6 rounded-3xl border border-zinc-100 shadow-sm space-y-6">
+                <div className="flex flex-col items-center space-y-4">
+                  <Skeleton className="h-32 w-32 rounded-full" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <div className="space-y-4">
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2">
+              <div className="bg-white p-6 rounded-3xl border border-zinc-100 shadow-sm space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-11 w-full rounded-xl" />
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-32 w-full rounded-xl" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -869,7 +932,9 @@ export function ProfilePage() {
               Profile Settings
             </h1>
             <p className="text-sm font-medium text-gray">
-              Manage your organization profile details.
+              {isEmployee
+                ? "Manage your personal profile details."
+                : "Manage your organization profile details."}
             </p>
           </div>
         </header>
@@ -885,7 +950,23 @@ export function ProfilePage() {
               <div className="flex flex-col items-center space-y-5 md:w-56 md:items-start md:border-r md:border-dull-white/40 md:pr-10">
                 <div className="relative group">
                   <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-dull-white/60 bg-dull-white/5 shadow-sm transition-all group-hover:border-secondary/20">
-                    {formik.values.logo ? (
+                    {isEmployee ? (
+                      formik.values.logo ? (
+                        <img
+                          src={formik.values.logo}
+                          alt="Profile picture"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-5xl font-semibold text-secondary/40">
+                          {getInitials(
+                            formik.values.first_name +
+                              " " +
+                              formik.values.last_name,
+                          )}
+                        </span>
+                      )
+                    ) : formik.values.logo ? (
                       <img
                         src={formik.values.logo}
                         alt="Organisation logo"
@@ -916,7 +997,7 @@ export function ProfilePage() {
                 </div>
                 <div className="text-center md:text-left">
                   <p className="text-sm font-semibold text-secondary">
-                    Organization Logo
+                    {isEmployee ? "Profile Picture" : "Organization Logo"}
                   </p>
                   <p className="mt-1.5 text-xs leading-relaxed text-gray">
                     Min 400x400px. <br /> PNG or JPG recommended.
@@ -950,36 +1031,92 @@ export function ProfilePage() {
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-semibold tracking-wider text-secondary/80">
-                      Organization Name <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      name="name"
-                      placeholder="TechCorp Inc"
-                      className="bg-gray-50/50 transition-colors focus:bg-white h-11"
-                      value={formik.values.name}
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      error={formik.touched.name && Boolean(formik.errors.name)}
-                    />
-                    {formik.touched.name && formik.errors.name && (
-                      <p className="text-sm font-medium text-red-500">
-                        {formik.errors.name}
-                      </p>
-                    )}
-                  </div>
+                  {isEmployee ? (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold tracking-wider text-secondary/80">
+                          First Name <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          name="first_name"
+                          placeholder="John"
+                          className="bg-gray-50/50 transition-colors focus:bg-white h-11"
+                          value={formik.values.first_name}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          error={
+                            formik.touched.first_name &&
+                            Boolean(formik.errors.first_name)
+                          }
+                        />
+                        {formik.touched.first_name &&
+                          formik.errors.first_name && (
+                            <p className="text-sm font-medium text-red-500">
+                              {formik.errors.first_name}
+                            </p>
+                          )}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold tracking-wider text-secondary/80">
+                          Last Name <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          name="last_name"
+                          placeholder="Doe"
+                          className="bg-gray-50/50 transition-colors focus:bg-white h-11"
+                          value={formik.values.last_name}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          error={
+                            formik.touched.last_name &&
+                            Boolean(formik.errors.last_name)
+                          }
+                        />
+                        {formik.touched.last_name &&
+                          formik.errors.last_name && (
+                            <p className="text-sm font-medium text-red-500">
+                              {formik.errors.last_name}
+                            </p>
+                          )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-semibold tracking-wider text-secondary/80">
+                        Organization Name{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        name="name"
+                        placeholder="TechCorp Inc"
+                        className="bg-gray-50/50 transition-colors focus:bg-white h-11"
+                        value={formik.values.name}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        error={
+                          formik.touched.name && Boolean(formik.errors.name)
+                        }
+                      />
+                      {formik.touched.name && formik.errors.name && (
+                        <p className="text-sm font-medium text-red-500">
+                          {formik.errors.name}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-sm font-semibold tracking-wider text-secondary/80">
-                      Organisation email
+                      {isEmployee ? "Email" : "Organisation email"}
                     </label>
                     <div className="group relative">
                       <Input
                         name="email"
                         placeholder="org@example.com"
                         className={`bg-gray-50/50 transition-colors focus:bg-white h-11 ${
-                          initialValues.email ? "cursor-not-allowed" : ""
+                          initialValues.email
+                            ? "cursor-not-allowed opacity-70"
+                            : ""
                         }`}
                         value={formik.values.email ?? ""}
                         onChange={
@@ -994,7 +1131,9 @@ export function ProfilePage() {
                       />
                       {initialValues.email && (
                         <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 rounded-xl border border-dull-white/60 bg-white px-3 py-2 text-xs font-semibold text-secondary opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
-                          Organisation email is not editable
+                          {isEmployee
+                            ? "Email is not editable"
+                            : "Organisation email is not editable"}
                         </div>
                       )}
                     </div>
@@ -1004,6 +1143,37 @@ export function ProfilePage() {
                       </p>
                     )}
                   </div>
+
+                  {isEmployee && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold tracking-wider text-secondary/80">
+                          Position
+                        </label>
+                        <Input
+                          name="position"
+                          placeholder="Senior Developer"
+                          className="bg-gray-50/50 transition-colors focus:bg-white h-11"
+                          value={formik.values.position}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold tracking-wider text-secondary/80">
+                          Department
+                        </label>
+                        <Input
+                          name="department"
+                          placeholder="Engineering"
+                          className="bg-gray-50/50 transition-colors focus:bg-white h-11"
+                          value={formik.values.department}
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-sm font-semibold tracking-wider text-secondary/80">
@@ -1178,644 +1348,663 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 p-6 lg:p-10">
-              <div className="lg:col-span-2 rounded-3xl bg-dull-white/10 p-6 lg:p-8">
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                  <div className="space-y-2 lg:col-span-2">
-                    <label className="text-sm font-semibold text-secondary">
-                      Description
-                    </label>
-                    <textarea
-                      name="description"
-                      rows={4}
-                      placeholder="Brief description of your organisation..."
-                      className="w-full rounded-2xl border border-dull-white/50 bg-zinc-50 px-4 py-3 text-sm text-secondary outline-none transition-all placeholder:text-gray/50 focus:border-secondary/50 focus:ring-2 focus:ring-secondary/5"
-                      value={formik.values.description}
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                    />
-                  </div>
-
-                  {industries.length > 0 && (
-                    <div
-                      className="space-y-2 lg:col-span-2"
-                      ref={industriesDropdownRef}
-                    >
-                      <label className="text-sm font-semibold text-secondary">
-                        Organization Type
-                      </label>
-
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setIsIndustriesOpen((v) => !v)}
-                          className="w-full rounded-xl border border-zinc-200 bg-gray-50/50 px-4 py-2 text-left transition-colors hover:bg-white"
-                          aria-label="Select industries"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex flex-1 flex-wrap gap-2">
-                              {selectedIndustryBadges.visible.length ? (
-                                <>
-                                  {selectedIndustryBadges.visible.map(
-                                    (name) => (
-                                      <span
-                                        key={name}
-                                        className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-primary"
-                                      >
-                                        {name}
-                                      </span>
-                                    ),
-                                  )}
-                                  {selectedIndustryBadges.remaining > 0 && (
-                                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-secondary border border-dull-white/70">
-                                      +{selectedIndustryBadges.remaining} more
-                                    </span>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-sm font-medium text-gray/60">
-                                  Select Organization Types
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-xs font-semibold text-gray">
-                              {isIndustriesOpen ? "Close" : "Select"}
-                            </span>
-                          </div>
-                        </button>
-
-                        {isIndustriesOpen && (
-                          <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-dull-white/50 bg-white shadow-sm">
-                            <div className="border-b border-dull-white/60 p-3">
-                              <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
-                                <Search className="h-4 w-4 text-gray" />
-                                <input
-                                  value={industriesSearch}
-                                  onChange={(e) =>
-                                    setIndustriesSearch(e.target.value)
-                                  }
-                                  placeholder="Search Organization Types"
-                                  className="w-full bg-transparent text-sm text-secondary outline-none"
-                                />
-                              </div>
-                            </div>
-                            <div
-                              className="max-h-40 overscroll-contain overflow-y-auto overflow-x-hidden p-2"
-                              onScroll={(e) =>
-                                setIndustriesScrollTop(
-                                  e.currentTarget.scrollTop,
-                                )
-                              }
-                              onWheel={(e) => {
-                                e.stopPropagation();
-                              }}
-                            >
-                              <div
-                                style={{ height: virtualIndustries.topSpacer }}
-                              />
-
-                              {virtualIndustries.items.map((industry) => {
-                                const checked =
-                                  formik.values.industry_ids?.includes(
-                                    industry.id,
-                                  ) ?? false;
-
-                                return (
-                                  <button
-                                    key={industry.id}
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleIndustry(industry.id)
-                                    }
-                                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-secondary hover:bg-gray-50"
-                                  >
-                                    <span className="truncate">
-                                      {industry.name}
-                                    </span>
-                                    <span
-                                      className={`ml-3 inline-flex h-5 w-5 items-center justify-center rounded border ${
-                                        checked
-                                          ? "bg-secondary border-secondary"
-                                          : "bg-white border-dull-white/70"
-                                      }`}
-                                      aria-hidden="true"
-                                    >
-                                      {checked && (
-                                        <span className="text-primary text-xs font-bold">
-                                          ✓
-                                        </span>
-                                      )}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-
-                              <div
-                                style={{
-                                  height: virtualIndustries.bottomSpacer,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-2 lg:col-span-2">
-                    <label className="text-sm font-semibold text-secondary">
-                      Legal Documentation
-                    </label>
-                    <div className="flex items-center justify-between rounded-xl border border-dashed border-dull-white bg-white/40 p-5 transition-colors hover:bg-white/60">
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-                          <FiFileText className="h-6 w-6" />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-semibold text-secondary">
-                            Business Registration
-                          </span>
-                          {formik.values.legal_document_url ? (
-                            <a
-                              href={formik.values.legal_document_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-blue-600 underline hover:text-blue-800"
-                            >
-                              View Uploaded Document
-                            </a>
-                          ) : (
-                            <span className="text-xs text-gray">
-                              No document uploaded
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <label className="cursor-pointer rounded-lg bg-white px-4 py-2 text-xs font-semibold text-secondary border border-dull-white shadow-sm hover:bg-gray-50">
-                        {isUploadingDocument ? "Uploading..." : "Upload"}
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.xls,.xlsx"
-                          className="hidden"
-                          onChange={(e) =>
-                            handleDocumentUpload(e.target.files?.[0] || null)
-                          }
-                        />
-                      </label>
-                    </div>
-                    {!isUploadingDocument && documentUploadSuccess && (
-                      <p className="mt-2 text-xs font-medium text-green-600">
-                        {documentUploadSuccess}
-                      </p>
-                    )}
-                    {!isUploadingDocument && documentUploadError && (
-                      <p className="mt-2 text-xs font-medium text-red-500">
-                        {documentUploadError}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl bg-dull-white/10 p-6 lg:col-span-2 lg:p-8">
-                <div className="space-y-8">
-                  <div className="space-y-6">
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div
-                        ref={legalCountryRef}
-                        className="relative space-y-2 sm:col-span-2"
-                      >
+            {!isEmployee && (
+              <>
+                <div className="grid grid-cols-1 gap-4 p-6 lg:p-10">
+                  <div className="lg:col-span-2 rounded-3xl bg-dull-white/10 p-6 lg:p-8">
+                    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                      <div className="space-y-2 lg:col-span-2">
                         <label className="text-sm font-semibold text-secondary">
-                          Legal Country
+                          Description
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowLegalCountryList((prev) => !prev);
-                            setShowLegalStateList(false);
-                            setShowLegalCityList(false);
-                          }}
-                          onBlur={() =>
-                            formik.setFieldTouched("legal_country", true)
-                          }
-                          className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left"
-                        >
-                          <span
-                            className={
-                              formik.values.legal_country
-                                ? "text-secondary"
-                                : "text-gray"
-                            }
-                          >
-                            {formik.values.legal_country || "Select country"}
-                          </span>
-                          <ChevronDown className="h-4 w-4 text-gray" />
-                        </button>
-                        {formik.touched.legal_country &&
-                        formik.errors.legal_country ? (
-                          <p className="text-xs font-medium text-red-500">
-                            {formik.errors.legal_country}
-                          </p>
-                        ) : null}
-
-                        <AnimatePresence>
-                          {showLegalCountryList ? (
-                            <motion.div
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 6 }}
-                              className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-dull-white bg-white shadow-sm"
-                            >
-                              <div className="border-b border-dull-white/60 p-3">
-                                <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
-                                  <Search className="h-4 w-4 text-gray" />
-                                  <input
-                                    value={searchLegalCountry}
-                                    onChange={(e) =>
-                                      setSearchLegalCountry(e.target.value)
-                                    }
-                                    placeholder="Search country"
-                                    className="w-full bg-transparent text-sm text-secondary outline-none"
-                                  />
-                                </div>
-                              </div>
-                              <div className="max-h-60 overflow-y-auto p-2 scrollbar-hide">
-                                {countries
-                                  .filter((c) =>
-                                    c.name.common
-                                      .toLowerCase()
-                                      .includes(
-                                        searchLegalCountry.toLowerCase(),
-                                      ),
-                                  )
-                                  .map((c) => (
-                                    <button
-                                      key={c.cca2}
-                                      type="button"
-                                      onClick={() =>
-                                        handleSelectLegalCountry(c)
-                                      }
-                                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-dull-white/20"
-                                    >
-                                      <span className="flex items-center gap-2">
-                                        {c.flags?.svg ? (
-                                          <img
-                                            src={c.flags.svg}
-                                            alt=""
-                                            className="h-4 w-6 rounded-sm object-cover"
-                                          />
-                                        ) : null}
-                                        <span>{c.name.common}</span>
-                                      </span>
-                                      {formik.values.legal_country ===
-                                      c.name.common ? (
-                                        <Check className="h-4 w-4 text-secondary" />
-                                      ) : null}
-                                    </button>
-                                  ))}
-                              </div>
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-
-                      <div ref={legalStateRef} className="relative space-y-2">
-                        <label className="text-sm font-semibold text-secondary">
-                          Legal State / Region
-                        </label>
-                        <button
-                          type="button"
-                          disabled={
-                            !selectedLegalCountry || locationStates.length === 0
-                          }
-                          onClick={() => {
-                            if (
-                              !selectedLegalCountry ||
-                              locationStates.length === 0
-                            )
-                              return;
-                            setShowLegalStateList((prev) => !prev);
-                            setShowLegalCountryList(false);
-                            setShowLegalCityList(false);
-                          }}
-                          onBlur={() =>
-                            formik.setFieldTouched("legal_state", true)
-                          }
-                          className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <span
-                            className={
-                              formik.values.legal_state
-                                ? "text-secondary"
-                                : "text-gray"
-                            }
-                          >
-                            {locationStates.length === 0
-                              ? formik.values.legal_state || "Auto-filled"
-                              : formik.values.legal_state || "Select state"}
-                          </span>
-                          <ChevronDown className="h-4 w-4 text-gray" />
-                        </button>
-                        {formik.touched.legal_state &&
-                        formik.errors.legal_state ? (
-                          <p className="text-xs font-medium text-red-500">
-                            {formik.errors.legal_state}
-                          </p>
-                        ) : null}
-
-                        <AnimatePresence>
-                          {showLegalStateList ? (
-                            <motion.div
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 6 }}
-                              className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-dull-white bg-white shadow-sm"
-                            >
-                              <div className="border-b border-dull-white/60 p-3">
-                                <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
-                                  <Search className="h-4 w-4 text-gray" />
-                                  <input
-                                    value={searchLegalState}
-                                    onChange={(e) =>
-                                      setSearchLegalState(e.target.value)
-                                    }
-                                    placeholder="Search state"
-                                    className="w-full bg-transparent text-sm text-secondary outline-none"
-                                  />
-                                </div>
-                              </div>
-                              <div className="max-h-60 overflow-y-auto p-2 scrollbar-hide">
-                                {locationStates
-                                  .filter((s) =>
-                                    s.name
-                                      .toLowerCase()
-                                      .includes(searchLegalState.toLowerCase()),
-                                  )
-                                  .map((s) => (
-                                    <button
-                                      key={s.state_code}
-                                      type="button"
-                                      onClick={() => handleSelectLegalState(s)}
-                                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-dull-white/20"
-                                    >
-                                      <span>{s.name}</span>
-                                      {formik.values.legal_state === s.name ? (
-                                        <Check className="h-4 w-4 text-secondary" />
-                                      ) : null}
-                                    </button>
-                                  ))}
-                              </div>
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-
-                      <div ref={legalCityRef} className="relative space-y-2">
-                        <label className="text-sm font-semibold text-secondary">
-                          Legal City
-                        </label>
-                        <button
-                          type="button"
-                          disabled={
-                            !selectedLegalCountry ||
-                            !formik.values.legal_state ||
-                            locationStates.length === 0 ||
-                            locationCities.length === 0
-                          }
-                          onClick={() => {
-                            if (
-                              !selectedLegalCountry ||
-                              !formik.values.legal_state ||
-                              locationStates.length === 0 ||
-                              locationCities.length === 0
-                            )
-                              return;
-                            setShowLegalCityList((prev) => !prev);
-                            setShowLegalCountryList(false);
-                            setShowLegalStateList(false);
-                          }}
-                          onBlur={() =>
-                            formik.setFieldTouched("legal_city", true)
-                          }
-                          className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <span
-                            className={
-                              formik.values.legal_city
-                                ? "text-secondary"
-                                : "text-gray"
-                            }
-                          >
-                            {locationStates.length === 0
-                              ? formik.values.legal_city || "Auto-filled"
-                              : locationCities.length === 0
-                                ? formik.values.legal_city || "Auto-filled"
-                                : formik.values.legal_city || "Select city"}
-                          </span>
-                          <ChevronDown className="h-4 w-4 text-gray" />
-                        </button>
-                        {formik.touched.legal_city &&
-                        formik.errors.legal_city ? (
-                          <p className="text-xs font-medium text-red-500">
-                            {formik.errors.legal_city}
-                          </p>
-                        ) : null}
-
-                        <AnimatePresence>
-                          {showLegalCityList ? (
-                            <motion.div
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 6 }}
-                              className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-dull-white bg-white shadow-sm"
-                            >
-                              <div className="border-b border-dull-white/60 p-3">
-                                <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
-                                  <Search className="h-4 w-4 text-gray" />
-                                  <input
-                                    value={searchLegalCity}
-                                    onChange={(e) =>
-                                      setSearchLegalCity(e.target.value)
-                                    }
-                                    placeholder="Search city"
-                                    className="w-full bg-transparent text-sm text-secondary outline-none"
-                                  />
-                                </div>
-                              </div>
-                              <div className="max-h-60 overflow-y-auto p-2 scrollbar-hide">
-                                {locationCities
-                                  .filter((city) =>
-                                    city
-                                      .toLowerCase()
-                                      .includes(searchLegalCity.toLowerCase()),
-                                  )
-                                  .map((city) => (
-                                    <button
-                                      key={city}
-                                      type="button"
-                                      onClick={() =>
-                                        handleSelectLegalCity(city)
-                                      }
-                                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-dull-white/20"
-                                    >
-                                      <span>{city}</span>
-                                      {formik.values.legal_city === city ? (
-                                        <Check className="h-4 w-4 text-secondary" />
-                                      ) : null}
-                                    </button>
-                                  ))}
-                              </div>
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-2 border-b border-dull-white/30 pb-2">
-                      <h4 className="text-base font-semibold tracking-wide text-gray">
-                        Organization Details
-                      </h4>
-                    </div>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="space-y-2 sm:col-span-2">
-                        <label className="text-sm font-semibold text-secondary">
-                          Website
-                        </label>
-                        <Input
-                          name="website"
-                          placeholder="https://example.com"
-                          className="bg-gray-50/50 h-11"
-                          value={formik.values.website}
+                        <textarea
+                          name="description"
+                          rows={4}
+                          placeholder="Brief description of your organisation..."
+                          className="w-full rounded-2xl border border-dull-white/50 bg-zinc-50 px-4 py-3 text-sm text-secondary outline-none transition-all placeholder:text-gray/50 focus:border-secondary/50 focus:ring-2 focus:ring-secondary/5"
+                          value={formik.values.description}
                           onChange={formik.handleChange}
                           onBlur={formik.handleBlur}
                         />
                       </div>
 
-                      <div className="space-y-2" ref={companySizeRef}>
+                      {industries.length > 0 && (
+                        <div
+                          className="space-y-2 lg:col-span-2"
+                          ref={industriesDropdownRef}
+                        >
+                          <label className="text-sm font-semibold text-secondary">
+                            Organization Type
+                          </label>
+
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsIndustriesOpen((v) => !v)}
+                              className="w-full rounded-xl border border-zinc-200 bg-gray-50/50 px-4 py-2 text-left transition-colors hover:bg-white"
+                              aria-label="Select industries"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex flex-1 flex-wrap gap-2">
+                                  {selectedIndustryBadges.visible.length ? (
+                                    <>
+                                      {selectedIndustryBadges.visible.map(
+                                        (name) => (
+                                          <span
+                                            key={name}
+                                            className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-primary"
+                                          >
+                                            {name}
+                                          </span>
+                                        ),
+                                      )}
+                                      {selectedIndustryBadges.remaining > 0 && (
+                                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-secondary border border-dull-white/70">
+                                          +{selectedIndustryBadges.remaining}{" "}
+                                          more
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-sm font-medium text-gray/60">
+                                      Select Organization Types
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-semibold text-gray">
+                                  {isIndustriesOpen ? "Close" : "Select"}
+                                </span>
+                              </div>
+                            </button>
+
+                            {isIndustriesOpen && (
+                              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-dull-white/50 bg-white shadow-sm">
+                                <div className="border-b border-dull-white/60 p-3">
+                                  <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
+                                    <Search className="h-4 w-4 text-gray" />
+                                    <input
+                                      value={industriesSearch}
+                                      onChange={(e) =>
+                                        setIndustriesSearch(e.target.value)
+                                      }
+                                      placeholder="Search Organization Types"
+                                      className="w-full bg-transparent text-sm text-secondary outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div
+                                  className="max-h-40 overscroll-contain overflow-y-auto overflow-x-hidden p-2"
+                                  onScroll={(e) =>
+                                    setIndustriesScrollTop(
+                                      e.currentTarget.scrollTop,
+                                    )
+                                  }
+                                  onWheel={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      height: virtualIndustries.topSpacer,
+                                    }}
+                                  />
+
+                                  {virtualIndustries.items.map((industry) => {
+                                    const checked =
+                                      formik.values.industry_ids?.includes(
+                                        industry.id,
+                                      ) ?? false;
+
+                                    return (
+                                      <button
+                                        key={industry.id}
+                                        type="button"
+                                        onClick={() =>
+                                          handleToggleIndustry(industry.id)
+                                        }
+                                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-secondary hover:bg-gray-50"
+                                      >
+                                        <span className="truncate">
+                                          {industry.name}
+                                        </span>
+                                        <span
+                                          className={`ml-3 inline-flex h-5 w-5 items-center justify-center rounded border ${
+                                            checked
+                                              ? "bg-secondary border-secondary"
+                                              : "bg-white border-dull-white/70"
+                                          }`}
+                                          aria-hidden="true"
+                                        >
+                                          {checked && (
+                                            <span className="text-primary text-xs font-bold">
+                                              ✓
+                                            </span>
+                                          )}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+
+                                  <div
+                                    style={{
+                                      height: virtualIndustries.bottomSpacer,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-2 lg:col-span-2">
                         <label className="text-sm font-semibold text-secondary">
-                          Company Size
+                          Legal Documentation
                         </label>
-                        <div className="relative">
+                        <div className="flex items-center justify-between rounded-xl border border-dashed border-dull-white bg-white/40 p-5 transition-colors hover:bg-white/60">
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary">
+                              <FiFileText className="h-6 w-6" />
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-sm font-semibold text-secondary">
+                                Business Registration
+                              </span>
+                              {formik.values.legal_document_url ? (
+                                <a
+                                  href={formik.values.legal_document_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-blue-600 underline hover:text-blue-800"
+                                >
+                                  View Uploaded Document
+                                </a>
+                              ) : (
+                                <span className="text-xs text-gray">
+                                  No document uploaded
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <label className="cursor-pointer rounded-lg bg-white px-4 py-2 text-xs font-semibold text-secondary border border-dull-white shadow-sm hover:bg-gray-50">
+                            {isUploadingDocument ? "Uploading..." : "Upload"}
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.xls,.xlsx"
+                              className="hidden"
+                              onChange={(e) =>
+                                handleDocumentUpload(
+                                  e.target.files?.[0] || null,
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                        {!isUploadingDocument && documentUploadSuccess && (
+                          <p className="mt-2 text-xs font-medium text-green-600">
+                            {documentUploadSuccess}
+                          </p>
+                        )}
+                        {!isUploadingDocument && documentUploadError && (
+                          <p className="mt-2 text-xs font-medium text-red-500">
+                            {documentUploadError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-3xl bg-dull-white/10 p-6 lg:col-span-2 lg:p-8">
+                  <div className="space-y-8">
+                    <div className="space-y-6">
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <div
+                          ref={legalCountryRef}
+                          className="relative space-y-2 sm:col-span-2"
+                        >
+                          <label className="text-sm font-semibold text-secondary">
+                            Legal Country
+                          </label>
                           <button
                             type="button"
-                            onClick={() => setIsCompanySizeOpen((v) => !v)}
-                            className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left transition-colors hover:bg-white"
+                            onClick={() => {
+                              setShowLegalCountryList((prev) => !prev);
+                              setShowLegalStateList(false);
+                              setShowLegalCityList(false);
+                            }}
+                            onBlur={() =>
+                              formik.setFieldTouched("legal_country", true)
+                            }
+                            className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left"
                           >
                             <span
                               className={
-                                formik.values.company_size
+                                formik.values.legal_country
                                   ? "text-secondary"
-                                  : "text-gray/60"
+                                  : "text-gray"
                               }
                             >
-                              {formik.values.company_size || "Select range"}
+                              {formik.values.legal_country || "Select country"}
                             </span>
-                            <ChevronDown
-                              className={`h-4 w-4 text-gray transition-transform duration-200 ${isCompanySizeOpen ? "rotate-180" : ""}`}
-                            />
+                            <ChevronDown className="h-4 w-4 text-gray" />
                           </button>
+                          {formik.touched.legal_country &&
+                          formik.errors.legal_country ? (
+                            <p className="text-xs font-medium text-red-500">
+                              {formik.errors.legal_country}
+                            </p>
+                          ) : null}
 
                           <AnimatePresence>
-                            {isCompanySizeOpen && (
+                            {showLegalCountryList ? (
                               <motion.div
-                                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                                transition={{ duration: 0.15, ease: "easeOut" }}
-                                className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-dull-white/50 bg-white p-1.5 shadow-xl max-h-52 overflow-y-auto"
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 6 }}
+                                className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-dull-white bg-white shadow-sm"
                               >
-                                {companySizeOptions.map((option) => {
-                                  const isSelected =
-                                    formik.values.company_size === option;
-                                  return (
-                                    <button
-                                      key={option}
-                                      type="button"
-                                      onClick={() => {
-                                        formik.setFieldValue(
-                                          "company_size",
-                                          option,
-                                        );
-                                        setIsCompanySizeOpen(false);
-                                      }}
-                                      className={`flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-colors ${
-                                        isSelected
-                                          ? "bg-secondary text-primary"
-                                          : "text-secondary hover:bg-gray-50"
-                                      }`}
-                                    >
-                                      <span>{option}</span>
-                                      {isSelected && (
-                                        <Check className="h-4 w-4 text-primary" />
-                                      )}
-                                    </button>
-                                  );
-                                })}
+                                <div className="border-b border-dull-white/60 p-3">
+                                  <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
+                                    <Search className="h-4 w-4 text-gray" />
+                                    <input
+                                      value={searchLegalCountry}
+                                      onChange={(e) =>
+                                        setSearchLegalCountry(e.target.value)
+                                      }
+                                      placeholder="Search country"
+                                      className="w-full bg-transparent text-sm text-secondary outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-60 overflow-y-auto p-2 scrollbar-hide">
+                                  {countries
+                                    .filter((c) =>
+                                      c.name.common
+                                        .toLowerCase()
+                                        .includes(
+                                          searchLegalCountry.toLowerCase(),
+                                        ),
+                                    )
+                                    .map((c) => (
+                                      <button
+                                        key={c.cca2}
+                                        type="button"
+                                        onClick={() =>
+                                          handleSelectLegalCountry(c)
+                                        }
+                                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-dull-white/20"
+                                      >
+                                        <span className="flex items-center gap-2">
+                                          {c.flags?.svg ? (
+                                            <img
+                                              src={c.flags.svg}
+                                              alt=""
+                                              className="h-4 w-6 rounded-sm object-cover"
+                                            />
+                                          ) : null}
+                                          <span>{c.name.common}</span>
+                                        </span>
+                                        {formik.values.legal_country ===
+                                        c.name.common ? (
+                                          <Check className="h-4 w-4 text-secondary" />
+                                        ) : null}
+                                      </button>
+                                    ))}
+                                </div>
                               </motion.div>
-                            )}
+                            ) : null}
+                          </AnimatePresence>
+                        </div>
+
+                        <div ref={legalStateRef} className="relative space-y-2">
+                          <label className="text-sm font-semibold text-secondary">
+                            Legal State / Region
+                          </label>
+                          <button
+                            type="button"
+                            disabled={
+                              !selectedLegalCountry ||
+                              locationStates.length === 0
+                            }
+                            onClick={() => {
+                              if (
+                                !selectedLegalCountry ||
+                                locationStates.length === 0
+                              )
+                                return;
+                              setShowLegalStateList((prev) => !prev);
+                              setShowLegalCountryList(false);
+                              setShowLegalCityList(false);
+                            }}
+                            onBlur={() =>
+                              formik.setFieldTouched("legal_state", true)
+                            }
+                            className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span
+                              className={
+                                formik.values.legal_state
+                                  ? "text-secondary"
+                                  : "text-gray"
+                              }
+                            >
+                              {locationStates.length === 0
+                                ? formik.values.legal_state || "Auto-filled"
+                                : formik.values.legal_state || "Select state"}
+                            </span>
+                            <ChevronDown className="h-4 w-4 text-gray" />
+                          </button>
+                          {formik.touched.legal_state &&
+                          formik.errors.legal_state ? (
+                            <p className="text-xs font-medium text-red-500">
+                              {formik.errors.legal_state}
+                            </p>
+                          ) : null}
+
+                          <AnimatePresence>
+                            {showLegalStateList ? (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 6 }}
+                                className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-dull-white bg-white shadow-sm"
+                              >
+                                <div className="border-b border-dull-white/60 p-3">
+                                  <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
+                                    <Search className="h-4 w-4 text-gray" />
+                                    <input
+                                      value={searchLegalState}
+                                      onChange={(e) =>
+                                        setSearchLegalState(e.target.value)
+                                      }
+                                      placeholder="Search state"
+                                      className="w-full bg-transparent text-sm text-secondary outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-60 overflow-y-auto p-2 scrollbar-hide">
+                                  {locationStates
+                                    .filter((s) =>
+                                      s.name
+                                        .toLowerCase()
+                                        .includes(
+                                          searchLegalState.toLowerCase(),
+                                        ),
+                                    )
+                                    .map((s) => (
+                                      <button
+                                        key={s.state_code}
+                                        type="button"
+                                        onClick={() =>
+                                          handleSelectLegalState(s)
+                                        }
+                                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-dull-white/20"
+                                      >
+                                        <span>{s.name}</span>
+                                        {formik.values.legal_state ===
+                                        s.name ? (
+                                          <Check className="h-4 w-4 text-secondary" />
+                                        ) : null}
+                                      </button>
+                                    ))}
+                                </div>
+                              </motion.div>
+                            ) : null}
+                          </AnimatePresence>
+                        </div>
+
+                        <div ref={legalCityRef} className="relative space-y-2">
+                          <label className="text-sm font-semibold text-secondary">
+                            Legal City
+                          </label>
+                          <button
+                            type="button"
+                            disabled={
+                              !selectedLegalCountry ||
+                              !formik.values.legal_state ||
+                              locationStates.length === 0 ||
+                              locationCities.length === 0
+                            }
+                            onClick={() => {
+                              if (
+                                !selectedLegalCountry ||
+                                !formik.values.legal_state ||
+                                locationStates.length === 0 ||
+                                locationCities.length === 0
+                              )
+                                return;
+                              setShowLegalCityList((prev) => !prev);
+                              setShowLegalCountryList(false);
+                              setShowLegalStateList(false);
+                            }}
+                            onBlur={() =>
+                              formik.setFieldTouched("legal_city", true)
+                            }
+                            className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span
+                              className={
+                                formik.values.legal_city
+                                  ? "text-secondary"
+                                  : "text-gray"
+                              }
+                            >
+                              {locationStates.length === 0
+                                ? formik.values.legal_city || "Auto-filled"
+                                : locationCities.length === 0
+                                  ? formik.values.legal_city || "Auto-filled"
+                                  : formik.values.legal_city || "Select city"}
+                            </span>
+                            <ChevronDown className="h-4 w-4 text-gray" />
+                          </button>
+                          {formik.touched.legal_city &&
+                          formik.errors.legal_city ? (
+                            <p className="text-xs font-medium text-red-500">
+                              {formik.errors.legal_city}
+                            </p>
+                          ) : null}
+
+                          <AnimatePresence>
+                            {showLegalCityList ? (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 6 }}
+                                className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-dull-white bg-white shadow-sm"
+                              >
+                                <div className="border-b border-dull-white/60 p-3">
+                                  <div className="flex items-center gap-2 rounded-lg border border-dull-white bg-white px-3 py-2">
+                                    <Search className="h-4 w-4 text-gray" />
+                                    <input
+                                      value={searchLegalCity}
+                                      onChange={(e) =>
+                                        setSearchLegalCity(e.target.value)
+                                      }
+                                      placeholder="Search city"
+                                      className="w-full bg-transparent text-sm text-secondary outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-60 overflow-y-auto p-2 scrollbar-hide">
+                                  {locationCities
+                                    .filter((city) =>
+                                      city
+                                        .toLowerCase()
+                                        .includes(
+                                          searchLegalCity.toLowerCase(),
+                                        ),
+                                    )
+                                    .map((city) => (
+                                      <button
+                                        key={city}
+                                        type="button"
+                                        onClick={() =>
+                                          handleSelectLegalCity(city)
+                                        }
+                                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-dull-white/20"
+                                      >
+                                        <span>{city}</span>
+                                        {formik.values.legal_city === city ? (
+                                          <Check className="h-4 w-4 text-secondary" />
+                                        ) : null}
+                                      </button>
+                                    ))}
+                                </div>
+                              </motion.div>
+                            ) : null}
                           </AnimatePresence>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
 
-              <div className="rounded-3xl bg-dull-white/10 p-6 lg:col-span-2 lg:p-2 lg:px-8">
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-secondary">
-                      Business ID
-                    </label>
-                    <div className="group relative">
-                      <Input
-                        name="business_id"
-                        placeholder="BIZ-ID"
-                        className={`bg-white/40 font-mono h-11 ${
-                          initialValues.business_id
-                            ? "opacity-80 cursor-not-allowed"
-                            : ""
-                        }`}
-                        value={formik.values.business_id}
-                        onChange={
-                          !initialValues.business_id
-                            ? formik.handleChange
-                            : undefined
-                        }
-                        onBlur={formik.handleBlur}
-                        readOnly={!!initialValues.business_id}
-                      />
-                      {initialValues.business_id && (
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 rounded-xl border border-dull-white/60 bg-white px-3 py-2 text-xs font-semibold text-secondary opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
-                          Business ID is not editable
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2 border-b border-dull-white/30 pb-2">
+                        <h4 className="text-base font-semibold tracking-wide text-gray">
+                          Organization Details
+                        </h4>
+                      </div>
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-sm font-semibold text-secondary">
+                            Website
+                          </label>
+                          <Input
+                            name="website"
+                            placeholder="https://example.com"
+                            className="bg-gray-50/50 h-11"
+                            value={formik.values.website}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                          />
                         </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-secondary">
-                      Total Branches
-                    </label>
-                    <div className="group relative">
-                      <Input
-                        name="total_branches"
-                        className="bg-white/40 font-mono opacity-80 h-11 cursor-not-allowed"
-                        value={String(
-                          branchCount ?? formik.values.total_branches ?? 0,
-                        )}
-                        disabled
-                      />
-                      <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 rounded-xl border border-dull-white/60 bg-white px-3 py-2 text-xs font-semibold text-secondary opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
-                        Total Branches is not editable
+                        <div className="space-y-2" ref={companySizeRef}>
+                          <label className="text-sm font-semibold text-secondary">
+                            Company Size
+                          </label>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsCompanySizeOpen((v) => !v)}
+                              className="flex h-11 w-full items-center justify-between rounded-xl border border-zinc-200 bg-gray-50/50 px-4 text-left transition-colors hover:bg-white"
+                            >
+                              <span
+                                className={
+                                  formik.values.company_size
+                                    ? "text-secondary"
+                                    : "text-gray/60"
+                                }
+                              >
+                                {formik.values.company_size || "Select range"}
+                              </span>
+                              <ChevronDown
+                                className={`h-4 w-4 text-gray transition-transform duration-200 ${isCompanySizeOpen ? "rotate-180" : ""}`}
+                              />
+                            </button>
+
+                            <AnimatePresence>
+                              {isCompanySizeOpen && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                                  transition={{
+                                    duration: 0.15,
+                                    ease: "easeOut",
+                                  }}
+                                  className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-dull-white/50 bg-white p-1.5 shadow-xl max-h-52 overflow-y-auto"
+                                >
+                                  {companySizeOptions.map((option) => {
+                                    const isSelected =
+                                      formik.values.company_size === option;
+                                    return (
+                                      <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => {
+                                          formik.setFieldValue(
+                                            "company_size",
+                                            option,
+                                          );
+                                          setIsCompanySizeOpen(false);
+                                        }}
+                                        className={`flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                                          isSelected
+                                            ? "bg-secondary text-primary"
+                                            : "text-secondary hover:bg-gray-50"
+                                        }`}
+                                      >
+                                        <span>{option}</span>
+                                        {isSelected && (
+                                          <Check className="h-4 w-4 text-primary" />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
+
+                <div className="rounded-3xl bg-dull-white/10 p-6 lg:col-span-2 lg:p-2 lg:px-8">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-secondary">
+                        Business ID
+                      </label>
+                      <div className="group relative">
+                        <Input
+                          name="business_id"
+                          placeholder="BIZ-ID"
+                          className={`bg-white/40 font-mono h-11 ${
+                            initialValues.business_id
+                              ? "opacity-80 cursor-not-allowed"
+                              : ""
+                          }`}
+                          value={formik.values.business_id}
+                          onChange={
+                            !initialValues.business_id
+                              ? formik.handleChange
+                              : undefined
+                          }
+                          onBlur={formik.handleBlur}
+                          readOnly={!!initialValues.business_id}
+                        />
+                        {initialValues.business_id && (
+                          <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 rounded-xl border border-dull-white/60 bg-white px-3 py-2 text-xs font-semibold text-secondary opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                            Business ID is not editable
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-secondary">
+                        Total Branches
+                      </label>
+                      <div className="group relative">
+                        <Input
+                          name="total_branches"
+                          className="bg-white/40 font-mono opacity-80 h-11 cursor-not-allowed"
+                          value={String(
+                            branchCount ?? formik.values.total_branches ?? 0,
+                          )}
+                          disabled
+                        />
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 rounded-xl border border-dull-white/60 bg-white px-3 py-2 text-xs font-semibold text-secondary opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                          Total Branches is not editable
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-dull-white/40 bg-white/80 p-6 backdrop-blur-md lg:px-10">
               <div className="flex items-center gap-3">

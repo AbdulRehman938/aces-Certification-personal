@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   ChevronLeft,
   Clock,
@@ -13,7 +13,6 @@ import {
   Eye,
   CreditCard,
   ChevronRight,
-  Search,
   ChevronDown,
   AlertCircle,
   Plus,
@@ -36,6 +35,59 @@ import {
   FaUser,
   FaCity,
 } from "react-icons/fa";
+import { AcesDynamicBadge } from "@/components/AcesDynamicBadge";
+import { Search } from "lucide-react";
+
+const isNewCertificate = (dateString?: string) => {
+  if (!dateString) return false;
+  const createdAt = new Date(dateString);
+  const now = new Date();
+  const diffInMs = now.getTime() - createdAt.getTime();
+  const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+  return diffInDays >= 0 && diffInDays <= 3;
+};
+
+const calculateExpiryDate = (cert: {
+  created_at?: string;
+  validity_years?: number;
+  validity_months?: number;
+  validity_days?: number;
+}) => {
+  if (!cert.created_at) return null;
+  const base = new Date(cert.created_at);
+  const expiry = new Date(base);
+  if (cert.validity_years)
+    expiry.setFullYear(expiry.getFullYear() + cert.validity_years);
+  if (cert.validity_months)
+    expiry.setMonth(expiry.getMonth() + cert.validity_months);
+  if (cert.validity_days) expiry.setDate(expiry.getDate() + cert.validity_days);
+  return expiry.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
+const formatValidity = (cert: {
+  validity_years?: number;
+  validity_months?: number;
+  validity_days?: number;
+}) => {
+  const parts: string[] = [];
+  if (cert.validity_years)
+    parts.push(
+      `${cert.validity_years} year${cert.validity_years !== 1 ? "s" : ""}`,
+    );
+  if (cert.validity_months)
+    parts.push(
+      `${cert.validity_months} month${cert.validity_months !== 1 ? "s" : ""}`,
+    );
+  if (cert.validity_days)
+    parts.push(
+      `${cert.validity_days} day${cert.validity_days !== 1 ? "s" : ""}`,
+    );
+  return parts.length > 0 ? parts.join(", ") : "N/A";
+};
 
 const SearchableDropdown = ({
   label,
@@ -147,6 +199,54 @@ const SearchableDropdown = ({
       </AnimatePresence>
     </div>
   );
+};
+
+const AssessmentStatusChecker = ({
+  show,
+  certificateId,
+  branchId,
+  onStatusUpdate,
+}: {
+  show: boolean;
+  certificateId: string;
+  branchId?: string | null;
+  onStatusUpdate: (data: any) => void;
+}) => {
+  useEffect(() => {
+    if (show && certificateId) {
+      const checkStatus = async () => {
+        try {
+          const response = await axiosInstance.get(
+            `/certificates/${certificateId}/self-disclosure-status${branchId ? `?branchId=${branchId}` : ""}`,
+          );
+          const data = response.data.data || response.data;
+          const isFinished =
+            data?.status === "completed" ||
+            data?.status === "passed" ||
+            data?.status === "active";
+          const isPending =
+            data?.isSubmitted &&
+            (data?.status === "pending" ||
+              data?.status === "submitted" ||
+              data?.status === "ai_reviewing" ||
+              data?.status === "awaiting_review");
+
+          onStatusUpdate({
+            ...data,
+            isFinished,
+            isPending,
+            eligible: isFinished,
+            isStarted: data?.isSubmitted || data?.hasSelfDisclosure,
+          });
+        } catch (err) {
+          console.error("Periodic status check failed", err);
+        }
+      };
+      checkStatus();
+    }
+  }, [show, certificateId, branchId, onStatusUpdate]);
+
+  return null;
 };
 
 interface CertificateDetailsProps {
@@ -383,9 +483,23 @@ export function CertificateDetails({
           `/certificates/${certificateId}`,
         );
 
-        const data = response?.data?.data ?? response?.data;
+        const rawData = response?.data?.data;
+        let cert = rawData;
+
+        if (rawData?.data && Array.isArray(rawData.data)) {
+          cert =
+            rawData.data.find((c: any) => c.id === certificateId) ??
+            rawData.data[0] ??
+            rawData;
+        } else if (Array.isArray(rawData)) {
+          cert =
+            rawData.find((c: any) => c.id === certificateId) ??
+            rawData[0] ??
+            rawData;
+        }
+
         if (isMounted) {
-          setCertificate(data);
+          setCertificate(cert);
         }
       } catch (err) {
         if (isMounted) {
@@ -428,11 +542,22 @@ export function CertificateDetails({
         const response = await axiosInstance.get("/organization/profile");
         const data = response?.data?.data || response?.data;
         setOrgProfile(data);
-      } catch (err) {
-        console.error("Failed to fetch organization profile", err);
+        if (data?.stripe_customer_id) {
+          setStripeCustomerId(data.stripe_customer_id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch profile", error);
       }
     };
     fetchProfile();
+  }, []);
+
+  // I'll add the useCallback here
+  const handleEligibilityUpdate = useCallback((data: any) => {
+    setEligibilityData(data);
+    if (data?.eligible) {
+      setAssessmentType("assured");
+    }
   }, []);
 
   useEffect(() => {
@@ -604,71 +729,175 @@ export function CertificateDetails({
 
           {certificate && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="space-y-1">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-                  <h1 className="text-2xl font-semibold text-gray-900 leading-tight">
-                    {certificate.name}
-                  </h1>
-                  <span className="shrink-0 rounded-full bg-zinc-100 px-4 py-1.5 text-xs font-semibold text-zinc-600 w-fit">
-                    {certificate.industry_names?.[0] || "Hotel"}
-                  </span>
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-2xl font-semibold text-gray-900 leading-tight">
+                      {certificate.name}
+                    </h1>
+                    {isNewCertificate(certificate.created_at) && (
+                      <span className="flex items-center gap-1.5 px-3 py-1 bg-secondary text-primary text-[10px] font-bold rounded-full animate-pulse shadow-sm">
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full" />
+                        NEW
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-gray-400">
+                    {certificate.certificate_id}
+                  </p>
                 </div>
-                <p className="text-sm font-medium text-gray-400">
-                  {certificate.certificate_id}
-                </p>
+                <span className="shrink-0 rounded-full bg-zinc-100 px-4 py-1.5 text-xs font-semibold text-zinc-600 w-fit">
+                  {certificate.industry_names?.[0] || "Hotel"}
+                </span>
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                {certificate.badges && certificate.badges.length > 0 ? (
-                  certificate.badges.map((badge: any) => (
-                    <span
-                      key={badge.id}
-                      className="rounded-full bg-zinc-100 px-6 py-2 text-sm font-medium text-gray-700"
+              {certificate.badges && certificate.badges.length > 0 ? (
+                <div className="pt-2">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                    Badge Tiers &amp; Score Criteria
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {certificate.badges.map((badge: any) => (
+                      <div
+                        key={badge.id}
+                        className="rounded-2xl border border-zinc-100 bg-white shadow-sm overflow-hidden"
+                      >
+                        {/* Badge header */}
+                        <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-800">
+                            {badge.name}
+                          </span>
+                        </div>
+
+                        {/* Score tiers */}
+                        {badge.colors && badge.colors.length > 0 ? (
+                          <div className="px-4 py-3 flex flex-col gap-3">
+                            {badge.colors.map((c: any, ci: number) => {
+                              // Determine dynamic level based on label or index
+                              const tierLevel =
+                                c.label ||
+                                (ci === 0
+                                  ? "BRONZE"
+                                  : ci === 1
+                                    ? "SILVER"
+                                    : ci === 2
+                                      ? "GOLD"
+                                      : "EMERALD");
+
+                              return (
+                                <div
+                                  key={ci}
+                                  className="flex items-center justify-between gap-3"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <AcesDynamicBadge
+                                      size={28}
+                                      level={tierLevel}
+                                      name={badge.name}
+                                      title={certificate.name}
+                                      className="shrink-0"
+                                    />
+                                    <span className="text-xs font-medium text-gray-600">
+                                      {c.label || tierLevel}
+                                    </span>
+                                  </div>
+                                  <span
+                                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0"
+                                    style={{
+                                      backgroundColor: `${
+                                        ci === 0
+                                          ? "#A8703A"
+                                          : ci === 1
+                                            ? "#949494"
+                                            : ci === 2
+                                              ? "#FFAA2F"
+                                              : "#10B981"
+                                      }18`,
+                                      color:
+                                        ci === 0
+                                          ? "#A8703A"
+                                          : ci === 1
+                                            ? "#949494"
+                                            : ci === 2
+                                              ? "#FFAA2F"
+                                              : "#10B981",
+                                      border: `1px solid ${
+                                        ci === 0
+                                          ? "#A8703A"
+                                          : ci === 1
+                                            ? "#949494"
+                                            : ci === 2
+                                              ? "#FFAA2F"
+                                              : "#10B981"
+                                      }35`,
+                                    }}
+                                  >
+                                    {c.min_score}–{c.max_score}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="px-4 py-3">
+                            <p className="text-xs text-gray-400">
+                              No score data
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-2 flex flex-wrap gap-3">
+                  {["Bronze", "Silver", "Gold", "Emerald"].map((tier) => (
+                    <div
+                      key={tier}
+                      className="px-6 py-2 rounded-full bg-zinc-100 text-zinc-600 text-sm font-semibold border border-zinc-200 flex items-center gap-2"
                     >
-                      {badge.name}
-                    </span>
-                  ))
-                ) : (
-                  <>
-                    <span className="rounded-full bg-[#EBEBEB] px-8 py-2 text-sm font-medium text-gray-700">
-                      Bronze
-                    </span>
-                    <span className="rounded-full bg-[#EBEBEB] px-8 py-2 text-sm font-medium text-gray-700">
-                      Silver
-                    </span>
-                    <span className="rounded-full bg-[#EBEBEB] px-8 py-2 text-sm font-medium text-gray-700">
-                      Gold
-                    </span>
-                    <span className="rounded-full bg-[#EBEBEB] px-8 py-2 text-sm font-medium text-gray-700">
-                      Emerald
-                    </span>
-                  </>
-                )}
-              </div>
+                      <AcesDynamicBadge
+                        size={20}
+                        level={tier}
+                        name="RANK"
+                        title={certificate.name}
+                        className="shrink-0"
+                      />
+                      {tier}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Description */}
-              <p className="text-sm leading-relaxed text-gray-500 max-w-4xl">
-                {certificate.description ||
-                  "The Data Protection Practitioner Certificate validates that your organisation has implemented robust data protection policies and procedures. This certification covers key areas including data handling, storage security, access controls, and incident response protocols."}
-              </p>
+              {certificate.description && (
+                <p className="text-[15px] leading-relaxed text-gray-400 font-medium max-w-5xl">
+                  {certificate.description}
+                </p>
+              )}
 
               <div className="h-px w-full bg-zinc-100" />
 
               {/* Pricing */}
-              <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-12 md:grid-cols-2">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    Self-disclosure: USD {certificate.disclosure_price}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[16px] font-bold text-[#1A1A1A]">
+                      Self-disclosure:
+                    </span>
+                    <span className="text-[16px] font-bold text-[#1A1A1A]">
+                      USD {certificate.disclosure_price}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400 font-medium tracking-tight">
                     Per property, online checklist.
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">
+                  <p className="text-[16px] font-bold text-[#1A1A1A]">
                     Assured: USD {certificate.assured_price}
                   </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-gray-400 font-medium tracking-tight">
                     Per certification, range by size and complexity.
                   </p>
                 </div>
@@ -723,76 +952,60 @@ export function CertificateDetails({
                 </div>
               </div>
 
+              {/* Timeline */}
+              {certificate && (
+                <div className="rounded-2xl border border-zinc-100 p-6 shadow-sm bg-white">
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="w-9 h-9 rounded-xl bg-secondary/8 flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4 text-secondary" />
+                    </div>
+                    <h3 className="text-[15px] font-bold text-[#1A1A1A]">
+                      Certificate avalibility
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+                        Validity period
+                      </p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {formatValidity(certificate)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Compulsory Documents */}
-              <div className="rounded-2xl border border-zinc-100 p-6 shadow-sm">
-                <h3 className="mb-4 text-sm font-semibold text-gray-900">
+              <div className="rounded-2xl border border-zinc-100 p-8 shadow-sm bg-white">
+                <h3 className="mb-6 text-[15px] font-bold text-[#1A1A1A]">
                   Compulsory documents
                 </h3>
-                <div className="space-y-3">
-                  {certificate.compulsory_docs &&
-                  certificate.compulsory_docs.length > 0
-                    ? certificate.compulsory_docs.map(
-                        (doc: string, i: number) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] font-semibold text-gray-500">
-                              {i + 1}
-                            </span>
-                            <span className="text-sm font-medium text-gray-500">
-                              {doc}
-                            </span>
-                          </div>
-                        ),
-                      )
-                    : [
-                        "Governance Framework",
-                        "Risk Management Policy",
-                        "Code of Conduct",
-                        "ESG Policy Document",
-                        "Organizational Structure / Org Chart",
-                      ].map((doc, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] font-semibold text-gray-500">
+                {certificate.compulsory_docs &&
+                certificate.compulsory_docs.length > 0 ? (
+                  <div className="space-y-4">
+                    {certificate.compulsory_docs.map(
+                      (doc: string, i: number) => (
+                        <div key={i} className="flex items-center gap-4">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FAFAFA] border border-[#F0F0F0] text-[11px] font-bold text-[#A3A3A3]">
                             {i + 1}
                           </span>
-                          <span className="text-sm font-medium text-gray-500">
+                          <span className="text-[14px] font-medium text-[#737373]">
                             {doc}
                           </span>
                         </div>
-                      ))}
-                </div>
+                      ),
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    No compulsory documents specified for this certificate.
+                  </p>
+                )}
               </div>
 
               {/* Timelines and Action */}
-              <div className="flex flex-col gap-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div className="rounded-md bg-zinc-50 p-4 flex items-center gap-4">
-                    <div className="h-8 w-8 rounded-full bg-[#1A1A1A] flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">
-                        Audit Assured timeline
-                      </p>
-                      <p className="text-sm font-semibold text-gray-900">
-                        4-6 weeks
-                      </p>
-                    </div>
-                  </div>
-                  <div className="rounded-md bg-zinc-50 p-4 flex items-center gap-4">
-                    <div className="h-8 w-8 rounded-full bg-[#1A1A1A] flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">
-                        Self assesment timeline
-                      </p>
-                      <p className="text-sm font-semibold text-gray-900">
-                        within 2-3 minutes
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="flex flex-col gap-8">
                 <div className="flex justify-end w-full md:max-w-[25%] ml-auto mt-4 md:mt-0">
                   <Tooltip
                     content="Read-only access. You do not have permission to initiate a certification."
@@ -829,9 +1042,9 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-2xl bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
             >
-              <div className="p-6 pb-3">
+              <div className="p-6 pb-3 border-b border-zinc-50 shrink-0">
                 <h2 className="text-xl font-bold text-[#1A1A1A] mb-1">
                   Select Site for Certification
                 </h2>
@@ -840,7 +1053,7 @@ export function CertificateDetails({
                 </p>
               </div>
 
-              <div className="px-6 py-3 overflow-y-auto grow space-y-3 scrollbar-hide">
+              <div className="px-6 py-3 overflow-y-auto grow space-y-3 scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {isBranchesLoading ? (
                   <div className="flex items-center justify-center py-10">
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-black" />
@@ -889,7 +1102,7 @@ export function CertificateDetails({
                             <div className="flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5" />
                               <span className="text-base font-medium">
-                                {branch.branch_size || "500+ employees"}
+                                {branch.branch_size || "—"}
                               </span>
                             </div>
                           </div>
@@ -907,7 +1120,7 @@ export function CertificateDetails({
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 pt-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="p-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-zinc-50 shrink-0 bg-white">
                 <button
                   onClick={() => {
                     setShowModal(false);
@@ -931,31 +1144,41 @@ export function CertificateDetails({
                       setIsTypeLoading(true);
                       setIsCheckingEligibility(true);
 
-                      const checkEligibility = async (): Promise<any> => {
-                        if (!certificateId) return { eligible: false };
-                        const response = await axiosInstance.get(
-                          `/certificates/${certificateId}/self-disclosure-status`,
-                        );
-                        const data = response.data.data || response.data;
-                        return {
-                          ...data,
-                          eligible:
-                            !!data?.isSubmitted && data?.status === "completed",
+                      const checkSelfDisclosureStatus =
+                        async (): Promise<any> => {
+                          if (!certificateId) return { eligible: false };
+                          try {
+                            const response = await axiosInstance.get(
+                              `/certificates/${certificateId}/self-disclosure-status${selectedBranchId ? `?branchId=${selectedBranchId}` : ""}`,
+                            );
+                            const data = response.data.data || response.data;
+                            return {
+                              ...data,
+                              eligible:
+                                data?.hasSelfDisclosure === true ||
+                                (!!data?.isSubmitted &&
+                                  data?.status === "completed"),
+                            };
+                          } catch (err) {
+                            console.error("Eligibility check failed", err);
+                            return { eligible: false };
+                          }
                         };
-                      };
 
                       try {
                         const [branchResponse, eligibilityRes] =
                           await Promise.all([
                             axiosInstance.get(`/branches/${selectedBranchId}`),
-                            checkEligibility(),
+                            checkSelfDisclosureStatus(),
                           ]);
 
                         const branchData =
                           branchResponse?.data?.data || branchResponse?.data;
                         setEligibilityData(eligibilityRes);
 
-                        if (!eligibilityRes?.eligible) {
+                        if (eligibilityRes?.eligible) {
+                          setAssessmentType("assured");
+                        } else {
                           setAssessmentType("self_disclosure");
                         }
 
@@ -1019,10 +1242,10 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-2xl bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
             >
               {/* Modal Header */}
-              <div className="p-6 pb-3">
+              <div className="p-6 pb-3 border-b border-zinc-50 shrink-0">
                 <h2 className="text-xl font-bold text-[#1A1A1A] mb-1">
                   Choose Assessment Type
                 </h2>
@@ -1033,7 +1256,7 @@ export function CertificateDetails({
                 </p>
               </div>
 
-              <div className="px-6 py-3 space-y-5">
+              <div className="px-6 py-3 space-y-5 overflow-y-auto grow scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <div className="flex items-start gap-2.5 p-3.5 bg-[#FFFBEB] border border-[#FEF3C7] rounded-xl mb-5">
                   <div className="shrink-0 w-5 h-5 bg-[#F59E0B] rounded-full flex items-center justify-center text-white">
                     <span className="font-bold text-xs">!</span>
@@ -1049,11 +1272,18 @@ export function CertificateDetails({
                   </div>
                 </div>
                 <div
-                  onClick={() => setAssessmentType("self_disclosure")}
-                  className={`relative p-5 rounded-xl border-2 transition-all cursor-pointer group flex items-start gap-4 ${
+                  onClick={() =>
+                    !eligibilityData?.isStarted &&
+                    setAssessmentType("self_disclosure")
+                  }
+                  className={`relative p-5 rounded-xl border-2 transition-all group flex items-start gap-4 ${
                     assessmentType === "self_disclosure"
                       ? "border-black bg-white"
-                      : "border-[#F5F5F5] bg-[#FAFAFA] hover:border-gray-200"
+                      : "border-[#F5F5F5] bg-[#FAFAFA]"
+                  } ${
+                    eligibilityData?.isStarted
+                      ? "opacity-60 grayscale-[0.5] cursor-not-allowed"
+                      : "cursor-pointer hover:border-gray-200"
                   }`}
                 >
                   <div
@@ -1065,13 +1295,34 @@ export function CertificateDetails({
                   >
                     <FileText className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-[#1A1A1A] text-base mb-0.5">
-                      Start Self-Disclosure
-                    </h3>
+                  <div className="grow">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <h3 className="font-bold text-[#1A1A1A] text-base">
+                        Self-Disclosure Assessment
+                      </h3>
+                      {eligibilityData?.isFinished ? (
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 rounded-lg text-[10px] text-green-600 font-bold border border-green-100">
+                          <Check className="w-3 h-3" /> Completed
+                        </div>
+                      ) : eligibilityData?.isPending ? (
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg text-[10px] text-blue-600 font-bold border border-blue-100">
+                          <Clock className="w-3 h-3" /> In Review
+                        </div>
+                      ) : null}
+                    </div>
                     <p className="text-gray text-xs font-medium">
                       Self-reported assessment completed by your organization
                     </p>
+                    {(eligibilityData?.isFinished ||
+                      eligibilityData?.isPending) && (
+                      <div className="mt-2.5 p-2 bg-zinc-50 rounded-lg border border-zinc-100">
+                        <p className="text-[10px] text-zinc-500 font-bold leading-tight">
+                          {eligibilityData?.isFinished
+                            ? "You have already completed the self-disclosure stage for this branch."
+                            : "Your self-disclosure is currently under review. You can proceed to Assured Certification once it is completed."}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   {assessmentType === "self_disclosure" && (
                     <div className="ml-auto mt-1">
@@ -1106,7 +1357,11 @@ export function CertificateDetails({
                       <h3 className="font-bold text-[#1A1A1A] text-base">
                         Start Assured Certification
                       </h3>
-                      {!eligibilityData?.eligible && (
+                      {eligibilityData?.isFinished ? (
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg text-[10px] text-blue-600 font-bold border border-blue-100">
+                          <Shield className="w-3 h-3" /> Available
+                        </div>
+                      ) : (
                         <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded-lg text-[10px] text-red-600 font-bold border border-red-100">
                           <AlertCircle className="w-3 h-3" /> Locked
                         </div>
@@ -1118,8 +1373,9 @@ export function CertificateDetails({
                     {!eligibilityData?.eligible && (
                       <div className="mt-2.5 p-2 bg-red-50/50 rounded-lg border border-red-100/50">
                         <p className="text-[10px] text-red-500 font-bold leading-tight">
-                          You must complete self disclosure to use assured
-                          certifications
+                          {eligibilityData?.isPending
+                            ? "Please wait for your self-disclosure review to complete before starting Assured Certification."
+                            : "You must complete self disclosure to use assured certifications"}
                         </p>
                       </div>
                     )}
@@ -1134,7 +1390,7 @@ export function CertificateDetails({
                 </div>
               </div>
 
-              <div className="p-6 pt-3 flex flex-col sm:flex-row items-center justify-end gap-3">
+              <div className="p-6 py-4 flex flex-col sm:flex-row items-center justify-end gap-3 border-t border-zinc-50 shrink-0 bg-white">
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => {
@@ -1163,6 +1419,13 @@ export function CertificateDetails({
           </div>
         )}
 
+        <AssessmentStatusChecker
+          show={showTypeModal}
+          certificateId={certificateId}
+          branchId={selectedBranchId}
+          onStatusUpdate={handleEligibilityUpdate}
+        />
+
         {showConfirmModal && (
           <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
             <motion.div
@@ -1175,9 +1438,9 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-[#FBFBFB] rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-2xl bg-[#FBFBFB] rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
             >
-              <div className="p-6 pb-3">
+              <div className="p-6 pb-3 border-b border-zinc-50 shrink-0 bg-white">
                 <h2 className="text-xl font-bold text-[#1A1A1A] mb-1">
                   Confirm Your Selection
                 </h2>
@@ -1187,7 +1450,7 @@ export function CertificateDetails({
               </div>
 
               {/* Modal Content */}
-              <div className="px-6 py-3 space-y-3 overflow-y-auto grow scrollbar-hide">
+              <div className="px-6 py-3 space-y-3 overflow-y-auto grow scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {/* Branch Info */}
                 <div className="bg-white p-4 rounded-xl border border-[#FAFAFA] shadow-sm">
                   <p className="text-gray text-[10px] font-bold tracking-wider mb-1.5">
@@ -1246,7 +1509,7 @@ export function CertificateDetails({
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 pt-3 flex flex-col sm:flex-row items-center justify-end gap-3 bg-white/50 backdrop-blur-sm border-t border-[#F0F0F0]">
+              <div className="p-6 py-4 flex flex-col sm:flex-row items-center justify-end gap-3 bg-white border-t border-[#F0F0F0] shrink-0">
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => {
@@ -1303,10 +1566,10 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-lg bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
             >
               {/* Modal Header */}
-              <div className="p-6 pb-3">
+              <div className="p-6 pb-3 border-b border-zinc-50 shrink-0">
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-xl font-bold text-[#1A1A1A]">
                     Payment Methods
@@ -1318,7 +1581,7 @@ export function CertificateDetails({
               </div>
 
               {/* Modal Content */}
-              <div className="px-6 py-3 space-y-2.5 overflow-y-auto grow scrollbar-hide">
+              <div className="px-6 py-3 space-y-2.5 overflow-y-auto grow scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {isMethodsLoading ? (
                   <div className="flex flex-col items-center justify-center py-10 gap-3">
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#F5F5F5] border-t-black" />
@@ -1413,7 +1676,7 @@ export function CertificateDetails({
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 pt-3 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#F0F0F0]">
+              <div className="p-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#F0F0F0] shrink-0 bg-white">
                 <button
                   onClick={() => {
                     setShowPaymentModal(false);
@@ -1458,10 +1721,10 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-lg bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
             >
-              {/* Modal Content */}
-              <div className="p-6 pb-3">
+              {/* Modal Header */}
+              <div className="p-6 pb-3 border-b border-zinc-50 shrink-0">
                 <h2 className="text-xl font-bold text-[#1A1A1A] mb-1">
                   Payment Summary
                 </h2>
@@ -1470,7 +1733,7 @@ export function CertificateDetails({
                 </p>
               </div>
 
-              <div className="px-6 py-3 space-y-4 overflow-y-auto grow scrollbar-hide">
+              <div className="px-6 py-3 space-y-4 overflow-y-auto grow scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 {/* Details Box */}
                 <div className="p-4 rounded-xl bg-[#FAFAFA] space-y-3">
                   <div className="space-y-0.5">
@@ -1478,7 +1741,7 @@ export function CertificateDetails({
                       Organization
                     </p>
                     <p className="text-[#1A1A1A] font-bold text-sm">
-                      {orgProfile?.name || "Acme Corporation"}
+                      {orgProfile?.name || "—"}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -1486,7 +1749,7 @@ export function CertificateDetails({
                       Branch
                     </p>
                     <p className="text-[#1A1A1A] font-bold text-sm">
-                      {selectedBranch?.name || "Headquarters - New York"}
+                      {selectedBranch?.name || "—"}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -1494,8 +1757,7 @@ export function CertificateDetails({
                       Certificate
                     </p>
                     <p className="text-[#1A1A1A] font-bold text-sm">
-                      {certificate?.name ||
-                        "Environmental Sustainability Standard"}
+                      {certificate?.name || "—"}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -1516,10 +1778,8 @@ export function CertificateDetails({
                   <span className="text-base font-bold">
                     USD{" "}
                     {statusAction === "assured"
-                      ? certificate?.assured_price?.toLocaleString() ||
-                        "3,500–6,000"
-                      : certificate?.disclosure_price?.toLocaleString() ||
-                        "1,500"}
+                      ? certificate?.assured_price?.toLocaleString() || "—"
+                      : certificate?.disclosure_price?.toLocaleString() || "—"}
                   </span>
                 </div>
 
@@ -1530,14 +1790,13 @@ export function CertificateDetails({
                       Cardholder Name
                     </p>
                     <p className="text-[#1A1A1A] font-bold text-sm capitalize">
-                      {orgProfile?.name || "John wick"}
+                      {orgProfile?.name || "—"}
                     </p>
                   </div>
                   <div className="flex justify-between items-center">
                     <p className="text-gray text-xs font-medium">Card Number</p>
                     <p className="text-[#1A1A1A] font-bold text-sm">
-                      •••• •••• ••••{" "}
-                      {selectedPaymentMethod?.card_last4 || "4567"}
+                      •••• •••• •••• {selectedPaymentMethod?.card_last4 || "——"}
                     </p>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1545,8 +1804,8 @@ export function CertificateDetails({
                     <p className="text-[#1A1A1A] font-bold text-sm">
                       {selectedPaymentMethod?.card_exp_month
                         ?.toString()
-                        .padStart(2, "0")}
-                      /{selectedPaymentMethod?.card_exp_year || "2026"}
+                        .padStart(2, "0") || "——"}
+                      /{selectedPaymentMethod?.card_exp_year || "——"}
                     </p>
                   </div>
                 </div>
@@ -1602,27 +1861,29 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-sm bg-white rounded-4xl shadow-2xl p-6 flex flex-col items-center text-center"
+              className="relative w-full max-w-sm bg-white rounded-4xl shadow-2xl p-6 flex flex-col items-center text-center max-h-[80vh]"
             >
-              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-5">
-                <Check className="w-8 h-8 text-green-500" />
+              <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex flex-col items-center">
+                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-5 shrink-0">
+                  <Check className="w-8 h-8 text-green-500" />
+                </div>
+                <h2 className="text-xl font-bold text-[#1A1A1A] mb-1.5">
+                  Payment Successful!
+                </h2>
+                <p className="text-gray text-xs font-medium mb-6">
+                  Your payment for {certificate?.name} has been processed
+                  successfully. You can now start the assessment.
+                </p>
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    router.push(`${base}/assessment`);
+                  }}
+                  className="w-full h-11 rounded-xl cursor-pointer bg-[#1A1A1A] text-white text-sm font-bold hover:bg-black transition-all shadow-xl shadow-black/20"
+                >
+                  Continue to Assessment
+                </button>
               </div>
-              <h2 className="text-xl font-bold text-[#1A1A1A] mb-1.5">
-                Payment Successful!
-              </h2>
-              <p className="text-gray text-xs font-medium mb-6">
-                Your payment for {certificate?.name} has been processed
-                successfully. You can now start the assessment.
-              </p>
-              <button
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  router.push(`${base}/assessment`);
-                }}
-                className="w-full h-11 rounded-xl cursor-pointer bg-[#1A1A1A] text-white text-sm font-bold hover:bg-black transition-all shadow-xl shadow-black/20"
-              >
-                Continue to Assessment
-              </button>
             </motion.div>
           </div>
         )}
@@ -1643,10 +1904,10 @@ export function CertificateDetails({
               }}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white rounded-4xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-4xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[80vh]"
             >
               {/* Modal Header */}
               <div className="p-8 pb-4 flex justify-between items-start">
@@ -1670,7 +1931,7 @@ export function CertificateDetails({
               </div>
 
               {/* Modal Content */}
-              <div className="px-8 py-4 overflow-y-auto scrollbar-hide">
+              <div className="w-full flex-1 overflow-y-auto px-8 py-4 scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <div className="space-y-6">
                   {apiError && (
                     <div className="p-4 rounded-xl bg-dull-red text-red flex items-start gap-3 text-xs font-bold border border-red/10">
@@ -1811,36 +2072,38 @@ export function CertificateDetails({
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8 text-center"
+                        className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8 text-center max-h-[80vh] flex flex-col"
                       >
-                        <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-100">
-                          <AlertCircle className="w-8 h-8 text-yellow-500" />
-                        </div>
-                        <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
-                          Reset Billing Details?
-                        </h2>
-                        <p className="text-[#737373] text-sm font-medium mb-6 leading-relaxed">
-                          Your progress will be reset. Are you sure you want to
-                          cancel and clear all billing details?
-                        </p>
-                        <div className="flex gap-3 justify-center">
-                          <button
-                            onClick={() => setShowBillingResetConfirm(false)}
-                            className="px-6 py-2 rounded-xl border-2 border-light-gray-2 text-secondary text-sm font-bold hover:bg-light-gray transition-all cursor-pointer"
-                          >
-                            No, Go Back
-                          </button>
-                          <button
-                            onClick={() => {
-                              resetBillingDetails();
-                              setShowBillingResetConfirm(false);
-                              setShowBillingModal(false);
-                              setShowPaymentModal(true);
-                            }}
-                            className="px-6 py-2 rounded-xl bg-secondary text-white text-sm font-bold hover:bg-black transition-all cursor-pointer"
-                          >
-                            Yes, Reset & Close
-                          </button>
+                        <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                          <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-100 shrink-0">
+                            <AlertCircle className="w-8 h-8 text-yellow-500" />
+                          </div>
+                          <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
+                            Reset Billing Details?
+                          </h2>
+                          <p className="text-[#737373] text-sm font-medium mb-6 leading-relaxed">
+                            Your progress will be reset. Are you sure you want
+                            to cancel and clear all billing details?
+                          </p>
+                          <div className="flex gap-3 justify-center mb-1">
+                            <button
+                              onClick={() => setShowBillingResetConfirm(false)}
+                              className="px-6 py-2 rounded-xl border-2 border-light-gray-2 text-secondary text-sm font-bold hover:bg-light-gray transition-all cursor-pointer whitespace-nowrap"
+                            >
+                              No, Go Back
+                            </button>
+                            <button
+                              onClick={() => {
+                                resetBillingDetails();
+                                setShowBillingResetConfirm(false);
+                                setShowBillingModal(false);
+                                setShowPaymentModal(true);
+                              }}
+                              className="px-6 py-2 rounded-xl bg-secondary text-white text-sm font-bold hover:bg-black transition-all cursor-pointer whitespace-nowrap"
+                            >
+                              Yes, Reset & Close
+                            </button>
+                          </div>
                         </div>
                       </motion.div>
                     </div>
@@ -1917,24 +2180,27 @@ export function CertificateDetails({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8 text-center"
+              className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8 text-center max-h-[80vh] flex flex-col"
             >
-              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
-                <AlertCircle className="w-8 h-8 text-red-500" />
+              <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100 shrink-0">
+                  <AlertCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
+                  Authentication Error
+                </h2>
+                <p className="text-[#737373] text-sm font-medium mb-6 leading-relaxed">
+                  We encountered an issue while verifying your eligibility.
+                  Please sign in again or contact support if the problem
+                  persists.
+                </p>
+                <button
+                  onClick={() => setShowEligibilityErrorModal(false)}
+                  className="w-full py-3 bg-[#1A1A1A] text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg"
+                >
+                  Close
+                </button>
               </div>
-              <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
-                Authentication Error
-              </h2>
-              <p className="text-[#737373] text-sm font-medium mb-6 leading-relaxed">
-                We encountered an issue while verifying your eligibility. Please
-                sign in again or contact support if the problem persists.
-              </p>
-              <button
-                onClick={() => setShowEligibilityErrorModal(false)}
-                className="w-full py-3 bg-[#1A1A1A] text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg"
-              >
-                Close
-              </button>
             </motion.div>
           </div>
         )}

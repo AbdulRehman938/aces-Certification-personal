@@ -366,7 +366,12 @@ export default function AccountCredentialsPage() {
                   <div className="relative flex items-center justify-center pt-1">
                     <input
                       type="checkbox"
-                      className="peer h-5 w-5 appearance-none cursor-pointer rounded border border-zinc-300 bg-white checked:bg-secondary transition-all"
+                      className={`peer h-5 w-5 appearance-none cursor-pointer rounded border ${
+                        (formik.touched.agree && formik.errors.agree) ||
+                        (formik.submitCount > 0 && formik.errors.agree)
+                          ? "border-red"
+                          : "border-zinc-300"
+                      } bg-white checked:bg-secondary transition-all`}
                       {...formik.getFieldProps("agree")}
                     />
                     <Check className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" />
@@ -389,11 +394,12 @@ export default function AccountCredentialsPage() {
                     </Link>
                   </span>
                 </label>
-                {formik.touched.agree && formik.errors.agree && (
+                {(formik.errors.agree && formik.touched.agree) ||
+                (formik.submitCount > 0 && formik.errors.agree) ? (
                   <span className="text-[10px] font-semibold text-red mt-1 ml-10">
                     {formik.errors.agree}
                   </span>
-                )}
+                ) : null}
               </div>
 
               {formik.status && formik.status.error && (
@@ -436,4 +442,3 @@ export default function AccountCredentialsPage() {
     </div>
   );
 }
-

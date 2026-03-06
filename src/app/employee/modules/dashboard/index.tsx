@@ -19,9 +19,10 @@ import {
   SubmissionDetails,
   SubmissionCertificate,
 } from "@/app/(dashboards)/applicant/modules/certificate/submission-details";
-import { LoadingScreen } from "@/app/(dashboards)/applicant/common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
 import { Tooltip } from "@/components/ui/tooltip";
+import { AcesDynamicBadge } from "@/components/AcesDynamicBadge";
 
 interface DashboardCertificate extends SubmissionCertificate {
   id: string | number;
@@ -43,6 +44,9 @@ interface DashboardCertificate extends SubmissionCertificate {
   paymentId?: string;
   assessmentType?: string;
   isPending?: boolean;
+  badges?: any[];
+  validity?: string;
+  questionsCount?: number;
 }
 
 interface Recommendation {
@@ -58,6 +62,9 @@ interface Recommendation {
   name: string;
   disclosure_price: string;
   assured_price: string;
+  badges?: any[];
+  validity?: string;
+  questionsCount?: number;
 }
 
 const CircularProgress = ({
@@ -173,6 +180,9 @@ export function EmployeeDashboardPage() {
   const [isCheckingId, setIsCheckingId] = useState<string | number | null>(
     null,
   );
+  const [isDownloadingId, setIsDownloadingId] = useState<
+    string | number | null
+  >(null);
 
   const showMessage = (
     title: string,
@@ -193,6 +203,36 @@ export function EmployeeDashboardPage() {
       confirmText,
       cancelText,
     });
+  };
+
+  const handleDownloadBadge = async (assessmentId: string | number) => {
+    try {
+      setIsDownloadingId(assessmentId);
+      const response = await axiosInstance.get(
+        `/assessments/${assessmentId}/download-certificate`,
+        {
+          responseType: "blob",
+        },
+      );
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `certificate-${assessmentId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download failed, trying direct link...", error);
+      window.open(
+        `${axiosInstance.defaults.baseURL}/assessments/${assessmentId}/download-certificate`,
+        "_blank",
+      );
+    } finally {
+      setIsDownloadingId(null);
+    }
   };
 
   const initDashboard = async (silent = false) => {
@@ -268,6 +308,14 @@ export function EmployeeDashboardPage() {
           name: item.name,
           disclosure_price: item.disclosure_price,
           assured_price: item.assured_price,
+          badges: item.badges || [],
+          validity:
+            item.validity_years > 0
+              ? `${item.validity_years} Year${item.validity_years > 1 ? "s" : ""}`
+              : item.validity_months > 0
+                ? `${item.validity_months} Months`
+                : "N/A",
+          questionsCount: item.questions_count,
         }));
         setRecommendations(mapped);
         setLoadingProgress(70);
@@ -278,115 +326,82 @@ export function EmployeeDashboardPage() {
 
       let allCerts: DashboardCertificate[] = [];
       try {
-        const branchRes = await axiosInstance.get("/branches/list");
-        const branches = branchRes.data?.data || branchRes.data || [];
-        const branch = branches.find((b: any) => b.is_main) || branches[0];
+        const assessmentsRes = await axiosInstance.get("/assessments", {
+          params: { page: 1, limit: 100 },
+        });
+        const apiData =
+          assessmentsRes.data?.data?.data || assessmentsRes.data?.data || [];
 
-        if (branch) {
-          const myCertsRes = await axiosInstance.get("/my-certificates", {
-            params: { branchid: branch.id },
-          });
-          const apiData =
-            myCertsRes.data?.data?.data ||
-            myCertsRes.data?.data ||
-            myCertsRes.data ||
-            [];
+        allCerts = apiData.map((item: any) => {
+          const rawStatus = String(item.status || "").toLowerCase();
+          let displayStatus = "In Progress";
 
-          allCerts = apiData.map((item: any) => {
-            const rawStatus = String(item.status || "").toLowerCase();
-            let displayStatus = "Active";
-            if (rawStatus === "expired") displayStatus = "Expired";
-            if (
-              rawStatus === "pending" ||
-              rawStatus === "in_progress" ||
-              rawStatus === "ai_reviewing"
-            )
-              displayStatus = "In Progress";
+          if (
+            rawStatus === "expired" ||
+            rawStatus === "rejected" ||
+            rawStatus === "failed"
+          ) {
+            displayStatus = "Expired";
+          } else if (
+            rawStatus === "active" ||
+            rawStatus === "completed" ||
+            rawStatus === "passed" ||
+            rawStatus === "published" ||
+            rawStatus === "certified"
+          ) {
+            displayStatus = "Active";
+          } else if (
+            rawStatus === "pending" ||
+            rawStatus === "in_progress" ||
+            rawStatus === "ai_reviewing" ||
+            rawStatus === "submitted" ||
+            rawStatus === "awaiting_review"
+          ) {
+            displayStatus = "In Progress";
+          }
 
-            const isAIReviewing = rawStatus === "ai_reviewing";
-            const total = parseInt(item.total_questions) || 0;
-            const progress = parseInt(item.answered_questions) || 0;
+          const isAIReviewing = rawStatus === "ai_reviewing";
+          const total = parseInt(item.total_questions) || 0;
+          const progress = parseInt(item.answered_questions) || 0;
 
-            return {
-              id: item.id,
-              title: item.name || item.certificate?.name || "Certificate",
-              category:
-                (item.industry_names && item.industry_names[0]) ||
-                (item.certificate?.industry_names &&
-                  item.certificate.industry_names[0]) ||
-                "General",
-              status: displayStatus,
-              type:
-                item.assessment_type === "self_disclosure"
-                  ? "Self-disclosure"
-                  : "Assured",
-              description: isAIReviewing
-                ? "Your assessment is currently under AI review."
-                : item.description ||
-                  item.certificate?.description ||
-                  "Complete your assessment and get certified.",
-              progress: isAIReviewing ? 100 : progress,
-              total: isAIReviewing ? 100 : total || 10,
-              isPending: isAIReviewing,
-              isSubmitted: item.is_submitted || rawStatus === "ai_reviewing",
-              certificateId: item.certificate_id || item.certificate?.id,
-              paymentId: item.payment_id,
-              assessmentType: item.assessment_type,
-              subDescription:
-                item.certificate_id || item.certificate?.certificate_id,
-              disclosure_price:
-                item.disclosure_price || item.certificate?.disclosure_price,
-              assured_price:
-                item.assured_price || item.certificate?.assured_price,
-            };
-          });
-        }
+          return {
+            id: item.id,
+            title: item.certificate_name || item.name || "Assessment",
+            category: "General",
+            status: displayStatus,
+            type:
+              item.assessment_type === "self_disclosure"
+                ? "Self-disclosure"
+                : "Assured",
+            description: isAIReviewing
+              ? `Your assessment for ${item.certificate_name || item.name || "this certificate"} is currently under AI review.`
+              : item.certificate_description ||
+                item.description ||
+                "Access your assessment and complete the required sections.",
+            progress: isAIReviewing ? 100 : progress,
+            total: isAIReviewing ? 100 : total || 10,
+            isPending: isAIReviewing,
+            isSubmitted:
+              item.is_submitted ||
+              rawStatus === "ai_reviewing" ||
+              rawStatus === "completed" ||
+              rawStatus === "passed",
+            certificateId: item.certificate_id,
+            paymentId: item.payment_id,
+            assessmentType: item.assessment_type,
+            subDescription: item.certificate_id,
+            badges: item.badges || [],
+            validity:
+              item.validity_years > 0
+                ? `${item.validity_years} Year${item.validity_years > 1 ? "s" : ""}`
+                : item.validity_months > 0
+                  ? `${item.validity_months} Months`
+                  : "N/A",
+            questionsCount: item.questions_count,
+          };
+        });
       } catch (error) {
-        console.error("Failed to fetch my certificates", error);
-      }
-
-      try {
-        const response = await axiosInstance.get("/assessments/pending");
-        const apiData = response.data?.data?.data || [];
-        const pendingMapped: DashboardCertificate[] = apiData.map(
-          (item: any) => {
-            const isAIReviewing = item.status === "ai_reviewing";
-            const total = parseInt(item.total_questions) || 0;
-            const progress = parseInt(item.answered_questions) || 0;
-
-            return {
-              id: item.id,
-              title: item.certificate_name || "Assessment",
-              category: "General",
-              status: "In Progress",
-              type:
-                item.assessment_type === "self_disclosure"
-                  ? "Self-disclosure"
-                  : "Assured",
-              description: isAIReviewing
-                ? "Your assessment is currently under AI review."
-                : "Complete your assessment and get certified.",
-              progress: isAIReviewing ? 100 : progress,
-              total: isAIReviewing ? 100 : total || 10,
-              isPending: isAIReviewing,
-              isSubmitted: item.is_submitted,
-              certificateId: item.certificate_id,
-              paymentId: item.payment_id,
-              assessmentType: item.assessment_type,
-              subDescription: item.certificate_id,
-            };
-          },
-        );
-
-        if (pendingMapped.length > 0) {
-          const existingIds = new Set(allCerts.map((c) => String(c.id)));
-          const newOnly = pendingMapped.filter(
-            (m) => !existingIds.has(String(m.id)),
-          );
-          allCerts = [...allCerts, ...newOnly];
-        }
-      } catch (error) {
-        console.error("Failed to fetch pending assessments", error);
+        console.error("Failed to fetch assessments", error);
       }
 
       setCertificates(allCerts);
@@ -493,7 +508,11 @@ export function EmployeeDashboardPage() {
     if (assessmentId && notificationActionParam === "dashboard_submission") {
       const match = certificates.find((c) => String(c.id) === assessmentId);
       if (match) {
-        setSelectedSubmission(match);
+        if (match.status === "In Progress") {
+          handleContinueSubmission(match);
+        } else {
+          setSelectedSubmission(match);
+        }
       } else {
         showMessage(
           "Certificate Not Found",
@@ -529,7 +548,11 @@ export function EmployeeDashboardPage() {
       if (notificationActionParam === "dashboard_certificate_results") {
         void handleCheckResults(match.id);
       } else {
-        setSelectedSubmission(match);
+        if (match.status === "In Progress") {
+          handleContinueSubmission(match);
+        } else {
+          setSelectedSubmission(match);
+        }
       }
 
       clearNotificationParams();
@@ -551,12 +574,7 @@ export function EmployeeDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (
-      showResultsModal ||
-      messageModal.show ||
-      !!selectedCert ||
-      !!selectedSubmission
-    ) {
+    if (showResultsModal || messageModal.show) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "unset";
@@ -564,7 +582,7 @@ export function EmployeeDashboardPage() {
     return () => {
       document.body.style.overflow = "unset";
     };
-  }, [showResultsModal, messageModal.show, selectedCert, selectedSubmission]);
+  }, [showResultsModal, messageModal.show]);
 
   const filteredCertificates = useMemo(() => {
     let filtered = certificates.filter((cert) => cert.status === activeTab);
@@ -600,16 +618,17 @@ export function EmployeeDashboardPage() {
   );
 
   const handleContinueSubmission = (cert: DashboardCertificate) => {
-    if (!cert.isSubmitted) {
-      localStorage.setItem(
-        "pending_assessment_ids",
-        JSON.stringify({
-          assessment_id: cert.id,
-          certificate_id: cert.certificateId,
-          payment_id: cert.paymentId,
-          assessment_type: cert.assessmentType,
-        }),
-      );
+    localStorage.setItem(
+      "pending_assessment_ids",
+      JSON.stringify({
+        assessment_id: cert.id,
+        certificate_id: cert.certificateId,
+        payment_id: cert.paymentId,
+        assessment_type: cert.assessmentType,
+      }),
+    );
+
+    if (cert.status === "In Progress") {
       router.push(`${base}/assessment`);
     } else {
       setSelectedSubmission(cert);
@@ -798,7 +817,7 @@ export function EmployeeDashboardPage() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="flex bg-zinc-50 rounded-2xl p-1.5 border border-dull-white/40 shadow-sm overflow-x-auto w-full max-w-[33%] no-scrollbar">
+                  <div className="flex bg-zinc-50 rounded-2xl p-1.5 border border-dull-white/40 shadow-sm overflow-x-auto w-fit no-scrollbar">
                     <div className="flex min-w-max gap-1">
                       {["In Progress", "Active", "Expired"].map((tab) => (
                         <button
@@ -821,12 +840,25 @@ export function EmployeeDashboardPage() {
 
                   <div className="space-y-6 relative min-h-[16rem] pb-2">
                     {isLoading ? (
-                      <div className="flex h-[26rem] items-center justify-center">
-                        <LoadingScreen
-                          isLoading={true}
-                          progress={loadingProgress}
-                          size="lg"
-                        />
+                      <div className="space-y-4">
+                        {[1, 2].map((i) => (
+                          <div
+                            key={i}
+                            className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 flex flex-col md:flex-row gap-6"
+                          >
+                            <Skeleton className="h-28 w-28 rounded-full shrink-0" />
+                            <div className="flex-1 space-y-4">
+                              <div className="space-y-2">
+                                <Skeleton className="h-6 w-1/3" />
+                                <Skeleton className="h-4 w-full" />
+                              </div>
+                              <div className="flex gap-4">
+                                <Skeleton className="h-10 w-32 rounded-xl" />
+                                <Skeleton className="h-10 w-32 rounded-xl" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <AnimatePresence mode="wait">
@@ -838,7 +870,14 @@ export function EmployeeDashboardPage() {
                               animate={{ opacity: 1, x: 0 }}
                               exit={{ opacity: 0, x: 20 }}
                               transition={{ delay: i * 0.1 }}
-                              className="bg-zinc-50 rounded-3xl md:rounded-4xl border border-dull-white/40 shadow-sm p-5 md:p-5 min-h-[14rem]"
+                              className={`bg-zinc-50 rounded-3xl md:rounded-4xl border border-dull-white/40 shadow-sm p-5 md:p-5 min-h-[14rem] cursor-pointer hover:border-[#1A1A1A] transition-all`}
+                              onClick={() => {
+                                if (cert.status === "Active") {
+                                  handleCheckResults(cert.id);
+                                } else if (cert.status === "In Progress") {
+                                  handleContinueSubmission(cert);
+                                }
+                              }}
                             >
                               {cert.status === "Active" ? (
                                 <div className="flex flex-col gap-2 overflow-visible">
@@ -912,30 +951,19 @@ export function EmployeeDashboardPage() {
 
                                     <div className="absolute -top-4 md:top-0 right-0 scale-75 md:scale-100 origin-right">
                                       <CircularProgress
-                                        progress={
-                                          cert.type === "Self-disclosure"
-                                            ? 20
-                                            : 60
-                                        }
-                                        total={
-                                          cert.type === "Self-disclosure"
-                                            ? 20
-                                            : 100
-                                        }
+                                        progress={cert.progress}
+                                        total={cert.total}
                                         label={
                                           cert.type === "Self-disclosure"
-                                            ? "20/20"
-                                            : "60%"
+                                            ? `${cert.progress}/${cert.total}`
+                                            : `${Math.round(((cert.progress || 0) / (cert.total || 1)) * 100)}%`
                                         }
                                       />
                                     </div>
                                   </div>
 
                                   <p className="text-[#737373] text-xs md:text-[13px] leading-[1.6] w-full md:max-w-[60%]">
-                                    Evaluates day-to-day hotel operations across
-                                    energy, water, waste and purchasing to
-                                    minimise environmental impact without
-                                    compromising guest comfort
+                                    {cert.description}
                                   </p>
 
                                   <div className="mt-6">
@@ -944,9 +972,16 @@ export function EmployeeDashboardPage() {
                                       <div className="flex  gap-3">
                                         <Button
                                           variant="secondary"
-                                          className="h-10 cursor-pointer rounded-md whitespace-nowrap px-2 w-48 bg-white border border-[#E5E5E5] text-[#1A1A1A] text-[13px] font-semibold hover:bg-gray-50  shadow-none"
+                                          className="h-10 cursor-pointer rounded-md whitespace-nowrap px-2 w-48 bg-white border border-[#E5E5E5] text-[#1A1A1A] text-[13px] font-semibold hover:bg-gray-50  shadow-none disabled:opacity-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDownloadBadge(cert.id);
+                                          }}
+                                          disabled={isDownloadingId === cert.id}
                                         >
-                                          Download Badge
+                                          {isDownloadingId === cert.id
+                                            ? "Downloading..."
+                                            : "Download Badge"}
                                         </Button>
 
                                         {cert.type === "Self-disclosure" ? (
@@ -958,6 +993,10 @@ export function EmployeeDashboardPage() {
                                               variant="primary"
                                               disabled={!canAccessCertificates}
                                               className="h-10 rounded-md whitespace-nowrap px-2 w-48 bg-[#1A1A1A] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedSubmission(cert);
+                                              }}
                                             >
                                               Get Certified
                                             </Button>
@@ -966,9 +1005,18 @@ export function EmployeeDashboardPage() {
                                           <>
                                             <Button
                                               variant="secondary"
-                                              className="h-10 cursor-pointer whitespace-nowrap px-2 w-48 bg-[#EAEAEA] text-[#1A1A1A] text-[13px] font-semibold hover:bg-[#d4d4d4]  shadow-none"
+                                              className="h-10 cursor-pointer whitespace-nowrap px-2 w-48 bg-[#EAEAEA] text-[#1A1A1A] text-[13px] font-semibold hover:bg-[#d4d4d4] shadow-none disabled:opacity-50"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownloadBadge(cert.id);
+                                              }}
+                                              disabled={
+                                                isDownloadingId === cert.id
+                                              }
                                             >
-                                              Download Certificate
+                                              {isDownloadingId === cert.id
+                                                ? "Downloading..."
+                                                : "Download Certificate"}
                                             </Button>
                                             <Button
                                               variant="primary"
@@ -994,16 +1042,16 @@ export function EmployeeDashboardPage() {
                               ) : cert.status === "In Progress" ? (
                                 <div className="flex flex-col overflow-visible">
                                   <div className="relative mb-1">
-                                    <div className="flex-1 min-w-0 pr-45">
+                                    <div className="flex-1 min-w-0 pr-4 mt-0.5">
                                       <div className="space-y-1">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
                                           <h3
-                                            className="text-[18px] font-bold text-[#1A1A1A] leading-tight truncate"
+                                            className="text-[17px] font-bold text-[#1A1A1A] leading-tight truncate shrink grow"
                                             title={cert.title}
                                           >
                                             {cert.title}
                                           </h3>
-                                          <span className="px-2.5 py-0.5 rounded-full bg-[#F5F5F5] text-secondary text-[10px] font-semibold border border-[#E5E5E5] shrink-0">
+                                          <span className="px-2.5 py-0.5 rounded-full bg-[#F5F5F5] text-secondary text-[10px] font-semibold border border-[#E5E5E5] shrink-0 whitespace-nowrap">
                                             {cert.type}
                                           </span>
                                         </div>
@@ -1092,15 +1140,15 @@ export function EmployeeDashboardPage() {
                               ) : (
                                 <div className="flex flex-col gap-4 overflow-visible">
                                   <div className="relative mb-1">
-                                    <div className="flex-1 min-w-0 pr-45">
+                                    <div className="flex-1 min-w-0 pr-4 mt-0.5">
                                       <div className="flex items-center gap-2">
                                         <h3
-                                          className="text-[18px] font-bold text-[#1A1A1A] truncate"
+                                          className="text-[17px] font-bold text-[#1A1A1A] truncate shrink grow"
                                           title={cert.title}
                                         >
                                           {cert.title}
                                         </h3>
-                                        <div className="flex gap-2 shrink-0">
+                                        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
                                           <span className="px-2.5 py-0.5 bg-[#FEE2E2] text-[#DC2626] rounded-full text-[10px] font-semibold">
                                             Expired
                                           </span>
@@ -1126,10 +1174,30 @@ export function EmployeeDashboardPage() {
                                     sustainability baseline.
                                   </p>
 
-                                  <div className="inline-flex">
-                                    <div className="px-16 py-2 bg-[#E8E8E8] text-[#525252] rounded-full text-[13px] font-medium">
-                                      Green Operations Badge
-                                    </div>
+                                  <div className="flex flex-wrap gap-2 mb-3">
+                                    {(cert as any).badges &&
+                                    (cert as any).badges.length > 0 ? (
+                                      (cert as any).badges.map(
+                                        (badge: any, idx: number) => (
+                                          <div
+                                            key={idx}
+                                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8E8E8] text-[#525252] text-[12px] font-medium"
+                                          >
+                                            <AcesDynamicBadge
+                                              size={32}
+                                              level={badge.name}
+                                              name="RANK"
+                                              className="shrink-0"
+                                            />
+                                            <span>{badge.name}</span>
+                                          </div>
+                                        ),
+                                      )
+                                    ) : (
+                                      <div className="px-12 py-1.5 bg-[#E8E8E8] text-[#525252] rounded-full text-[12px] font-medium">
+                                        Standard Badge
+                                      </div>
+                                    )}
                                   </div>
 
                                   <p className="text-[#737373] text-xs md:text-[13px] leading-[1.6] max-w-full md:max-w-[80%]">
@@ -1328,16 +1396,27 @@ export function EmployeeDashboardPage() {
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center p-20">
-                <LoadingScreen
-                  isLoading={true}
-                  progress={loadingProgress}
-                  size="lg"
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[1, 2, 3, 4].map((i: number) => (
+                  <div
+                    key={i}
+                    className="bg-zinc-50 border border-zinc-100 rounded-4xl p-8 space-y-6"
+                  >
+                    <div className="space-y-4">
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                    </div>
+                    <div className="flex gap-4">
+                      <Skeleton className="h-10 w-32 rounded-xl" />
+                      <Skeleton className="h-10 w-32 rounded-xl" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredRecommendations.map((item, i) => (
+                {filteredRecommendations.map((item: any, i: number) => (
                   <motion.div
                     key={i}
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -1348,22 +1427,53 @@ export function EmployeeDashboardPage() {
                     <div className="flex flex-col h-full">
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-1">
-                          <h3 className="text-lg font-semibold text-[#1A1A1A] leading-tight pr-4">
+                          <h3
+                            className="text-lg font-semibold text-[#1A1A1A] leading-tight flex-1 truncate shrink grow min-w-0"
+                            title={item.title}
+                          >
                             {item.title}
                           </h3>
-                          <span className="shrink-0 px-3 py-1 bg-[#EAEAEA] text-[#1A1A1A] rounded-full text-[11px] font-semibold">
+                          <span className="shrink-0 px-3 py-1 bg-[#EAEAEA] text-[#1A1A1A] rounded-full text-[11px] font-semibold ml-2">
                             {item.category}
                           </span>
                         </div>
-                        <p className="text-[12px] text-[#A3A3A3] font-medium mb-3">
-                          {item.code}
-                        </p>
-                        <div className="mb-2">
-                          <img
-                            src="/assets/imgs/icons/GoldRank.svg"
-                            alt="Gold Rank"
-                            className="w-7 h-7 object-contain"
-                          />
+                        <div className="flex items-center gap-3 mb-2">
+                          <p className="text-[12px] text-[#A3A3A3] font-medium">
+                            {item.code}
+                          </p>
+                          <div className="w-1 h-1 bg-[#D4D4D4] rounded-full" />
+                          <p className="text-[11px] text-[#737373] font-semibold">
+                            {item.validity} Validity
+                          </p>
+                          <div className="w-1 h-1 bg-[#D4D4D4] rounded-full" />
+                          <p className="text-[11px] text-[#737373] font-semibold">
+                            {item.questionsCount} Questions
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {item.badges && item.badges.length > 0 ? (
+                            item.badges.map((badge: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-[#F5F5F5] bg-[#FAFAFA]/50"
+                              >
+                                <img
+                                  src="/assets/imgs/icons/GoldRank.svg"
+                                  alt="Gold Rank"
+                                  className="w-4 h-4 shrink-0"
+                                />
+                                <span className="text-[10px] font-bold text-[#525252] uppercase tracking-wider">
+                                  {badge.name}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <img
+                              src="/assets/imgs/icons/GoldRank.svg"
+                              alt="Gold Rank"
+                              className="w-7 h-7 shrink-0"
+                            />
+                          )}
                         </div>
 
                         <p className="text-[#737373] text-[12px] leading-[1.6] mb-3 max-w-120 line-clamp-3 overflow-hidden">
@@ -1374,7 +1484,7 @@ export function EmployeeDashboardPage() {
                       <div className="mt-auto">
                         <div className="h-px bg-[#999999bc] w-full mb-4" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-5 h-auto">
-                          {item.pricing.map((price, idx) => (
+                          {item.pricing?.map((price: any, idx: number) => (
                             <div key={idx}>
                               <p className="text-[14px] font-semibold text-[#1A1A1A] mb-1">
                                 {price.label}
@@ -1441,42 +1551,46 @@ export function EmployeeDashboardPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-6 shadow-2xl"
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden max-h-[90vh]"
             >
-              <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
-                  messageModal.type === "error"
-                    ? "bg-red-50 text-red-500"
-                    : "bg-blue-50 text-blue-500"
-                }`}
-              >
-                {messageModal.type === "error" ? (
-                  <AlertCircle className="w-8 h-8" />
-                ) : (
-                  <div className="text-2xl">🎉</div>
-                )}
+              <div className="w-full h-full overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="p-8 text-center space-y-6">
+                  <div
+                    className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+                      messageModal.type === "error"
+                        ? "bg-red-50 text-red-500"
+                        : "bg-blue-50 text-blue-500"
+                    }`}
+                  >
+                    {messageModal.type === "error" ? (
+                      <AlertCircle className="w-8 h-8" />
+                    ) : (
+                      <div className="text-2xl">🎉</div>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-xl font-black text-zinc-900 leading-tight">
+                      {messageModal.title}
+                    </h3>
+                    <p className="text-gray-400 font-medium text-sm leading-relaxed">
+                      {messageModal.message}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (messageModal.onConfirm) messageModal.onConfirm();
+                      setMessageModal((prev) => ({ ...prev, show: false }));
+                    }}
+                    className={`w-full h-12 font-black rounded-xl text-sm ${
+                      messageModal.type === "error"
+                        ? "bg-red-500 hover:bg-red-600 text-white"
+                        : "bg-zinc-900 hover:bg-black text-white"
+                    }`}
+                  >
+                    {messageModal.confirmText || "Got it"}
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <h3 className="text-xl font-black text-zinc-900 leading-tight">
-                  {messageModal.title}
-                </h3>
-                <p className="text-gray-400 font-medium text-sm leading-relaxed">
-                  {messageModal.message}
-                </p>
-              </div>
-              <Button
-                onClick={() => {
-                  if (messageModal.onConfirm) messageModal.onConfirm();
-                  setMessageModal((prev) => ({ ...prev, show: false }));
-                }}
-                className={`w-full h-12 font-black rounded-xl text-sm ${
-                  messageModal.type === "error"
-                    ? "bg-red-500 hover:bg-red-600 text-white"
-                    : "bg-zinc-900 hover:bg-black text-white"
-                }`}
-              >
-                {messageModal.confirmText || "Got it"}
-              </Button>
             </motion.div>
           </div>
         )}
@@ -1489,56 +1603,62 @@ export function EmployeeDashboardPage() {
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
-              className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl relative overflow-hidden"
+              className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl relative overflow-hidden max-h-[90vh]"
             >
-              <div className="p-10 text-center space-y-8">
-                <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto bg-blue-50 ring-8 ring-blue-50/30">
-                  <div className="text-5xl">🏆</div>
-                </div>
-                <div className="space-y-3">
-                  <h2 className="text-3xl font-black text-zinc-900 tracking-tight">
-                    Congratulations!
-                  </h2>
-                  <p className="text-gray-400 font-medium text-base">
-                    You have successfully completed the assessment.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
-                    <p className="text-[10px] font-bold text-zinc-400">
-                      Final Score
-                    </p>
-                    <p className="text-4xl font-black text-zinc-900">
-                      {resultsData.score ?? 0}%
+              <div className="w-full h-full overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="p-10 text-center space-y-8">
+                  <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto bg-blue-50 ring-8 ring-blue-50/30">
+                    <div className="text-5xl">🏆</div>
+                  </div>
+                  <div className="space-y-3">
+                    <h2 className="text-3xl font-black text-zinc-900 tracking-tight">
+                      Congratulations!
+                    </h2>
+                    <p className="text-gray-400 font-medium text-base">
+                      You have successfully completed the assessment.
                     </p>
                   </div>
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
-                    <p className="text-[10px] font-bold text-zinc-400">
-                      Status
-                    </p>
-                    <p className="text-lg font-black text-zinc-900 capitalize">
-                      {resultsData.status}
-                    </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
+                      <p className="text-[10px] font-bold text-zinc-400">
+                        Final Score
+                      </p>
+                      <p className="text-4xl font-black text-zinc-900">
+                        {resultsData.score ?? 0}%
+                      </p>
+                    </div>
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
+                      <p className="text-[10px] font-bold text-zinc-400">
+                        Status
+                      </p>
+                      <p className="text-lg font-black text-zinc-900 capitalize">
+                        {resultsData.status}
+                      </p>
+                    </div>
                   </div>
+                  <Button
+                    onClick={() => setShowResultsModal(false)}
+                    className="w-full h-14 bg-zinc-900 hover:bg-black text-white font-black rounded-2xl"
+                  >
+                    Close
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => setShowResultsModal(false)}
-                  className="w-full h-14 bg-zinc-900 hover:bg-black text-white font-black rounded-2xl"
-                >
-                  Close
-                </Button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      <style jsx global>{`
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap");
         .font-sans {
           font-family: "Archivo", sans-serif;
         }
-      `}</style>
+      `,
+        }}
+      />
     </>
   );
 }

@@ -404,7 +404,7 @@ export default function OrganisationInfoPage() {
                                 }
                               />
                             </div>
-                            <div className="max-h-32 overflow-y-auto p-1 scrollbar-hide">
+                            <div className="max-h-20 overflow-y-auto p-1 scrollbar-hide">
                               {countries
                                 .filter((c) =>
                                   c.name.common
@@ -523,4 +523,3 @@ export default function OrganisationInfoPage() {
     </div>
   );
 }
-

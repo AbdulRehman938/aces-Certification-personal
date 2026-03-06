@@ -160,6 +160,20 @@ export default function PersonalInformationPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [loadCountries]);
 
+  const handleSkip = () => {
+    const accessToken = localStorage.getItem("access_token");
+    if (accessToken) {
+      document.cookie = `auth_token=${accessToken}; path=/; max-age=86400; samesite=strict`;
+    }
+
+    dispatch(resetSignup());
+    clearSignupSessionStorage();
+
+    document.cookie =
+      "signup_completed=true; path=/; max-age=31536000; samesite=strict";
+    router.push("/applicant");
+  };
+
   const formik = useFormik({
     initialValues: {
       logo: "",
@@ -168,33 +182,11 @@ export default function PersonalInformationPage() {
       description: "",
     },
     validationSchema: Yup.object({
+      companySize: Yup.string().required("Company Size is required"),
       website: Yup.string().url("Enter a valid URL"),
       description: Yup.string().max(500, "Maximum 500 characters"),
     }),
     onSubmit: async (values) => {
-      const currentSavedSitesCount = sites.filter((s) => s.isSaved).length;
-      const hasContent =
-        !!values.companySize ||
-        !!values.website ||
-        !!values.description ||
-        currentSavedSitesCount > 0 ||
-        !!logoFileName;
-
-      if (!hasContent) {
-        const accessToken = localStorage.getItem("access_token");
-        if (accessToken) {
-          document.cookie = `auth_token=${accessToken}; path=/; max-age=86400; samesite=strict`;
-        }
-
-        dispatch(resetSignup());
-        clearSignupSessionStorage();
-
-        document.cookie =
-          "signup_completed=true; path=/; max-age=31536000; samesite=strict";
-        router.push("/applicant");
-        return;
-      }
-
       if (sites.length > 0) {
         const unsaved = sites.some((site) => !site.isSaved);
         if (unsaved) {
@@ -575,13 +567,6 @@ export default function PersonalInformationPage() {
       });
     }
   };
-
-  const hasData =
-    !!formik.values.companySize ||
-    !!formik.values.website ||
-    !!formik.values.description ||
-    savedSitesCount > 0 ||
-    !!logoFileName;
 
   return (
     <div className="h-screen w-full overflow-y-auto scrollbar-hide lg:fixed lg:inset-0 lg:overflow-hidden lg:p-10">
@@ -1324,24 +1309,23 @@ export default function PersonalInformationPage() {
               <div className="pt-0 flex items-center gap-4">
                 <button
                   type="button"
-                  onClick={() => router.push("/signup/account")}
-                  className="flex h-12 w-12 font-medium shrink-0 items-center justify-center cursor-pointer rounded-xl border border-zinc-400 text-secondary hover:bg-zinc-50 transition-all bg-white"
+                  onClick={handleSkip}
+                  className="flex-1 py-3.5 bg-white text-secondary border border-zinc-200 rounded-xl text-base font-semibold hover:bg-zinc-50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  Do it later
                 </button>
                 <button
                   type="submit"
                   disabled={formik.isSubmitting || isLogoUploading}
                   className="flex-1 py-3.5 bg-[#2E2E2E] text-white rounded-xl text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {hasData ? "Submit & Continue" : "Skip & Continue"}
+                  Continue
                 </button>
               </div>
             </form>
           </div>
         </div>
-      </div>
+      </div>  
     </div>
   );
 }
-

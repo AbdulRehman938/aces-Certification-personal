@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 const key = "N4cR8uJ0yB3wE5aK9nX2rP6hS0dF4gJ8lC1mV5uR7tY0pQ9mT2vL6pZ1sH7k";
-const payload = "kVVR5m-PV03gO9vo.fidQbFiAruqog2_ldcbovQ.ClUlhm6uEXMsnU1cJ2OnAGRZxOOSg9EtNbWF8fcjCTt69d_KgrA8tEXHG1Dmj50sD-bLg2UURYOsMmN1oDpziz-1fYEJ1TfA1R1gMDmPL0EMaKM31yu-RqxSHAPm8R7hkfTXxy_wDkL5NCB0MYbdDmtSFsHZavWGpI4glEoLMLzg_ZkZVw2PKGo0321EPy64wBkCHHu8pq4TKcVSPmv4Ia552qjHl6qL7HCG61aT-5JCMNI8tLw-8kUtTibx";
+const payload = "MSzLM2RhwwuAFd5j._0YZ-d226Le0W3apvm8DUw.6KdFkcFt_RaUbiKNwbnifWMKnIrHi8m195g9fKL9gHUgeBQCYW3OxOA7hDnFhHbI4cDpnJaY-auKGZp7WPNCjbRpxoHYHO0MdVvljkSUeYyqL02ttJ5hFGF3YxkShd7zvTuNc4Xhzbg-PxRy-s8QAY1S_mNjYue5ev1GERNLST-r-DaiuRl-opxja3wAgHVU9SCEK4pAPZyF17m031RYYSwy4uF6iodw9uPlei1avdcvkTb8nVVlBjrZivSFDwqIvvKvMzo_qzvUjiWIarx3xJYR9DUsBWvWymMLRSYwhQ8ht2jvulVJ8a2PkTwb5kJVfstZP2bK9G2SksPw5TLB99GXlIOn6-F9iVtnujeoEm6BrvflFYXeBBeD9IKJ4eIGbwJmdHuPhJY1IhjhAGjSK4MWHyj68eCqFcR_5O1seTvawQxGkgEQZCYe2GVjckVC4FtndXF9QVcQ9KjayogN82-mpNR5XtlKrz9eCpp9no-PVS6YondQoX8ZtSmij8tZf_zqqTsK5JQiOMxMPLewVaznzf6FhhR8a9MVqxk-11EHm3fOoEzcnCdeSfDlr6Ri3RnNIV2t0xVpqFKktYUgvMICitfee3KpNzd_Pa0LJQ1F1bLVWB7zy2IpS5nIrmppAIDv8yXfJUGg3yvxeJZnx-GbLSjPi72rOb59z6ITBu82afbp8A";
 
 function fromBase64(base64) {
     const normalized = base64.replace(/-/g, '+').replace(/_/g, '/');
@@ -16,27 +16,34 @@ async function decrypt() {
 
     const hash = crypto.createHash('sha256').update(key.trim()).digest();
     
-    // Candidate 1: p1 is tag, p2 is ciphertext
     try {
         const decipher = crypto.createDecipheriv('aes-256-gcm', hash, iv);
         decipher.setAuthTag(p1);
         let decrypted = decipher.update(p2, 'binary', 'utf8');
         decrypted += decipher.final('utf8');
         console.log("Decrypted (Candidate A):");
-        console.log(decrypted);
+        try {
+            const json = JSON.parse(decrypted);
+            console.log(JSON.stringify(json, null, 2));
+        } catch (e) {
+            console.log(decrypted);
+        }
         return;
     } catch (e) {
-        // console.log("Candidate A failed");
     }
 
-    // Candidate 2: p2 is tag, p1 is ciphertext
     try {
         const decipher = crypto.createDecipheriv('aes-256-gcm', hash, iv);
         decipher.setAuthTag(p2);
         let decrypted = decipher.update(p1, 'binary', 'utf8');
         decrypted += decipher.final('utf8');
         console.log("Decrypted (Candidate B):");
-        console.log(decrypted);
+        try {
+            const json = JSON.parse(decrypted);
+            console.log(JSON.stringify(json, null, 2));
+        } catch (e) {
+            console.log(decrypted);
+        }
         return;
     } catch (e) {
         // console.log("Candidate B failed");

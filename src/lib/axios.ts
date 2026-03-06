@@ -2,8 +2,14 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 
 import { handleApiError } from './api-error';
 import { decryptPayloadToJson, encryptJsonToPayload } from './payload-crypto';
 
+const isBrowser = typeof window !== "undefined";
+
 export const axiosInstance: AxiosInstance = axios.create({
-  baseURL: 'https://new-aces.vercel.app/api',
+  baseURL: isBrowser
+    ? "/api"
+    : (process.env.API_URL ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        "https://new-aces.vercel.app") + "/api",
   timeout: 10000,
 });
 
@@ -200,7 +206,6 @@ axiosInstance.interceptors.request.use(
     const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
 
     if (isFormData && config.headers) {
-      // Axios handles Content-Type automatically for FormData
       config.headers.delete('Content-Type');
       config.headers.delete('content-type');
     }
@@ -221,7 +226,7 @@ axiosInstance.interceptors.request.use(
             const storedType = window.localStorage.getItem('profile_type');
             if (storedType === 'employee') {
               const empResponse = await axiosInstance.get('/employee/my-profile', {
-                // @ts-expect-error - Custom property for interceptor
+                // @ts-expect-error
                 _skipAuthRedirect: true,
               });
               const empData = (empResponse?.data as { data?: { organization_id?: string | number } })?.data || (empResponse?.data as { organization_id?: string | number });
@@ -232,7 +237,7 @@ axiosInstance.interceptors.request.use(
             } else {
               try {
                 const orgResponse = await axiosInstance.get('/organization/profile', {
-                  // @ts-expect-error - Custom property for interceptor
+                  // @ts-expect-error
                   _skipAuthRedirect: true,
                 });
                 const orgData = (orgResponse?.data as { data?: Record<string, unknown> })?.data || (orgResponse?.data as Record<string, unknown>);
@@ -244,7 +249,7 @@ axiosInstance.interceptors.request.use(
                 const status = (orgErr as { status?: number; response?: { status?: number } }).status || (orgErr as { response?: { status?: number } }).response?.status;
                 if (status === 404) {
                   const empResponse = await axiosInstance.get('/employee/my-profile', {
-                    // @ts-expect-error - Custom property for interceptor
+                    // @ts-expect-error
                     _skipAuthRedirect: true,
                   });
                   const empData = (empResponse?.data as { data?: { organization_id?: string | number } })?.data || (empResponse?.data as { organization_id?: string | number });

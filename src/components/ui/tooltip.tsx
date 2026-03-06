@@ -32,11 +32,9 @@ export const Tooltip = ({
     const left = rect.left + rect.width / 2;
     const offset = 8;
 
-    // Boundary checks
     const spaceAbove = rect.top;
     const spaceBelow = window.innerHeight - rect.bottom;
 
-    // Default to top, only flip if forced by space
     if (spaceAbove < tooltipHeight + offset + 10 && spaceBelow > spaceAbove) {
       setSide("bottom");
       setPosition({ top: rect.bottom + offset, left });
@@ -53,8 +51,6 @@ export const Tooltip = ({
       const handleEvents = () => updatePosition();
       window.addEventListener("scroll", handleEvents, true);
       window.addEventListener("resize", handleEvents);
-      
-      // ResizeObserver for trigger and tooltip
       const observer = new ResizeObserver(() => {
         updatePosition();
       });
@@ -66,14 +62,13 @@ export const Tooltip = ({
         observer.observe(tooltipRef.current);
       }
 
-      // Secondary check after layout
       const timer = setTimeout(updatePosition, 10);
       
       return () => {
         window.removeEventListener("scroll", handleEvents, true);
         window.removeEventListener("resize", handleEvents);
         clearTimeout(timer);
-        observer.disconnect(); // Disconnect observer on cleanup
+        observer.disconnect();
       };
     }
   }, [isVisible, content]);
@@ -118,7 +113,6 @@ export const Tooltip = ({
               zIndex: 9999,
               pointerEvents: "none",
               transformOrigin: side === "top" ? "bottom" : "top",
-              // Changed from translate: to transform: for better compatibility
               transform: side === "top" ? "translate(-50%, -100%)" : "translate(-50%, 0)",
             }}
           >

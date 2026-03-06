@@ -22,7 +22,7 @@ export function LoadingScreen({
   };
 
   const width = dimensions[size];
-  const strokeWidth = 12; 
+  const strokeWidth = 12;
   const radius = (width - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
