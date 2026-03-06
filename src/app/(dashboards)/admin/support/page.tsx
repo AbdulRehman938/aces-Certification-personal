@@ -1,6 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import { useUser } from "@/contexts/UserContext";
+import { axiosInstance } from "@/lib/axios";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface SupportTicketCardProps {
   title: string;
@@ -8,8 +17,64 @@ interface SupportTicketCardProps {
   certification: string;
   date: string;
   status: string;
-  onStatusChange?: (newStatus: string) => void;
+  onStatusChange?: (newStatus: string) => Promise<boolean> | boolean;
+  canUpdateStatus?: boolean;
 }
+
+type SupportTicketApiItem = {
+  id: string;
+  subject?: string | null;
+  category?: string | null;
+  certificate_name?: string | null;
+  created_at?: string | null;
+  status?: string | null;
+  description?: string | null;
+  supporting_document?: string | null;
+};
+
+type SupportTicketsApiResponse = {
+  success?: boolean;
+  message?: string;
+  statusCode?: number;
+  timestamp?: string;
+  page?: number;
+  limit?: number;
+  total?: number;
+  data?: SupportTicketApiItem[] | null;
+};
+
+type SupportTicket = {
+  id: string;
+  title: string;
+  category: string;
+  certification: string;
+  date: string;
+  status: string;
+};
+
+const toTitleCase = (value?: string | null): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "N/A";
+  return raw
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
+
+const toApiStatus = (value: string): string =>
+  value.toLowerCase().trim().replace(/\s+/g, "-");
 
 function SupportTicketCard({
   title,
@@ -18,6 +83,7 @@ function SupportTicketCard({
   date,
   status,
   onStatusChange,
+  canUpdateStatus = true,
 }: SupportTicketCardProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
@@ -32,10 +98,15 @@ function SupportTicketCard({
   ];
 
   const handleStatusChange = (newStatus: string) => {
+    const previousStatus = currentStatus;
     setCurrentStatus(newStatus);
     setIsDropdownOpen(false);
     if (onStatusChange) {
-      onStatusChange(newStatus);
+      Promise.resolve(onStatusChange(newStatus)).then((success) => {
+        if (!success) {
+          setCurrentStatus(previousStatus);
+        }
+      });
     }
   };
 
@@ -119,8 +190,14 @@ function SupportTicketCard({
 
         <div className="relative">
           <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className={`flex items-center justify-center gap-2 px-4 py-1 border rounded-lg text-sm font-medium transition-colors min-w-[140px] ${getStatusButtonClass(currentStatus)}`}
+            onClick={() => {
+              if (!canUpdateStatus) return;
+              setIsDropdownOpen(!isDropdownOpen);
+            }}
+            disabled={!canUpdateStatus}
+            className={`flex items-center justify-center gap-2 px-4 py-1 border rounded-lg text-sm font-medium transition-colors min-w-[140px] ${getStatusButtonClass(currentStatus)} ${
+              canUpdateStatus ? "" : "opacity-60 cursor-not-allowed"
+            }`}
           >
             <span>{currentStatus}</span>
             <svg
@@ -141,7 +218,7 @@ function SupportTicketCard({
             </svg>
           </button>
 
-          {isDropdownOpen && (
+          {isDropdownOpen && canUpdateStatus && (
             <>
               <div
                 className="fixed inset-0 z-10"
@@ -169,6 +246,128 @@ function SupportTicketCard({
 }
 
 export default function SupportPage() {
+  const { profile } = useUser();
+  const isSubadmin = profile?.role === "subadmin";
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: "read" | "write" | "edit" | "delete",
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === "string") {
+        return action === "read" && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? "") && actions.includes(action)
+      );
+    });
+  };
+  const canManageTicketStatus =
+    hasActionPermission(["supportCenter"], "write") ||
+    hasActionPermission(["supportCenter"], "edit");
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+
+  const updateTicketStatusLocally = (
+    setter: Dispatch<SetStateAction<SupportTicket[]>>,
+    ticketId: string,
+    status: string,
+  ) => {
+    setter((prev) =>
+      prev.map((ticket) =>
+        ticket.id === ticketId ? { ...ticket, status } : ticket,
+      ),
+    );
+  };
+
+  const handleTicketStatusChange = async (
+    ticketId: string,
+    newStatus: string,
+  ): Promise<boolean> => {
+    const currentStatus =
+      tickets.find((ticket) => ticket.id === ticketId)?.status || "";
+    const apiStatus = toApiStatus(newStatus);
+
+    updateTicketStatusLocally(setTickets, ticketId, newStatus);
+
+    try {
+      const response = await axiosInstance.patch(
+        `/support-tickets/${encodeURIComponent(ticketId)}/status`,
+        {
+          status: apiStatus,
+        },
+      );
+      console.log("Support ticket status update response:", response.data);
+      return true;
+    } catch (error) {
+      console.error("Failed to update support ticket status:", error);
+      setLoadError("Failed to update support ticket status.");
+      updateTicketStatusLocally(setTickets, ticketId, currentStatus);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchSupportTickets = async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const response = await axiosInstance.get<SupportTicketsApiResponse>(
+          "/support-tickets",
+          {
+          params: {
+            page: 1,
+            limit: 10,
+          },
+          },
+        );
+
+        if (isCancelled) return;
+        console.log("Support tickets response:", response.data);
+
+        const apiTickets = Array.isArray(response.data?.data)
+          ? response.data.data
+          : [];
+
+        const mappedTickets: SupportTicket[] = apiTickets.map((ticket) => ({
+          id: ticket.id,
+          title: ticket.subject || "Untitled ticket",
+          category: toTitleCase(ticket.category),
+          certification: ticket.certificate_name || "N/A",
+          date: formatDate(ticket.created_at),
+          status: toTitleCase(ticket.status),
+        }));
+
+        setTickets(mappedTickets);
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch support tickets:", error);
+        setLoadError("Failed to fetch support tickets.");
+        setTickets([]);
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchSupportTickets();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   return (
     <div className="p-3 md:p-6 bg-light-gray min-h-screen">
       <div className="mb-4 md:mb-6">
@@ -188,51 +387,79 @@ export default function SupportPage() {
         </h2>
       </div>
 
+      {loadError ? (
+        <div className="mb-4 p-3 bg-red/10 border border-red/20 rounded-lg">
+          <p className="text-sm font-semibold text-red">{loadError}</p>
+        </div>
+      ) : null}
+
       <div className="space-y-4">
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="In progress"
-        />
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="In progress"
-        />
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Pending"
-        />
-        <SupportTicketCard
-          title="Missing documentation for carbon emissions reporting"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Pending"
-        />
-        <SupportTicketCard
-          title="Question about GRI Standards compliance requirements"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Completed"
-        />
-        <SupportTicketCard
-          title="Question about GRI Standards compliance requirements"
-          category="Documentation Issue"
-          certification="ISO 14064-1 Carbon Footprint"
-          date="Jan 15, 2024"
-          status="Completed"
-        />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`support-ticket-skeleton-${index}`}
+              className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6"
+            >
+              <div className="flex flex-col gap-4">
+                <Skeleton
+                  width="45%"
+                  height={20}
+                  baseColor="#E5E7EB"
+                  highlightColor="#F3F4F6"
+                />
+                <div className="flex flex-wrap gap-4">
+                  <Skeleton
+                    width={130}
+                    height={14}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                  <Skeleton
+                    width={180}
+                    height={14}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                  <Skeleton
+                    width={120}
+                    height={14}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Skeleton
+                    width={140}
+                    height={34}
+                    borderRadius={8}
+                    baseColor="#E5E7EB"
+                    highlightColor="#F3F4F6"
+                  />
+                </div>
+              </div>
+            </div>
+          ))
+        ) : tickets.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 p-4 md:p-6 text-sm text-gray">
+            No support tickets found.
+          </div>
+        ) : (
+          tickets.map((ticket) => (
+            <SupportTicketCard
+              key={ticket.id}
+              title={ticket.title}
+              category={ticket.category}
+              certification={ticket.certification}
+              date={ticket.date}
+              status={ticket.status}
+              onStatusChange={(newStatus) =>
+                handleTicketStatusChange(ticket.id, newStatus)
+              }
+              canUpdateStatus={canManageTicketStatus}
+            />
+          ))
+        )}
       </div>
     </div>
   );
 }
-

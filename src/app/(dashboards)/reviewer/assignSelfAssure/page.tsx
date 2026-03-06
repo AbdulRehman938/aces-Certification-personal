@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -10,6 +10,10 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface AssignedAudit {
   id: string;
@@ -20,77 +24,132 @@ interface AssignedAudit {
   status: string;
 }
 
-const assignedAuditsData: AssignedAudit[] = [
-  {
-    id: "1",
-    organization: "Grand Hyatt....",
-    certification: "ISO 14001 Environment....",
-    aiFlags: 3,
-    assignedDate: "Dec 20, 2024",
-    status: "AI Flagged",
-  },
-  {
-    id: "2",
-    organization: "Marina Bay....",
-    certification: "Carbon Neutral Certif....",
-    aiFlags: 2,
-    assignedDate: "Dec 20, 2024",
-    status: "Under Review",
-  },
-  {
-    id: "3",
-    organization: "Raffles Hotel",
-    certification: "Sustainable Supply....",
-    aiFlags: 1,
-    assignedDate: "Dec 20, 2024",
-    status: "Assigned to Auditor",
-  },
-  {
-    id: "4",
-    organization: "CapitaLand....",
-    certification: "ESG Reporting Excell....",
-    aiFlags: 2,
-    assignedDate: "Dec 20, 2024",
-    status: "Audit Completed",
-  },
-  {
-    id: "5",
-    organization: "Mandarin Or....",
-    certification: "ISO 14001 Environmen....",
-    aiFlags: 1,
-    assignedDate: "Dec 20, 2024",
-    status: "Approved",
-  },
-  {
-    id: "6",
-    organization: "Far East Or....",
-    certification: "ESG Reporting Excell....",
-    aiFlags: 4,
-    assignedDate: "Dec 20, 2024",
-    status: "Blocked",
-  },
-];
+type ReviewerCertificateAssessmentItem = {
+  id?: string;
+  assessmentId?: string;
+  certificateAssessmentId?: string;
+  organizationName?: string;
+  certificateName?: string;
+  totalAiFlags?: number;
+  assignedDate?: string;
+  status?: string;
+  productId?: string;
+  certificateId?: string;
+};
+
+const formatAssignedDate = (value?: string): string => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
+
+const formatStatusLabel = (value?: string): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "N/A";
+  return raw
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
 
 export default function AssignSelfAssure() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [assignedAudits, setAssignedAudits] = useState<AssignedAudit[]>([]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchAssignedAssessments = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axiosInstance.get(
+          "/reviewers/certificate-assessments",
+          {
+            params: {
+              page: 1,
+              limit: 10,
+            },
+          },
+        );
+
+        if (isCancelled) return;
+        console.log("reviewer certificate assessments response:", response.data);
+
+        const payload = response.data?.data;
+        const items: ReviewerCertificateAssessmentItem[] = Array.isArray(
+          payload?.items,
+        )
+          ? payload.items
+          : Array.isArray(response.data?.items)
+            ? response.data.items
+            : [];
+
+        const mappedRows: AssignedAudit[] = items.map((item, index) => ({
+          id:
+            item.id ||
+            item.assessmentId ||
+            item.certificateAssessmentId ||
+            item.productId ||
+            `${item.certificateId || "assessment"}-${index}`,
+          organization: item.organizationName || "N/A",
+          certification: item.certificateName || "N/A",
+          aiFlags: Number.isFinite(Number(item.totalAiFlags))
+            ? Number(item.totalAiFlags)
+            : 0,
+          assignedDate: formatAssignedDate(item.assignedDate),
+          status: formatStatusLabel(item.status),
+        }));
+
+        setAssignedAudits(mappedRows);
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch reviewer certificate assessments:", error);
+        if (axios.isAxiosError(error)) {
+          console.error("API message:", error.response?.data?.message);
+        }
+        setAssignedAudits([]);
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchAssignedAssessments();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const getStatusStyles = (status: string) => {
-    switch (status) {
-      case "AI Flagged":
-        return "bg-[#FFEBEB] text-[#D32F2F] border border-[#FF8A8A]";
-      case "Under Review":
-        return "bg-[#FFF9E6] text-[#FFB020] border border-[#FFD580]";
-      case "Assigned to Auditor":
-        return "bg-[#F0F0F0] text-[#1D2939] border border-[#D0D5DD]";
-      case "Audit Completed":
-        return "bg-[#F0F0F0] text-[#1D2939] border border-[#D0D5DD]";
-      case "Approved":
-        return "bg-[#ECFDF3] text-[#027A48] border border-[#6CE9A6]";
-      case "Blocked":
-        return "bg-[#FFEBEB] text-[#D32F2F] border border-[#FF8A8A]";
-      default:
-        return "bg-[#e9e9e9] text-black border border-black";
+    const statusKey = status.toLowerCase();
+    if (statusKey.includes("flag")) {
+      return "bg-[#FFEBEB] text-[#D32F2F] border border-[#FF8A8A]";
     }
+    if (statusKey.includes("under review")) {
+      return "bg-[#FFF9E6] text-[#FFB020] border border-[#FFD580]";
+    }
+    if (statusKey.includes("assigned to auditor")) {
+      return "bg-[#F0F0F0] text-[#1D2939] border border-[#D0D5DD]";
+    }
+    if (statusKey.includes("completed")) {
+      return "bg-[#F0F0F0] text-[#1D2939] border border-[#D0D5DD]";
+    }
+    if (statusKey.includes("approved")) {
+      return "bg-[#ECFDF3] text-[#027A48] border border-[#6CE9A6]";
+    }
+    if (statusKey.includes("blocked")) {
+      return "bg-[#FFEBEB] text-[#D32F2F] border border-[#FF8A8A]";
+    }
+    return "bg-[#e9e9e9] text-black border border-black";
   };
 
   const columns = useMemo<ColumnDef<AssignedAudit>[]>(
@@ -208,8 +267,10 @@ export default function AssignSelfAssure() {
         ),
         cell: (info: any) => {
           const row = info.row.original as AssignedAudit;
+          const statusKey = row.status.toLowerCase();
           const isView =
-            row.status === "Audit Completed" || row.status === "Approved";
+            statusKey.includes("completed") || statusKey.includes("approved");
+          const targetId = encodeURIComponent(row.id);
           return (
             <div className="flex items-center justify-end">
               <button
@@ -218,7 +279,9 @@ export default function AssignSelfAssure() {
                     ? "bg-white text-secondary border-black"
                     : "bg-[#262626] text-white border-[#262626]"
                 }`}
-                onClick={() => router.push("/reviewer/assignSelfAssure/review")}
+                onClick={() =>
+                  router.push(`/reviewer/assignSelfAssure/review?id=${targetId}`)
+                }
               >
                 {isView ? "View" : "Review"}
               </button>
@@ -228,11 +291,11 @@ export default function AssignSelfAssure() {
         enableSorting: false,
       },
     ],
-    [],
+    [router],
   );
 
   const table = useReactTable({
-    data: assignedAuditsData,
+    data: assignedAudits,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -285,7 +348,36 @@ export default function AssignSelfAssure() {
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: 10 }).map((_, rowIndex) => (
+                  <tr
+                    key={`reviewer-assign-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`reviewer-assign-skeleton-cell-${rowIndex}-${column.id}`}
+                        className="px-2 md:px-4 py-2 md:py-4"
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-end" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 90 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -444,4 +536,3 @@ export default function AssignSelfAssure() {
     </div>
   );
 }
-

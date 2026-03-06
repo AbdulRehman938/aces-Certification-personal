@@ -11,7 +11,8 @@ import {
 } from "@tanstack/react-table";
 import axios from "axios";
 import { axiosInstance } from "@/lib/axios";
-import { Loading } from "../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import { useUser } from "@/contexts/UserContext";
 
 type Industry = {
@@ -44,8 +45,6 @@ export default function IndustryPage() {
   );
   const [industryName, setIndustryName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showTableLoader, setShowTableLoader] = useState(false);
-  const [tableLoadingProgress, setTableLoadingProgress] = useState(0);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -60,12 +59,6 @@ export default function IndustryPage() {
     total: 0,
     totalPages: 0,
   });
-  const tableLoaderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const tableLoaderFinishTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isListLoading =
@@ -265,38 +258,6 @@ export default function IndustryPage() {
     };
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (tableLoaderIntervalRef.current) {
-      clearInterval(tableLoaderIntervalRef.current);
-      tableLoaderIntervalRef.current = null;
-    }
-    if (tableLoaderFinishTimeoutRef.current) {
-      clearTimeout(tableLoaderFinishTimeoutRef.current);
-      tableLoaderFinishTimeoutRef.current = null;
-    }
-
-    if (isListLoading) {
-      setShowTableLoader(true);
-      setTableLoadingProgress(0);
-      tableLoaderIntervalRef.current = setInterval(() => {
-        setTableLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showTableLoader) {
-      setTableLoadingProgress(100);
-      tableLoaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowTableLoader(false);
-        setTableLoadingProgress(0);
-      }, 300);
-    }
-  }, [isListLoading, showTableLoader]);
-
   const handleCreate = async () => {
     if (!industryName.trim()) {
       setModalError("Industry name is required");
@@ -469,18 +430,9 @@ export default function IndustryPage() {
         </div>
       )}
 
-      <div
-        className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden ${
-          showTableLoader ? "flex flex-col flex-1" : ""
-        }`}
-      >
-        <div
-          className={`relative ${showTableLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-        >
-          <table
-            className={`w-full ${showTableLoader ? "h-full" : ""}`}
-            style={{ tableLayout: "fixed" }}
-          >
+      <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
+        <div className="relative overflow-x-auto">
+          <table className="w-full" style={{ tableLayout: "fixed" }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -509,9 +461,37 @@ export default function IndustryPage() {
                 </tr>
               ))}
             </thead>
-            <tbody className={showTableLoader ? "h-full" : ""}>
-              {showTableLoader ? null : table.getRowModel().rows.length ===
-                0 ? (
+            <tbody>
+              {isListLoading ? (
+                Array.from({ length: pagination.pageSize }).map((_, rowIndex) => (
+                  <tr
+                    key={`industry-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`industry-skeleton-cell-${rowIndex}-${column.id}`}
+                        className={`px-2 md:px-4 py-2 md:py-4 ${
+                          column.id === "action" ? "px-2 md:px-8 text-right" : ""
+                        }`}
+                        style={
+                          column.id === "select"
+                            ? { width: "85%" }
+                            : column.id === "action"
+                              ? { width: "15%" }
+                              : undefined
+                        }
+                      >
+                        <Skeleton
+                          height={18}
+                          width={column.id === "action" ? 90 : "70%"}
+                          borderRadius={6}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -553,17 +533,6 @@ export default function IndustryPage() {
               )}
             </tbody>
           </table>
-
-          {showTableLoader && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loading
-                isLoading
-                size="sm"
-                progress={tableLoadingProgress}
-                className="p-4"
-              />
-            </div>
-          )}
         </div>
 
         <div className="px-2 md:px-4 py-3 md:py-4 border-t border-zinc-100 flex items-center justify-center overflow-x-auto">
@@ -712,8 +681,21 @@ export default function IndustryPage() {
 
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-xl mx-2 md:mx-4">
             {isLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
+              <div className="absolute inset-0 z-10 rounded-xl bg-white/80 backdrop-blur-sm p-4 md:p-6">
+                <div className="h-full flex flex-col justify-between gap-6">
+                  <div className="space-y-3">
+                    <Skeleton width="38%" height={20} borderRadius={6} />
+                    <Skeleton width="62%" height={14} borderRadius={6} />
+                  </div>
+                  <div className="space-y-3">
+                    <Skeleton width="24%" height={14} borderRadius={6} />
+                    <Skeleton width="100%" height={44} borderRadius={8} />
+                  </div>
+                  <div className="flex items-center justify-end gap-3">
+                    <Skeleton width={90} height={38} borderRadius={8} />
+                    <Skeleton width={110} height={38} borderRadius={8} />
+                  </div>
+                </div>
               </div>
             )}
             <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2">
@@ -856,8 +838,21 @@ export default function IndustryPage() {
 
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-xl mx-2 md:mx-4">
             {isLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
+              <div className="absolute inset-0 z-10 rounded-xl bg-white/80 backdrop-blur-sm p-4 md:p-6">
+                <div className="h-full flex flex-col justify-between gap-6">
+                  <div className="space-y-3">
+                    <Skeleton width="38%" height={20} borderRadius={6} />
+                    <Skeleton width="62%" height={14} borderRadius={6} />
+                  </div>
+                  <div className="space-y-3">
+                    <Skeleton width="24%" height={14} borderRadius={6} />
+                    <Skeleton width="100%" height={44} borderRadius={8} />
+                  </div>
+                  <div className="flex items-center justify-end gap-3">
+                    <Skeleton width={90} height={38} borderRadius={8} />
+                    <Skeleton width={110} height={38} borderRadius={8} />
+                  </div>
+                </div>
               </div>
             )}
             <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2">
@@ -1000,8 +995,21 @@ export default function IndustryPage() {
 
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-xl mx-2 md:mx-4">
             {isLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
+              <div className="absolute inset-0 z-10 rounded-xl bg-white/80 backdrop-blur-sm p-4 md:p-6">
+                <div className="h-full flex flex-col justify-between gap-6">
+                  <div className="space-y-3">
+                    <Skeleton width="32%" height={20} borderRadius={6} />
+                    <Skeleton width="68%" height={14} borderRadius={6} />
+                  </div>
+                  <div className="space-y-3">
+                    <Skeleton width="84%" height={16} borderRadius={6} />
+                    <Skeleton width="74%" height={14} borderRadius={6} />
+                  </div>
+                  <div className="flex items-center justify-end gap-3">
+                    <Skeleton width={90} height={38} borderRadius={8} />
+                    <Skeleton width={110} height={38} borderRadius={8} />
+                  </div>
+                </div>
               </div>
             )}
             <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2">
@@ -1092,4 +1100,3 @@ export default function IndustryPage() {
     </div>
   );
 }
-

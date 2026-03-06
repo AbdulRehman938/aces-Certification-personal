@@ -17,7 +17,8 @@ import {
 } from "@tanstack/react-table";
 import Dropdown from "../common/dropdown";
 import Button from "../common/button";
-import { Loading } from "../common/Loading";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import { axiosInstance } from "@/lib/axios";
 import {
   Country as CSC,
@@ -26,6 +27,7 @@ import {
 } from "country-state-city";
 import Image from "next/image";
 import { Search, ChevronDown } from "lucide-react";
+import { useUser } from "@/contexts/UserContext";
 
 type AssignedTask = {
   id: number;
@@ -95,7 +97,28 @@ const getInitials = (name: string): string => {
   ).toUpperCase();
 };
 
+const ModalSavingSkeleton = () => (
+  <div className="absolute inset-0 z-10 rounded-xl bg-white/80 backdrop-blur-sm p-4 md:p-6">
+    <div className="h-full flex flex-col justify-between gap-6">
+      <div className="space-y-3">
+        <Skeleton width="32%" height={20} borderRadius={6} />
+        <Skeleton width="58%" height={14} borderRadius={6} />
+      </div>
+      <div className="space-y-3">
+        <Skeleton width="100%" height={42} borderRadius={8} />
+        <Skeleton width="100%" height={42} borderRadius={8} />
+        <Skeleton width="100%" height={42} borderRadius={8} />
+      </div>
+      <div className="flex justify-end gap-3">
+        <Skeleton width={96} height={38} borderRadius={8} />
+        <Skeleton width={126} height={38} borderRadius={8} />
+      </div>
+    </div>
+  </div>
+);
+
 export default function AuditorsPage() {
+  const { profile } = useUser();
   const [activeTab, setActiveTab] = useState<"reviewers" | "auditors">(
     "reviewers",
   );
@@ -103,10 +126,6 @@ export default function AuditorsPage() {
   const [auditorData, setAuditorData] = useState<Auditor[]>([]);
   const [isLoadingReviewers, setIsLoadingReviewers] = useState(false);
   const [isLoadingAuditors, setIsLoadingAuditors] = useState(false);
-  const [showReviewersLoader, setShowReviewersLoader] = useState(false);
-  const [reviewersLoadingProgress, setReviewersLoadingProgress] = useState(0);
-  const [showAuditorsLoader, setShowAuditorsLoader] = useState(false);
-  const [auditorsLoadingProgress, setAuditorsLoadingProgress] = useState(0);
   const [reviewersError, setReviewersError] = useState<string | null>(null);
   const [auditorsError, setAuditorsError] = useState<string | null>(null);
   const [isAddReviewerModalOpen, setIsAddReviewerModalOpen] = useState(false);
@@ -248,21 +267,33 @@ export default function AuditorsPage() {
     total: 0,
   });
   const certificatesDropdownRef = useRef<HTMLDivElement>(null);
-  const reviewersLoaderIntervalRef = useRef<ReturnType<
-    typeof setInterval
-  > | null>(null);
-  const reviewersLoaderFinishTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const auditorsLoaderIntervalRef = useRef<ReturnType<
-    typeof setInterval
-  > | null>(null);
-  const auditorsLoaderFinishTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
   const certificatesListRef = useRef<HTMLDivElement>(null);
   const editCertificatesDropdownRef = useRef<HTMLDivElement>(null);
   const editCertificatesListRef = useRef<HTMLDivElement>(null);
+  const isSubadmin = profile?.role === "subadmin";
+  const permissions = Array.isArray(profile?.permissions)
+    ? (profile.permissions as Array<
+        string | { resource?: string; action?: string[] }
+      >)
+    : [];
+  const hasActionPermission = (
+    resources: string[],
+    action: "read" | "write" | "edit" | "delete",
+  ) => {
+    if (!isSubadmin) return true;
+    if (!permissions.length) return false;
+    return permissions.some((permission) => {
+      if (typeof permission === "string") {
+        return action === "read" && resources.includes(permission);
+      }
+      const actions = Array.isArray(permission.action) ? permission.action : [];
+      return (
+        resources.includes(permission.resource ?? "") && actions.includes(action)
+      );
+    });
+  };
+  const canWrite = hasActionPermission(["auditor", "auditors"], "write");
+  const canEdit = hasActionPermission(["auditor", "auditors"], "edit");
 
   const columns = useMemo<ColumnDef<Reviewer>[]>(
     () => [
@@ -423,35 +454,46 @@ export default function AuditorsPage() {
             </button>
 
             <button
-              onClick={() => {
-                const reviewer = row.original;
+              onClick={
+                canEdit
+                  ? () => {
+                      const reviewer = row.original;
 
-                const nameParts = reviewer.name.trim().split(/\s+/);
-                const firstName =
-                  nameParts.length > 1
-                    ? nameParts.slice(0, -1).join(" ")
-                    : nameParts[0] || "";
-                const lastName =
-                  nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+                      const nameParts = reviewer.name.trim().split(/\s+/);
+                      const firstName =
+                        nameParts.length > 1
+                          ? nameParts.slice(0, -1).join(" ")
+                          : nameParts[0] || "";
+                      const lastName =
+                        nameParts.length > 1
+                          ? nameParts[nameParts.length - 1]
+                          : "";
 
-                setEditReviewerFirstName(firstName);
-                setEditReviewerLastName(lastName);
-                setEditReviewerEmail(reviewer.email);
-                setEditReviewerExpertiseTags(reviewer.expertise || []);
-                setEditReviewerIsActive(reviewer.accountStatus === "Active");
+                      setEditReviewerFirstName(firstName);
+                      setEditReviewerLastName(lastName);
+                      setEditReviewerEmail(reviewer.email);
+                      setEditReviewerExpertiseTags(reviewer.expertise || []);
+                      setEditReviewerIsActive(reviewer.accountStatus === "Active");
 
-                setOriginalReviewerValues({
-                  firstName,
-                  lastName,
-                  email: reviewer.email,
-                  tags: reviewer.expertise || [],
-                  accountStatus: reviewer.accountStatus === "Active",
-                });
+                      setOriginalReviewerValues({
+                        firstName,
+                        lastName,
+                        email: reviewer.email,
+                        tags: reviewer.expertise || [],
+                        accountStatus: reviewer.accountStatus === "Active",
+                      });
 
-                setEditingReviewerId(reviewer.id);
-                setIsEditReviewerModalOpen(true);
-              }}
-              className="w-8 h-8 bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors rounded-lg"
+                      setEditingReviewerId(reviewer.id);
+                      setIsEditReviewerModalOpen(true);
+                    }
+                  : undefined
+              }
+              disabled={!canEdit}
+              className={`w-8 h-8 bg-zinc-100 flex items-center justify-center transition-colors rounded-lg ${
+                canEdit
+                  ? "hover:bg-zinc-200"
+                  : "opacity-50 cursor-not-allowed"
+              }`}
             >
               <svg
                 width="20"
@@ -471,7 +513,7 @@ export default function AuditorsPage() {
         enableSorting: false,
       },
     ],
-    [],
+    [canEdit],
   );
 
   const auditorColumns = useMemo<ColumnDef<Auditor>[]>(
@@ -683,46 +725,57 @@ export default function AuditorsPage() {
               </svg>
             </button>
             <button
-              onClick={() => {
-                const auditor = row.original;
+              onClick={
+                canEdit
+                  ? () => {
+                      const auditor = row.original;
 
-                const nameParts = auditor.name.trim().split(/\s+/);
-                const firstName =
-                  nameParts.length > 1
-                    ? nameParts.slice(0, -1).join(" ")
-                    : nameParts[0] || "";
-                const lastName =
-                  nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+                      const nameParts = auditor.name.trim().split(/\s+/);
+                      const firstName =
+                        nameParts.length > 1
+                          ? nameParts.slice(0, -1).join(" ")
+                          : nameParts[0] || "";
+                      const lastName =
+                        nameParts.length > 1
+                          ? nameParts[nameParts.length - 1]
+                          : "";
 
-                const certTags = auditor.certifications.map((cert, idx) => ({
-                  id: `cert-${idx}`,
-                  name: cert,
-                }));
+                      const certTags = auditor.certifications.map((cert, idx) => ({
+                        id: `cert-${idx}`,
+                        name: cert,
+                      }));
 
-                setEditAuditorFirstName(firstName);
-                setEditAuditorLastName(lastName);
-                setEditAuditorEmail(auditor.email);
-                setEditSelectedCountry(auditor.country || "");
-                setEditSelectedState("");
-                setEditSelectedCity("");
-                setEditCertificationTags(certTags);
-                setEditIsAuditorActive(auditor.accountStatus === "Active");
+                      setEditAuditorFirstName(firstName);
+                      setEditAuditorLastName(lastName);
+                      setEditAuditorEmail(auditor.email);
+                      setEditSelectedCountry(auditor.country || "");
+                      setEditSelectedState("");
+                      setEditSelectedCity("");
+                      setEditCertificationTags(certTags);
+                      setEditIsAuditorActive(auditor.accountStatus === "Active");
 
-                setOriginalAuditorValues({
-                  firstName,
-                  lastName,
-                  email: auditor.email,
-                  country: auditor.country || "",
-                  state: "",
-                  city: "",
-                  assigned_certificates: auditor.certifications || [],
-                  accountStatus: auditor.accountStatus === "Active",
-                });
+                      setOriginalAuditorValues({
+                        firstName,
+                        lastName,
+                        email: auditor.email,
+                        country: auditor.country || "",
+                        state: "",
+                        city: "",
+                        assigned_certificates: auditor.certifications || [],
+                        accountStatus: auditor.accountStatus === "Active",
+                      });
 
-                setEditingAuditorId(auditor.id);
-                setIsEditAuditorModalOpen(true);
-              }}
-              className="w-8 h-8 bg-zinc-100 flex items-center justify-center hover:bg-zinc-200 transition-colors rounded-lg"
+                      setEditingAuditorId(auditor.id);
+                      setIsEditAuditorModalOpen(true);
+                    }
+                  : undefined
+              }
+              disabled={!canEdit}
+              className={`w-8 h-8 bg-zinc-100 flex items-center justify-center transition-colors rounded-lg ${
+                canEdit
+                  ? "hover:bg-zinc-200"
+                  : "opacity-50 cursor-not-allowed"
+              }`}
             >
               <svg
                 width="20"
@@ -742,7 +795,7 @@ export default function AuditorsPage() {
         enableSorting: false,
       },
     ],
-    [],
+    [canEdit],
   );
 
   const table = useReactTable({
@@ -1112,70 +1165,6 @@ export default function AuditorsPage() {
     }
   }, [activeTab]);
 
-  useEffect(() => {
-    if (reviewersLoaderIntervalRef.current) {
-      clearInterval(reviewersLoaderIntervalRef.current);
-      reviewersLoaderIntervalRef.current = null;
-    }
-    if (reviewersLoaderFinishTimeoutRef.current) {
-      clearTimeout(reviewersLoaderFinishTimeoutRef.current);
-      reviewersLoaderFinishTimeoutRef.current = null;
-    }
-
-    if (isLoadingReviewers) {
-      setShowReviewersLoader(true);
-      setReviewersLoadingProgress(0);
-      reviewersLoaderIntervalRef.current = setInterval(() => {
-        setReviewersLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showReviewersLoader) {
-      setReviewersLoadingProgress(100);
-      reviewersLoaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowReviewersLoader(false);
-        setReviewersLoadingProgress(0);
-      }, 300);
-    }
-  }, [isLoadingReviewers, showReviewersLoader]);
-
-  useEffect(() => {
-    if (auditorsLoaderIntervalRef.current) {
-      clearInterval(auditorsLoaderIntervalRef.current);
-      auditorsLoaderIntervalRef.current = null;
-    }
-    if (auditorsLoaderFinishTimeoutRef.current) {
-      clearTimeout(auditorsLoaderFinishTimeoutRef.current);
-      auditorsLoaderFinishTimeoutRef.current = null;
-    }
-
-    if (isLoadingAuditors) {
-      setShowAuditorsLoader(true);
-      setAuditorsLoadingProgress(0);
-      auditorsLoaderIntervalRef.current = setInterval(() => {
-        setAuditorsLoadingProgress((prev) => {
-          if (prev >= 95) return prev;
-          const step = Math.max(1, Math.round((95 - prev) / 8));
-          return Math.min(prev + step, 95);
-        });
-      }, 120);
-      return;
-    }
-
-    if (showAuditorsLoader) {
-      setAuditorsLoadingProgress(100);
-      auditorsLoaderFinishTimeoutRef.current = setTimeout(() => {
-        setShowAuditorsLoader(false);
-        setAuditorsLoadingProgress(0);
-      }, 300);
-    }
-  }, [isLoadingAuditors, showAuditorsLoader]);
-
   const refreshData = () => {
     if (activeTab === "reviewers") {
       fetchReviewers();
@@ -1263,6 +1252,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveReviewer = async () => {
+    if (!canWrite) return;
     const errors: typeof reviewerErrors = {};
 
     if (!reviewerFirstName.trim()) {
@@ -1332,6 +1322,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveAuditor = async () => {
+    if (!canWrite) return;
     const errors: typeof auditorErrors = {};
 
     if (!auditorFirstName.trim()) {
@@ -1433,6 +1424,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveEditReviewer = async () => {
+    if (!canEdit) return;
     if (!editingReviewerId || !originalReviewerValues) {
       alert("Error: Missing reviewer information");
       return;
@@ -1531,6 +1523,7 @@ export default function AuditorsPage() {
   };
 
   const handleSaveEditAuditor = async () => {
+    if (!canEdit) return;
     if (!editingAuditorId || !originalAuditorValues) {
       alert("Error: Missing auditor information");
       return;
@@ -1671,8 +1664,13 @@ export default function AuditorsPage() {
         </div>
         {activeTab === "reviewers" && (
           <button
-            onClick={() => setIsAddReviewerModalOpen(true)}
-            className="px-4 py-2 md:px-6 md:py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0"
+            onClick={canWrite ? () => setIsAddReviewerModalOpen(true) : undefined}
+            disabled={!canWrite}
+            className={`px-4 py-2 md:px-6 md:py-3 rounded-lg transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0 ${
+              canWrite
+                ? "bg-black text-white hover:bg-gray-800"
+                : "bg-black/50 text-white/70 cursor-not-allowed"
+            }`}
           >
             Add Reviewer
             <span className="w-5 h-5 inline-flex items-center justify-center">
@@ -1693,8 +1691,13 @@ export default function AuditorsPage() {
         )}
         {activeTab === "auditors" && (
           <button
-            onClick={() => setIsAddAuditorModalOpen(true)}
-            className="px-4 py-2 md:px-6 md:py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0"
+            onClick={canWrite ? () => setIsAddAuditorModalOpen(true) : undefined}
+            disabled={!canWrite}
+            className={`px-4 py-2 md:px-6 md:py-3 rounded-lg transition-colors text-sm md:text-base font-medium inline-flex items-center gap-2 shrink-0 ${
+              canWrite
+                ? "bg-black text-white hover:bg-gray-800"
+                : "bg-black/50 text-white/70 cursor-not-allowed"
+            }`}
           >
             Add Auditor
             <span className="w-5 h-5 inline-flex items-center justify-center">
@@ -1798,18 +1801,9 @@ export default function AuditorsPage() {
                 </button>
               </div>
             ) : (
-              <div
-                className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden mb-4 ${
-                  showReviewersLoader ? "flex flex-col flex-1" : ""
-                }`}
-              >
-                <div
-                  className={`relative ${showReviewersLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-                >
-                  <table
-                    className={`w-full ${showReviewersLoader ? "h-full" : ""}`}
-                    style={{ tableLayout: "auto" }}
-                  >
+              <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden mb-4">
+                <div className="relative overflow-x-auto">
+                  <table className="w-full" style={{ tableLayout: "auto" }}>
                     <thead>
                       {table.getHeaderGroups().map((headerGroup) => (
                         <tr
@@ -1836,9 +1830,42 @@ export default function AuditorsPage() {
                         </tr>
                       ))}
                     </thead>
-                    <tbody className={showReviewersLoader ? "h-full" : ""}>
-                      {showReviewersLoader ? null : table.getRowModel().rows
-                          .length === 0 ? (
+                    <tbody>
+                      {isLoadingReviewers ? (
+                        Array.from({
+                          length: table.getState().pagination.pageSize,
+                        }).map((_, rowIndex) => (
+                          <tr
+                            key={`reviewers-skeleton-row-${rowIndex}`}
+                            className="border-b border-zinc-100 last:border-b-0"
+                          >
+                            {table.getVisibleLeafColumns().map((column) => (
+                              <td
+                                key={`reviewers-skeleton-cell-${rowIndex}-${column.id}`}
+                                className={`py-2 md:py-4 ${
+                                  column.id === "action"
+                                    ? "text-right pl-2 md:pl-4"
+                                    : "px-2 md:px-4"
+                                }`}
+                              >
+                                <div
+                                  className={
+                                    column.id === "action"
+                                      ? "flex justify-end"
+                                      : ""
+                                  }
+                                >
+                                  <Skeleton
+                                    height={18}
+                                    width={column.id === "action" ? 76 : "70%"}
+                                    borderRadius={6}
+                                  />
+                                </div>
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      ) : table.getRowModel().rows.length === 0 ? (
                         <tr>
                           <td
                             colSpan={columns.length}
@@ -1873,20 +1900,9 @@ export default function AuditorsPage() {
                       )}
                     </tbody>
                   </table>
-
-                  {showReviewersLoader && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loading
-                        isLoading
-                        size="sm"
-                        progress={reviewersLoadingProgress}
-                        className="p-4"
-                      />
-                    </div>
-                  )}
                 </div>
 
-                {!showReviewersLoader &&
+                {!isLoadingReviewers &&
                   !reviewersError &&
                   table.getRowModel().rows.length > 0 && (
                     <div className="px-2 md:px-4 py-3 md:py-4 border-t border-zinc-100 flex items-center justify-center overflow-x-auto">
@@ -2040,18 +2056,9 @@ export default function AuditorsPage() {
                 </button>
               </div>
             ) : (
-              <div
-                className={`bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden mb-4 ${
-                  showAuditorsLoader ? "flex flex-col flex-1" : ""
-                }`}
-              >
-                <div
-                  className={`relative ${showAuditorsLoader ? "flex-1 overflow-x-auto" : "overflow-x-auto"}`}
-                >
-                  <table
-                    className={`w-full ${showAuditorsLoader ? "h-full" : ""}`}
-                    style={{ tableLayout: "auto" }}
-                  >
+              <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden mb-4">
+                <div className="relative overflow-x-auto">
+                  <table className="w-full" style={{ tableLayout: "auto" }}>
                     <thead>
                       {auditorTable.getHeaderGroups().map((headerGroup) => (
                         <tr
@@ -2111,9 +2118,78 @@ export default function AuditorsPage() {
                         </tr>
                       ))}
                     </thead>
-                    <tbody className={showAuditorsLoader ? "h-full" : ""}>
-                      {showAuditorsLoader ? null : auditorTable.getRowModel()
-                          .rows.length === 0 ? (
+                    <tbody>
+                      {isLoadingAuditors ? (
+                        Array.from({
+                          length: auditorTable.getState().pagination.pageSize,
+                        }).map((_, rowIndex) => (
+                          <tr
+                            key={`auditors-skeleton-row-${rowIndex}`}
+                            className="border-b border-zinc-100 last:border-b-0"
+                          >
+                            {auditorTable.getVisibleLeafColumns().map((column) => (
+                              <td
+                                key={`auditors-skeleton-cell-${rowIndex}-${column.id}`}
+                                className={`py-2 md:py-4 ${
+                                  column.id === "action"
+                                    ? "text-right pl-2 md:pl-4"
+                                    : "px-2 md:px-4"
+                                }`}
+                                style={
+                                  column.id === "name"
+                                    ? { minWidth: "200px", width: "200px" }
+                                    : column.id === "email"
+                                      ? {
+                                          minWidth: "180px",
+                                          maxWidth: "180px",
+                                          width: "180px",
+                                        }
+                                      : column.id === "location"
+                                        ? { minWidth: "200px", width: "200px" }
+                                        : column.id === "certifications"
+                                          ? {
+                                              minWidth: "550px",
+                                              width: "550px",
+                                            }
+                                          : column.id === "assigned"
+                                            ? {
+                                                minWidth: "80px",
+                                                maxWidth: "80px",
+                                                width: "80px",
+                                              }
+                                            : column.id === "accountStatus"
+                                              ? {
+                                                  minWidth: "100px",
+                                                  maxWidth: "100px",
+                                                  width: "100px",
+                                                }
+                                              : column.id === "action"
+                                                ? {
+                                                    minWidth: "120px",
+                                                    maxWidth: "120px",
+                                                    width: "120px",
+                                                  }
+                                                : undefined
+                                }
+                              >
+                                <div
+                                  className={
+                                    column.id === "action"
+                                      ? "flex justify-end"
+                                      : ""
+                                  }
+                                >
+                                  <Skeleton
+                                    height={18}
+                                    width={column.id === "action" ? 76 : "70%"}
+                                    borderRadius={6}
+                                  />
+                                </div>
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      ) : auditorTable.getRowModel().rows.length === 0 ? (
                         <tr>
                           <td
                             colSpan={auditorColumns.length}
@@ -2184,20 +2260,9 @@ export default function AuditorsPage() {
                       )}
                     </tbody>
                   </table>
-
-                  {showAuditorsLoader && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loading
-                        isLoading
-                        size="sm"
-                        progress={auditorsLoadingProgress}
-                        className="p-4"
-                      />
-                    </div>
-                  )}
                 </div>
 
-                {!showAuditorsLoader &&
+                {!isLoadingAuditors &&
                   !auditorsError &&
                   auditorTable.getRowModel().rows.length > 0 && (
                     <div className="px-2 md:px-4 py-3 md:py-4 border-t border-zinc-100 flex items-center justify-center overflow-x-auto">
@@ -2339,7 +2404,7 @@ export default function AuditorsPage() {
         )}
       </div>
 
-      {isAddReviewerModalOpen && (
+      {isAddReviewerModalOpen && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2357,9 +2422,7 @@ export default function AuditorsPage() {
 
           <div className="relative bg-white rounded-xl shadow-lg w-full max-w-xl mx-4 p-4 md:p-6">
             {isSavingReviewer && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
+              <ModalSavingSkeleton />
             )}
 
             <div className="flex items-start justify-between mb-6">
@@ -2592,7 +2655,7 @@ export default function AuditorsPage() {
               >
                 Cancel
               </button>
-              <Button onClick={handleSaveReviewer} disabled={isSavingReviewer}>
+              <Button onClick={handleSaveReviewer} disabled={isSavingReviewer || !canWrite}>
                 {isSavingReviewer ? "Saving..." : "Save Reviewer"}
               </Button>
             </div>
@@ -2600,7 +2663,7 @@ export default function AuditorsPage() {
         </div>
       )}
 
-      {isEditReviewerModalOpen && (
+      {isEditReviewerModalOpen && canEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2620,9 +2683,7 @@ export default function AuditorsPage() {
 
           <div className="relative bg-white rounded-xl shadow-lg w-full max-w-xl mx-4 p-4 md:p-6">
             {isSavingEditReviewer && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
+              <ModalSavingSkeleton />
             )}
 
             <div className="flex items-start justify-between mb-6">
@@ -2852,7 +2913,7 @@ export default function AuditorsPage() {
               </button>
               <Button
                 onClick={handleSaveEditReviewer}
-                disabled={isSavingEditReviewer}
+                disabled={isSavingEditReviewer || !canEdit}
               >
                 {isSavingEditReviewer ? "Saving..." : "Update Reviewer"}
               </Button>
@@ -2861,7 +2922,7 @@ export default function AuditorsPage() {
         </div>
       )}
 
-      {isAddAuditorModalOpen && (
+      {isAddAuditorModalOpen && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -2897,9 +2958,7 @@ export default function AuditorsPage() {
 
           <div className="relative bg-white rounded-xl shadow-lg w-full max-w-2xl mx-4 p-4 md:p-6 max-h-[90vh] overflow-y-auto">
             {isSavingAuditor && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
+              <ModalSavingSkeleton />
             )}
 
             <div className="flex items-start justify-between mb-6">
@@ -3505,7 +3564,7 @@ export default function AuditorsPage() {
               >
                 Cancel
               </button>
-              <Button onClick={handleSaveAuditor} disabled={isSavingAuditor}>
+              <Button onClick={handleSaveAuditor} disabled={isSavingAuditor || !canWrite}>
                 {isSavingAuditor ? "Saving..." : "Save Auditor"}
               </Button>
             </div>
@@ -3513,7 +3572,7 @@ export default function AuditorsPage() {
         </div>
       )}
 
-      {isEditAuditorModalOpen && (
+      {isEditAuditorModalOpen && canEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -3542,9 +3601,7 @@ export default function AuditorsPage() {
 
           <div className="relative bg-white rounded-xl shadow-lg w-full max-w-2xl mx-4 p-4 md:p-6 max-h-[90vh] overflow-y-auto">
             {isSavingEditAuditor && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-                <Loading isLoading size="sm" className="p-4" />
-              </div>
+              <ModalSavingSkeleton />
             )}
 
             <div className="flex items-start justify-between mb-6">
@@ -4092,7 +4149,7 @@ export default function AuditorsPage() {
               </button>
               <Button
                 onClick={handleSaveEditAuditor}
-                disabled={isSavingEditAuditor}
+                disabled={isSavingEditAuditor || !canEdit}
               >
                 {isSavingEditAuditor ? "Saving..." : "Update Auditor"}
               </Button>
@@ -4406,4 +4463,3 @@ export default function AuditorsPage() {
     </div>
   );
 }
-

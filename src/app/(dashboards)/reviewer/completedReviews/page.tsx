@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -9,89 +9,155 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
+import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface CompletedReview {
   id: string;
+  assessmentId?: string;
+  auditId?: string;
   organization: string;
   certification: string;
-  finalResult: "Approved" | "Conditionally Approved" | "Rejected";
-  status: "Submitted" | "Close" | "Submitted";
+  status: string;
 }
 
-const completedReviewsData: CompletedReview[] = [
-  {
-    id: "1",
-    organization: "Grand Hyatt Singapore",
-    certification: "ISO 14001 Environmental Certification",
-    finalResult: "Approved",
-    status: "Submitted",
-  },
-  {
-    id: "2",
-    organization: "Marina Bay Sands",
-    certification: "Carbon Neutral Certification",
-    finalResult: "Approved",
-    status: "Close",
-  },
-  {
-    id: "3",
-    organization: "Raffles Hotel",
-    certification: "Sustainable Supply Chain",
-    finalResult: "Approved",
-    status: "Submitted",
-  },
-  {
-    id: "4",
-    organization: "CapitaLand Group",
-    certification: "ESG Reporting Excellence",
-    finalResult: "Approved",
-    status: "Close",
-  },
-  {
-    id: "5",
-    organization: "Mandarin Oriental",
-    certification: "ISO 14001 Environmental Certification",
-    finalResult: "Approved",
-    status: "Close",
-  },
-  {
-    id: "6",
-    organization: "Far East Organization",
-    certification: "ESG Reporting Excellence",
-    finalResult: "Approved",
-    status: "Submitted",
-  },
-];
+type ReviewerAuditItem = {
+  assessment_id?: string;
+  assessmentId?: string;
+  audit_id?: string;
+  auditId?: string;
+  organization_name?: string;
+  organizationName?: string;
+  certificate_name?: string;
+  certificateName?: string;
+  computed_status?: string;
+  computedStatus?: string;
+  review_status?: string;
+  reviewStatus?: string;
+  audit_status?: string;
+  auditStatus?: string;
+};
+
+const DEFAULT_PAGE_SIZE = 10;
+
+const formatStatusLabel = (value?: string): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "N/A";
+  return raw
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
 
 export default function CompletedReviews() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [completedReviews, setCompletedReviews] = useState<CompletedReview[]>(
+    [],
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchReviewerAudits = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axiosInstance.get("/reviewers/audits", {
+          params: {
+            page: currentPage,
+            limit: DEFAULT_PAGE_SIZE,
+          },
+        });
+        if (isCancelled) return;
+        console.log("reviewer audits response:", response.data);
+
+        const payload = response.data?.data;
+        const items: ReviewerAuditItem[] = Array.isArray(payload?.items)
+          ? payload.items
+          : Array.isArray(response.data?.items)
+            ? response.data.items
+            : [];
+
+        const mappedRows: CompletedReview[] = items.map((item, index) => {
+          const assessmentId = item.assessment_id || item.assessmentId || "";
+          const auditId = item.audit_id || item.auditId || "";
+
+          return {
+            id:
+              auditId ||
+              assessmentId ||
+              `review-audit-${currentPage}-${index + 1}`,
+            assessmentId: assessmentId || undefined,
+            auditId: auditId || undefined,
+            organization: item.organization_name || item.organizationName || "N/A",
+            certification: item.certificate_name || item.certificateName || "N/A",
+            status: formatStatusLabel(
+              item.computed_status ||
+                item.computedStatus ||
+                item.review_status ||
+                item.reviewStatus ||
+                item.audit_status ||
+                item.auditStatus,
+            ),
+          };
+        });
+
+        const responseTotalPages = Number(
+          payload?.totalPages ?? response.data?.totalPages,
+        );
+        const responseTotal = Number(payload?.total ?? response.data?.total);
+        const resolvedTotalPages =
+          Number.isFinite(responseTotalPages) && responseTotalPages > 0
+            ? responseTotalPages
+            : Number.isFinite(responseTotal) && responseTotal > 0
+              ? Math.ceil(responseTotal / DEFAULT_PAGE_SIZE)
+              : 1;
+
+        setCompletedReviews(mappedRows);
+        setTotalPages(resolvedTotalPages);
+
+        if (currentPage > resolvedTotalPages && resolvedTotalPages > 0) {
+          setCurrentPage(resolvedTotalPages);
+        }
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("Failed to fetch reviewer audits:", error);
+        if (axios.isAxiosError(error)) {
+          console.error("API message:", error.response?.data?.message);
+        }
+        setCompletedReviews([]);
+        setTotalPages(1);
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchReviewerAudits();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentPage]);
 
   const getStatusStyles = (status: string) => {
-    switch (status) {
-      case "Submitted":
-        return "bg-green-50 text-green-600 border border-green-600";
-      case "Close":
-        return "bg-red-50 text-red-600 border border-red-600";
-      default:
-        return "bg-[#e9e9e9] text-black border border-black";
+    const key = status.toLowerCase();
+    if (key.includes("completed") || key.includes("approved")) {
+      return "bg-[#f2fff7] text-[#00B448] border border-[#00B448]";
     }
-  };
-
-  const getResultStyles = (res: string) => {
-    switch (res) {
-      case "Approved":
-        return "bg-[#f2fff7] text-[#00B448] border border-[#00B448]";
-      case "Close":
-        return "bg-[#fef7e5] text-[#FF0909] border border-[#FF0909]";
-      case "Submitted":
-        return "bg-[#f2ff7] text-[#00B448] border border-[#00B448]";
-      case "Conditionally Approved":
-        return "bg-white text-[#FAAB00] border border-[#FAAB00]";
-      case "Rejected":
-        return "bg-[#fef7e5] text-[#FF0909] border border-[#FF0909]";
-      default:
-        return "bg-white text-black border border-black";
+    if (key.includes("in progress")) {
+      return "bg-[#FFF9E6] text-[#FFB020] border border-[#FFD580]";
     }
+    if (key.includes("rejected") || key.includes("close")) {
+      return "bg-[#fef7e5] text-[#FF0909] border border-[#FF0909]";
+    }
+    return "bg-[#e9e9e9] text-black border border-black";
   };
 
   const columns = useMemo<ColumnDef<CompletedReview>[]>(
@@ -123,21 +189,6 @@ export default function CompletedReviews() {
         ),
       },
       {
-        accessorKey: "finalResult",
-        header: () => (
-          <span className="text-[12px] font-medium text-gray">
-            Final Result
-          </span>
-        ),
-        cell: ({ getValue }) => (
-          <span
-            className={`inline-flex items-center justify-center px-4 py-1.5 rounded-md text-sm font-medium leading-[100%] align-middle border min-w-[120px] md:min-w-[140px] text-center ${getResultStyles(getValue<string>())}`}
-          >
-            {getValue<string>()}
-          </span>
-        ),
-      },
-      {
         accessorKey: "status",
         header: () => (
           <span className="text-[12px] font-medium text-gray">Status</span>
@@ -158,12 +209,18 @@ export default function CompletedReviews() {
           </span>
         ),
         cell: (info: any) => {
+          const row = info.row.original as CompletedReview;
+          const navigateId = row.assessmentId || row.auditId;
+          const detailRoute = navigateId
+            ? `/reviewer/completedReviews/review?assessmentId=${encodeURIComponent(navigateId)}`
+            : "/reviewer/completedReviews/review";
+
           return (
             <div className="flex items-center justify-center gap-2 pl-8">
               <button
                 className="p-2 rounded-md border"
                 style={{ borderColor: "#9B9B9B" }}
-                onClick={() => router.push("/reviewer/completedReviews/review")}
+                onClick={() => router.push(detailRoute)}
               >
                 <svg
                   width="12"
@@ -204,11 +261,11 @@ export default function CompletedReviews() {
         },
       },
     ],
-    [],
+    [router],
   );
 
   const table = useReactTable({
-    data: completedReviewsData,
+    data: completedReviews,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -255,7 +312,36 @@ export default function CompletedReviews() {
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: DEFAULT_PAGE_SIZE }).map((_, rowIndex) => (
+                  <tr
+                    key={`completed-reviews-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`completed-reviews-skeleton-cell-${rowIndex}-${column.id}`}
+                        className="px-2 md:px-4 py-2 md:py-4"
+                        style={{
+                          width: `${100 / table.getAllColumns().length}%`,
+                        }}
+                      >
+                        <div
+                          className={
+                            column.id === "action" ? "flex justify-center" : ""
+                          }
+                        >
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 70 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -290,8 +376,110 @@ export default function CompletedReviews() {
             </tbody>
           </table>
         </div>
+        <div className="px-2 md:px-4 py-3 md:py-4 border-t border-zinc-100 flex items-center justify-center overflow-x-auto">
+          <div className="flex items-center gap-0.5 md:gap-1">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={isLoading || currentPage <= 1}
+              className="flex items-center px-2 py-1 md:px-3 md:py-1.5 bg-zinc-100 text-gray rounded-sm text-[10px] md:text-xs font-normal hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-3 h-3 md:w-4 md:h-4"
+              >
+                <path
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                  d="M10.2325 4.18414C10.4622 4.423 10.4547 4.80282 10.2159 5.0325L7.06567 8L10.2159 10.9675C10.4547 11.1972 10.4622 11.577 10.2325 11.8159C10.0028 12.0547 9.623 12.0622 9.38414 11.8325L5.78413 8.4325C5.66649 8.31938 5.6 8.16321 5.6 8C5.6 7.83679 5.66649 7.68062 5.78413 7.5675L9.38414 4.1675C9.623 3.93782 10.0028 3.94527 10.2325 4.18414Z"
+                  fill="#999999"
+                />
+              </svg>
+              <span className="hidden sm:inline ml-1 md:ml-0">Back</span>
+            </button>
+            {(() => {
+              const maxPagesToShow = 8;
+              let startPage = Math.max(1, currentPage - 3);
+              let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+              if (endPage - startPage + 1 < maxPagesToShow) {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
+              }
+
+              const pages = [];
+              if (startPage > 1) {
+                pages.push(
+                  <span
+                    key="dots-before"
+                    className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
+                  >
+                    ...
+                  </span>,
+                );
+              }
+
+              for (let page = startPage; page <= endPage; page += 1) {
+                pages.push(
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    disabled={isLoading}
+                    className={`px-1.5 py-1 md:px-2.5 md:py-1.5 rounded-sm text-[10px] md:text-xs font-normal transition-colors ${
+                      currentPage === page
+                        ? "bg-dull-gray text-primary"
+                        : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    style={
+                      currentPage !== page ? { borderColor: "#E6E6E6" } : undefined
+                    }
+                  >
+                    {page}
+                  </button>,
+                );
+              }
+
+              if (endPage < totalPages) {
+                pages.push(
+                  <span
+                    key="dots-after"
+                    className="px-1 md:px-2 text-[10px] md:text-xs text-gray"
+                  >
+                    ...
+                  </span>,
+                );
+              }
+              return pages;
+            })()}
+            <button
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              disabled={isLoading || currentPage >= totalPages}
+              className="flex items-center px-2 py-1 md:px-3 md:py-1.5 bg-zinc-100 text-gray rounded-sm text-[10px] md:text-xs font-normal hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200"
+            >
+              <span className="hidden sm:inline mr-1 md:mr-0">Next</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-3 h-3 md:w-4 md:h-4"
+              >
+                <path
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                  d="M5.76748 11.8159C5.5378 11.577 5.54525 11.1972 5.78411 10.9675L8.93431 8L5.78411 5.0325C5.54525 4.80282 5.5378 4.423 5.76748 4.18413C5.99715 3.94527 6.37698 3.93782 6.61584 4.1675L10.2158 7.5675C10.3335 7.68062 10.4 7.83679 10.4 8C10.4 8.16321 10.3335 8.31938 10.2158 8.4325L6.61584 11.8325C6.37698 12.0622 5.99715 12.0547 5.76748 11.8159Z"
+                  fill="#999999"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-

@@ -73,6 +73,18 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         resources: ["team", "users"],
       },
       {
+        label: "Notifications",
+        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        href: "/admin/notifications",
+        resources: [],
+      },
+      {
+        label: "Messages",
+        icon: "/assets/imgs/admin/dashboard/chat.svg",
+        href: "/admin/messages",
+        resources: [],
+      },
+      {
         label: "Setting",
         icon: "/assets/imgs/admin/dashboard/setting.svg",
         href: "/admin/settings",
@@ -108,6 +120,16 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         href: "/auditor/completeAudits",
       },
       {
+        label: "Notifications",
+        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        href: "/auditor/notifications",
+      },
+      {
+        label: "Messages",
+        icon: "/assets/imgs/admin/dashboard/chat.svg",
+        href: "/auditor/messages",
+      },
+      {
         label: "Setting",
         icon: "/assets/imgs/auditor/sidebar/setting.svg",
         href: "/auditor/settings",
@@ -134,6 +156,16 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         label: "Completed Reviewers",
         icon: "/assets/imgs/reviewer/dashboard/completed.svg",
         href: "/reviewer/completedReviews",
+      },
+      {
+        label: "Notifications",
+        icon: "/assets/imgs/admin/dashboard/bell.svg",
+        href: "/reviewer/notifications",
+      },
+      {
+        label: "Messages",
+        icon: "/assets/imgs/admin/dashboard/chat.svg",
+        href: "/reviewer/messages",
       },
       {
         label: "Setting",

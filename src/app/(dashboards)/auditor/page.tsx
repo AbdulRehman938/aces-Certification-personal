@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -9,6 +9,8 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import Button from "../admin/common/button";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 interface StatCardProps {
   label: string;
@@ -41,6 +43,21 @@ function StatCard({ label, value, subtitle, icon }: StatCardProps) {
           <p className="text-[11px] md:text-xs font-normal text-gray leading-[14px] align-middle">
             {subtitle}
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCardSkeleton() {
+  return (
+    <div className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm">
+      <div className="flex items-start gap-3">
+        <Skeleton width={32} height={32} borderRadius={8} />
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <Skeleton width="65%" height={14} borderRadius={6} />
+          <Skeleton width="35%" height={28} borderRadius={6} />
+          <Skeleton width="80%" height={12} borderRadius={6} />
         </div>
       </div>
     </div>
@@ -191,6 +208,7 @@ const upcomingDeadlinesData = [
 ];
 
 export default function AuditorDashboard() {
+  const [isLoading, setIsLoading] = useState(true);
   const [showAllAudits, setShowAllAudits] = useState(false);
   const [showAllDeadlines, setShowAllDeadlines] = useState(false);
   const hasMoreAudits = assignedAuditsData.length > 3;
@@ -386,6 +404,16 @@ export default function AuditorDashboard() {
     getFilteredRowModel: getFilteredRowModel(),
   });
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setIsLoading(false);
+    }, 600);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   return (
     <div className="p-6 bg-light-gray min-h-screen">
       <div className="mb-8">
@@ -398,22 +426,26 @@ export default function AuditorDashboard() {
       </div>
       <div className="mb-10 flex flex-col gap-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-          {selfAssessmentCards.map((card, index) => (
-            <StatCard
-              key={`self-assessment-${index}`}
-              label={card.label}
-              value={card.value}
-              subtitle={card.subtitle}
-              icon={card.icon}
-            />
-          ))}
+          {isLoading
+            ? selfAssessmentCards.map((_, index) => (
+                <StatCardSkeleton key={`auditor-dashboard-stat-skeleton-${index}`} />
+              ))
+            : selfAssessmentCards.map((card, index) => (
+                <StatCard
+                  key={`self-assessment-${index}`}
+                  label={card.label}
+                  value={card.value}
+                  subtitle={card.subtitle}
+                  icon={card.icon}
+                />
+              ))}
         </div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between py-1">
             <h2 className="text-base font-semibold text-secondary">
               Assigned Audits
             </h2>
-            {hasMoreAudits && !showAllAudits && (
+            {hasMoreAudits && !showAllAudits && !isLoading && (
               <button
                 onClick={() => setShowAllAudits(true)}
                 className="px-3 py-1.5 border bg-white border-black rounded-lg text-xs font-medium text-secondary hover:bg-gray-50 transition-colors"
@@ -454,7 +486,36 @@ export default function AuditorDashboard() {
                   ))}
                 </thead>
                 <tbody>
-                  {table.getRowModel().rows.length === 0 ? (
+                  {isLoading ? (
+                    Array.from({ length: 4 }).map((_, rowIndex) => (
+                      <tr
+                        key={`auditor-dashboard-assigned-skeleton-row-${rowIndex}`}
+                        className="border-b border-zinc-100 last:border-b-0"
+                      >
+                        {table.getVisibleLeafColumns().map((column) => (
+                          <td
+                            key={`auditor-dashboard-assigned-skeleton-cell-${rowIndex}-${column.id}`}
+                            className="px-2 md:px-4 py-2 md:py-4"
+                            style={{
+                              width: `${100 / table.getAllColumns().length}%`,
+                            }}
+                          >
+                            <div
+                              className={
+                                column.id === "action" ? "flex justify-end" : ""
+                              }
+                            >
+                              <Skeleton
+                                height={18}
+                                width={column.id === "action" ? 76 : "70%"}
+                                borderRadius={6}
+                              />
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : table.getRowModel().rows.length === 0 ? (
                     <tr>
                       <td
                         colSpan={columns.length}
@@ -496,7 +557,7 @@ export default function AuditorDashboard() {
               <h2 className="text-base font-semibold text-secondary">
                 Upcoming Deadlines
               </h2>
-              {hasMoreDeadlines && !showAllDeadlines && (
+              {hasMoreDeadlines && !showAllDeadlines && !isLoading && (
                 <button
                   onClick={() => setShowAllDeadlines(true)}
                   className="px-3 py-1.5 border border-black rounded-lg text-xs font-medium text-secondary hover:bg-gray-50 transition-colors"
@@ -506,75 +567,104 @@ export default function AuditorDashboard() {
               )}
             </div>
             <div className="flex flex-col gap-3">
-              {displayedDeadlines.map((deadline) => (
-                <div
-                  key={deadline.id}
-                  className={`p-4 rounded-xl relative overflow-hidden ${
-                    deadline.status === "overdue"
-                      ? "bg-[#fef2f2]"
-                      : "bg-[#fef7e5]"
-                  }`}
-                >
-                  <div
-                    className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
-                    style={{
-                      backgroundColor:
-                        deadline.status === "overdue" ? "#FF0909" : "#FAAB00",
-                    }}
-                  ></div>
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0">
-                      {deadline.status === "overdue" ? (
-                        <svg
-                          width="32"
-                          height="32"
-                          viewBox="0 0 32 32"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M3.63332 28C3.38888 28 3.16666 27.9391 2.96666 27.8173C2.76666 27.6956 2.6111 27.5342 2.49999 27.3333C2.38888 27.1324 2.32799 26.9156 2.31732 26.6827C2.30666 26.4498 2.36755 26.2222 2.49999 26L14.8333 4.66667C14.9667 4.44444 15.1391 4.27778 15.3507 4.16667C15.5622 4.05556 15.7787 4 16 4C16.2213 4 16.4382 4.05556 16.6507 4.16667C16.8631 4.27778 17.0351 4.44444 17.1667 4.66667L29.5 26C29.6333 26.2222 29.6947 26.4502 29.684 26.684C29.6733 26.9178 29.612 27.1342 29.5 27.3333C29.388 27.5324 29.2324 27.6938 29.0333 27.8173C28.8342 27.9409 28.612 28.0018 28.3667 28H3.63332ZM16 24C16.3778 24 16.6947 23.872 16.9507 23.616C17.2067 23.36 17.3342 23.0436 17.3333 22.6667C17.3324 22.2898 17.2044 21.9733 16.9493 21.7173C16.6942 21.4613 16.3778 21.3333 16 21.3333C15.6222 21.3333 15.3058 21.4613 15.0507 21.7173C14.7955 21.9733 14.6675 22.2898 14.6667 22.6667C14.6658 23.0436 14.7938 23.3604 15.0507 23.6173C15.3075 23.8742 15.624 24.0018 16 24ZM16 20C16.3778 20 16.6947 19.872 16.9507 19.616C17.2067 19.36 17.3342 19.0436 17.3333 18.6667V14.6667C17.3333 14.2889 17.2053 13.9724 16.9493 13.7173C16.6933 13.4622 16.3769 13.3342 16 13.3333C15.6231 13.3324 15.3067 13.4604 15.0507 13.7173C14.7947 13.9742 14.6667 14.2907 14.6667 14.6667V18.6667C14.6667 19.0444 14.7947 19.3613 15.0507 19.6173C15.3067 19.8733 15.6231 20.0009 16 20Z"
-                            fill="#FF0909"
+              {isLoading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={`auditor-dashboard-deadline-skeleton-${index}`}
+                      className="p-4 rounded-xl relative overflow-hidden bg-white border border-zinc-100"
+                    >
+                      <div className="flex items-start gap-4">
+                        <Skeleton width={32} height={32} borderRadius={8} />
+                        <div className="flex-1 min-w-0">
+                          <Skeleton width="55%" height={18} borderRadius={6} />
+                          <Skeleton
+                            width="72%"
+                            height={14}
+                            borderRadius={6}
+                            className="mt-2"
                           />
-                        </svg>
-                      ) : (
-                        <svg
-                          width="32"
-                          height="32"
-                          viewBox="0 0 32 32"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M16 2.66669C23.364 2.66669 29.3333 8.63602 29.3333 16C29.3333 23.364 23.364 29.3334 16 29.3334C8.63599 29.3334 2.66666 23.364 2.66666 16C2.66666 8.63602 8.63599 2.66669 16 2.66669ZM16 8.00002C15.6464 8.00002 15.3072 8.1405 15.0572 8.39054C14.8071 8.64059 14.6667 8.97973 14.6667 9.33335V16C14.6667 16.3536 14.8073 16.6927 15.0573 16.9427L19.0573 20.9427C19.3088 21.1856 19.6456 21.32 19.9952 21.3169C20.3448 21.3139 20.6792 21.1737 20.9264 20.9264C21.1736 20.6792 21.3138 20.3448 21.3169 19.9952C21.3199 19.6456 21.1855 19.3088 20.9427 19.0574L17.3333 15.448V9.33335C17.3333 8.97973 17.1928 8.64059 16.9428 8.39054C16.6927 8.1405 16.3536 8.00002 16 8.00002Z"
-                            fill="#FAAB00"
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <Skeleton width={72} height={14} borderRadius={6} />
+                          <Skeleton
+                            width={64}
+                            height={12}
+                            borderRadius={6}
+                            className="mt-2"
                           />
-                        </svg>
-                      )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-semibold text-secondary mb-1">
-                        {deadline.organization}
-                      </h3>
-                      <p className="text-sm text-gray">
-                        {deadline.certification}
-                      </p>
+                  ))
+                : displayedDeadlines.map((deadline) => (
+                    <div
+                      key={deadline.id}
+                      className={`p-4 rounded-xl relative overflow-hidden ${
+                        deadline.status === "overdue"
+                          ? "bg-[#fef2f2]"
+                          : "bg-[#fef7e5]"
+                      }`}
+                    >
+                      <div
+                        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
+                        style={{
+                          backgroundColor:
+                            deadline.status === "overdue" ? "#FF0909" : "#FAAB00",
+                        }}
+                      ></div>
+                      <div className="flex items-start gap-4">
+                        <div className="shrink-0">
+                          {deadline.status === "overdue" ? (
+                            <svg
+                              width="32"
+                              height="32"
+                              viewBox="0 0 32 32"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M3.63332 28C3.38888 28 3.16666 27.9391 2.96666 27.8173C2.76666 27.6956 2.6111 27.5342 2.49999 27.3333C2.38888 27.1324 2.32799 26.9156 2.31732 26.6827C2.30666 26.4498 2.36755 26.2222 2.49999 26L14.8333 4.66667C14.9667 4.44444 15.1391 4.27778 15.3507 4.16667C15.5622 4.05556 15.7787 4 16 4C16.2213 4 16.4382 4.05556 16.6507 4.16667C16.8631 4.27778 17.0351 4.44444 17.1667 4.66667L29.5 26C29.6333 26.2222 29.6947 26.4502 29.684 26.684C29.6733 26.9178 29.612 27.1342 29.5 27.3333C29.388 27.5324 29.2324 27.6938 29.0333 27.8173C28.8342 27.9409 28.612 28.0018 28.3667 28H3.63332ZM16 24C16.3778 24 16.6947 23.872 16.9507 23.616C17.2067 23.36 17.3342 23.0436 17.3333 22.6667C17.3324 22.2898 17.2044 21.9733 16.9493 21.7173C16.6942 21.4613 16.3778 21.3333 16 21.3333C15.6222 21.3333 15.3058 21.4613 15.0507 21.7173C14.7955 21.9733 14.6675 22.2898 14.6667 22.6667C14.6658 23.0436 14.7938 23.3604 15.0507 23.6173C15.3075 23.8742 15.624 24.0018 16 24ZM16 20C16.3778 20 16.6947 19.872 16.9507 19.616C17.2067 19.36 17.3342 19.0436 17.3333 18.6667V14.6667C17.3333 14.2889 17.2053 13.9724 16.9493 13.7173C16.6933 13.4622 16.3769 13.3342 16 13.3333C15.6231 13.3324 15.3067 13.4604 15.0507 13.7173C14.7947 13.9742 14.6667 14.2907 14.6667 14.6667V18.6667C14.6667 19.0444 14.7947 19.3613 15.0507 19.6173C15.3067 19.8733 15.6231 20.0009 16 20Z"
+                                fill="#FF0909"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              width="32"
+                              height="32"
+                              viewBox="0 0 32 32"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M16 2.66669C23.364 2.66669 29.3333 8.63602 29.3333 16C29.3333 23.364 23.364 29.3334 16 29.3334C8.63599 29.3334 2.66666 23.364 2.66666 16C2.66666 8.63602 8.63599 2.66669 16 2.66669ZM16 8.00002C15.6464 8.00002 15.3072 8.1405 15.0572 8.39054C14.8071 8.64059 14.6667 8.97973 14.6667 9.33335V16C14.6667 16.3536 14.8073 16.6927 15.0573 16.9427L19.0573 20.9427C19.3088 21.1856 19.6456 21.32 19.9952 21.3169C20.3448 21.3139 20.6792 21.1737 20.9264 20.9264C21.1736 20.6792 21.3138 20.3448 21.3169 19.9952C21.3199 19.6456 21.1855 19.3088 20.9427 19.0574L17.3333 15.448V9.33335C17.3333 8.97973 17.1928 8.64059 16.9428 8.39054C16.6927 8.1405 16.3536 8.00002 16 8.00002Z"
+                                fill="#FAAB00"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-semibold text-secondary mb-1">
+                            {deadline.organization}
+                          </h3>
+                          <p className="text-sm text-gray">
+                            {deadline.certification}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p
+                            className={`text-sm font-semibold mb-1 ${
+                              deadline.status === "overdue"
+                                ? "text-[#FF0909]"
+                                : "text-[#FAAB00]"
+                            }`}
+                          >
+                            {deadline.daysLeft} days left
+                          </p>
+                          <p className="text-xs text-gray">{deadline.date}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p
-                        className={`text-sm font-semibold mb-1 ${
-                          deadline.status === "overdue"
-                            ? "text-[#FF0909]"
-                            : "text-[#FAAB00]"
-                        }`}
-                      >
-                        {deadline.daysLeft} days left
-                      </p>
-                      <p className="text-xs text-gray">{deadline.date}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  ))}
             </div>
           </div>
         </div>
@@ -582,4 +672,3 @@ export default function AuditorDashboard() {
     </div>
   );
 }
-

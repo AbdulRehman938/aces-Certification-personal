@@ -3,7 +3,10 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { axiosInstance } from "@/lib/axios";
+import axios from "axios";
 import Dropdown from "../common/dropdown";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import {
   useReactTable,
   getCoreRowModel,
@@ -15,6 +18,9 @@ import {
 
 type AIFlag = {
   id: string;
+  certificateId?: string;
+  assessmentId?: string;
+  certificateCode?: string;
   organisation: string;
   certification: string;
   type: string;
@@ -28,6 +34,12 @@ type AiFlagsApiItem = {
   id: string;
   organization_name?: string;
   certificate_name?: string;
+  certificate_id?: string;
+  certificateId?: string;
+  assessment_id?: string;
+  assessmentId?: string;
+  certificate_assessment_id?: string;
+  certificateAssessmentId?: string;
   assessment_type?: string;
   status?: string;
   summary?: string;
@@ -39,6 +51,8 @@ type AiFlagsApiItem = {
 type AiFlagsApiResponse = {
   success: boolean;
   message?: string;
+  statusCode?: number;
+  timestamp?: string;
   data?: {
     flags?: AiFlagsApiItem[];
     total?: number;
@@ -109,7 +123,7 @@ export default function AIFlagsPage() {
         ),
         cell: ({ getValue }) => (
           <span
-            className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray underline cursor-pointer"
+            className="text-[10px] md:text-xs font-normal leading-[100%] align-middle text-dull-gray"
             style={{ letterSpacing: "1%" }}
           >
             {getValue<string>()}
@@ -277,53 +291,89 @@ export default function AIFlagsPage() {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const pageIndex = pagination.pageIndex + 1;
-        const pageSize = pagination.pageSize;
-        const params = new URLSearchParams({
-          pageNumber: String(pageIndex),
-          limit: String(pageSize),
-        });
+        const pageNumber = pagination.pageIndex + 1;
+        const limit = pagination.pageSize;
+        const params: { pageNumber: number; limit: number; status?: string } = {
+          pageNumber,
+          limit,
+        };
         if (statusFilter !== "all") {
-          params.append("status", statusFilter);
+          params.status = statusFilter;
         }
+
         const response = await axiosInstance.get<AiFlagsApiResponse>(
-          `/ai-flags?${params.toString()}`,
+          "/ai-flags",
+          { params },
         );
+        console.log("AI Flags request params:", params);
+        console.log("AI Flags response:", response.data);
         if (isCancelled) return;
 
-        const flags = response.data?.data?.flags ?? [];
-        const total = response.data?.data?.total ?? 0;
+        const flags = Array.isArray(response.data?.data?.flags)
+          ? response.data.data.flags
+          : [];
+        const total =
+          typeof response.data?.data?.total === "number"
+            ? response.data.data.total
+            : flags.length;
 
-        const mapped: AIFlag[] = flags.map((flag) => ({
-          id: flag.id,
-          organisation: flag.organization_name || "N/A",
-          certification: flag.certificate_name || "N/A",
-          type: flag.assessment_type || "N/A",
-          status: flag.status
-            ? flag.status.charAt(0).toUpperCase() + flag.status.slice(1)
-            : "N/A",
-          summary: flag.summary || "N/A",
-          summarySubtext: flag.risk_level ? `Risk: ${flag.risk_level}` : "",
-          flagged: flag.flagged_at
-            ? new Intl.DateTimeFormat("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              }).format(new Date(flag.flagged_at))
-            : "N/A",
-        }));
+        const mapped: AIFlag[] = flags.map((flag) => {
+          const riskLevelLabel = flag.risk_level
+            ? `Risk: ${flag.risk_level.charAt(0).toUpperCase()}${flag.risk_level.slice(1)}`
+            : "";
+          const totalFlagsLabel =
+            typeof flag.total_flags === "number"
+              ? `${flag.total_flags} flag${flag.total_flags === 1 ? "" : "s"}`
+              : "";
+          const summarySubtext = [riskLevelLabel, totalFlagsLabel]
+            .filter(Boolean)
+            .join(" | ");
+          const flaggedAtDate = flag.flagged_at ? new Date(flag.flagged_at) : null;
+
+          return {
+            id: flag.id,
+            certificateId: String(
+              flag.certificate_id || flag.certificateId || "",
+            ).trim() || undefined,
+            assessmentId: String(
+              flag.assessment_id ||
+                flag.assessmentId ||
+                flag.certificate_assessment_id ||
+                flag.certificateAssessmentId ||
+                "",
+            ).trim() || undefined,
+            certificateCode: String(flag.certificate_name || "").trim() || undefined,
+            organisation: flag.organization_name || "N/A",
+            certification: flag.certificate_name || "N/A",
+            type: flag.assessment_type || "N/A",
+            status: flag.status
+              ? flag.status.charAt(0).toUpperCase() + flag.status.slice(1)
+              : "N/A",
+            summary: flag.summary || "N/A",
+            summarySubtext,
+            flagged:
+              flaggedAtDate && !Number.isNaN(flaggedAtDate.getTime())
+                ? new Intl.DateTimeFormat("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  }).format(flaggedAtDate)
+                : "N/A",
+          };
+        });
 
         setData(mapped);
         setPagination((prev) => ({
           ...prev,
           total,
         }));
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!isCancelled) {
           console.error("Failed to fetch AI flags:", error);
-          setLoadError(
-            error.response?.data?.message || "Failed to load AI flags",
-          );
+          const message = axios.isAxiosError(error)
+            ? error.response?.data?.message || "Failed to load AI flags"
+            : "Failed to load AI flags";
+          setLoadError(message);
           setData([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
         }
@@ -340,7 +390,7 @@ export default function AIFlagsPage() {
   }, [pagination.pageIndex, pagination.pageSize, statusFilter]);
 
   return (
-    <div className="p-3 md:p-6 bg-light-gray min-h-screen">
+    <div className="p-3 md:p-6 bg-light-gray min-h-screen flex flex-col">
       <div className="flex flex-row items-start justify-between mb-4 md:mb-6 gap-3">
         <div>
           <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px] align-middle">
@@ -412,7 +462,7 @@ export default function AIFlagsPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -436,13 +486,37 @@ export default function AIFlagsPage() {
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.length === 0 ? (
+              {isLoading ? (
+                Array.from({ length: pagination.pageSize }).map((_, rowIndex) => (
+                  <tr
+                    key={`ai-flags-skeleton-row-${rowIndex}`}
+                    className="border-b border-zinc-100 last:border-b-0"
+                  >
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <td
+                        key={`ai-flags-skeleton-cell-${rowIndex}-${column.id}`}
+                        className={`px-2 md:px-4 py-2 md:py-4 ${
+                          column.id === "action" ? "text-center" : ""
+                        }`}
+                      >
+                        <div className={column.id === "action" ? "flex justify-center" : ""}>
+                          <Skeleton
+                            height={18}
+                            width={column.id === "action" ? 88 : "70%"}
+                            borderRadius={6}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
                     className="px-4 py-8 text-center text-gray text-sm"
                   >
-                    {isLoading ? "Loading..." : "No flags found"}
+                    No flags found
                   </td>
                 </tr>
               ) : (
@@ -474,7 +548,7 @@ export default function AIFlagsPage() {
           <div className="flex items-center gap-0.5 md:gap-1">
             <button
               onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
+              disabled={isLoading || !table.getCanPreviousPage()}
               className="flex items-center px-2 py-1 md:px-3 md:py-1.5 bg-zinc-100 text-gray rounded-sm text-[10px] md:text-xs font-normal hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200"
             >
               <svg
@@ -568,7 +642,7 @@ export default function AIFlagsPage() {
             })()}
             <button
               onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
+              disabled={isLoading || !table.getCanNextPage()}
               className="flex items-center px-2 py-1 md:px-3 md:py-1.5 bg-zinc-100 text-gray rounded-sm text-[10px] md:text-xs font-normal hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200"
             >
               <span className="hidden sm:inline mr-1 md:mr-0">Next</span>
@@ -594,4 +668,3 @@ export default function AIFlagsPage() {
     </div>
   );
 }
-

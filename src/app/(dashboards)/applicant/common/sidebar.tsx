@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, X, ChevronRight } from "lucide-react";
-import { FiHome } from "react-icons/fi";
+import { FiHome, FiMessageCircle } from "react-icons/fi";
 import { PiCertificateDuotone } from "react-icons/pi";
 import { useSidebar } from "./SidebarContext";
 import { persistOrganizationId } from "@/lib/auth-utils";
@@ -47,6 +47,12 @@ export default function Sidebar() {
       href: `${base}/organisation-users`,
       icon: "/assets/imgs/icons/users.svg",
       isCustom: true,
+    },
+    {
+      name: "Messages",
+      href: `${base}/messages`,
+      icon: FiMessageCircle,
+      isCustom: false,
     },
 
     {
@@ -148,11 +154,16 @@ export default function Sidebar() {
       Branch: "branches",
       Profile: "profile",
       "Organization Users": "organization_users",
+      Messages: "messages",
       "Support Center": "support_center",
       Legal: "legal",
     };
 
     const targetResource = nameToResourceMap[item.name];
+
+    if (item.name === "Messages") {
+      return true;
+    }
 
     if (targetResource) {
       return permissions.some(
