@@ -82,7 +82,7 @@ export default function ForgotPasswordPage() {
           </div>
           <Input
             type="email"
-            placeholder="alica@sunrisegrand.com"
+            placeholder="user@acescertification.com"
             icon={<AiOutlineMail />}
             {...formik.getFieldProps("email")}
             error={!!(formik.touched.email && formik.errors.email)}

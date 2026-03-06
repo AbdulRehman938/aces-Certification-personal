@@ -441,21 +441,21 @@ function LoginContent() {
         message="Your email has been successfully verified. You can now log in."
         type="success"
       />
-      <div className="relative w-full h-[clamp(7rem,18vh,10rem)] flex items-center justify-center mb-[clamp(0.75rem,2vh,1.5rem)]">
-        <img
-          src="/assets/imgs/login/login2.svg"
-          alt="vector1"
-          className="absolute max-w-full max-h-full object-contain"
-        />
-        <div className="relative flex flex-col items-center">
-          <img
-            src="/assets/imgs/login/login1.svg"
-            alt="vector2"
-            className="z-10 max-w-full max-h-full object-contain"
-          />
-          <div className="absolute top-30 w-[110%] h-0.5 bg-auth-middle rounded-full z-20" />
-        </div>
-      </div>
+     <div className="relative w-full h-[clamp(7rem,18vh,10rem)] flex items-center justify-center mb-[clamp(0.75rem,2vh,1.5rem)]">
+            <img
+              src="/assets/imgs/login/login2.svg"
+              alt="vector1"
+              className="absolute max-w-full max-h-full object-contain"
+            />
+            <div className="relative flex flex-col items-center">
+              <img
+                src="/assets/imgs/login/login1.svg"
+                alt="vector2"
+                className="z-10 max-w-full translate-y-[-0.2rem] max-h-full object-contain"
+              />
+              <div className="absolute top-29 w-[110%] h-0.5 bg-auth-middle rounded-full z-20" />
+            </div>
+          </div>
 
       <h1 className="text-[clamp(1.5rem,4vw,1.875rem)] font-semibold text-secondary mb-0">
         Welcome back
@@ -494,7 +494,7 @@ function LoginContent() {
           </div>
           <Input
             type="email"
-            placeholder="alica@sunrisegrand.com"
+            placeholder="user@acescertification.com"
             icon={<AiOutlineMail />}
             {...formik.getFieldProps("email")}
             error={!!(formik.touched.email && formik.errors.email)}

@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { axiosInstance } from "@/lib/axios";
 import { Country, State, City } from "country-state-city";
 import {
@@ -393,8 +393,9 @@ export function PaymentsPage() {
     if (selectedCertificate) {
       setIsCheckingEligibility(true);
       try {
+        const storedBranchId = localStorage.getItem("selected_branch_id");
         const response = await axiosInstance.get(
-          `/certificates/${selectedCertificate.id}/self-disclosure-status`,
+          `/certificates/${selectedCertificate.id}/self-disclosure-status${storedBranchId ? `?branchId=${storedBranchId}` : ""}`,
         );
         const data = response.data.data || response.data;
         const eligibilityRes = {
@@ -766,8 +767,22 @@ export function PaymentsPage() {
             </div>
 
             {isHistoryLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <LoadingScreen isLoading={true} size="lg" />
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-zinc-50 border border-transparent rounded-3xl p-5 flex items-center justify-between"
+                  >
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-1/4" />
+                      <Skeleton className="h-3 w-1/3" />
+                    </div>
+                    <div className="flex gap-4">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : payments.length === 0 ? (
               <div className="bg-primary/50 border border-zinc-100/50 rounded-2xl p-8 flex items-center justify-between">
@@ -845,13 +860,13 @@ export function PaymentsPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100]"
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-100"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] z-[110]"
+              className="relative w-full max-w-2xl bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] z-110"
             >
               <div className="p-6 pb-3">
                 <h2 className="text-xl font-bold text-[#1A1A1A] mb-1">
@@ -1498,7 +1513,7 @@ export function PaymentsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-200 flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -1589,7 +1604,7 @@ export function PaymentsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-200 flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -1629,4 +1644,3 @@ export function PaymentsPage() {
     </div>
   );
 }
-

@@ -7,7 +7,7 @@ import * as Yup from "yup";
 import { Button } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
 import { axiosInstance } from "@/lib/axios";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FaStar, FaExclamation } from "react-icons/fa";
 import { RxCross2 } from "react-icons/rx";
 import { MdKeyboardArrowDown } from "react-icons/md";
@@ -92,12 +92,28 @@ const branchValidationSchema = Yup.object({
   name: Yup.string()
     .max(15, "Branch name cannot exceed 15 characters")
     .required("Branch name is required"),
-  address: Yup.string().required("Address is required"),
-  country: Yup.string().required("Country is required"),
-  city: Yup.string().required("City is required"),
-  state: Yup.string().required("State/Region is required"),
-  postalCode: Yup.string().required("Postal code is required"),
-  contactNo: Yup.string().required("Contact number is required"),
+  address: Yup.string(),
+  country: Yup.string().when("address", {
+    is: (val: string) => val && val.trim().length > 0,
+    then: (schema) => schema.required("Country is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  city: Yup.string().when("address", {
+    is: (val: string) => val && val.trim().length > 0,
+    then: (schema) => schema.required("City is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  state: Yup.string().when("address", {
+    is: (val: string) => val && val.trim().length > 0,
+    then: (schema) => schema.required("State is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  postalCode: Yup.string().when("address", {
+    is: (val: string) => val && val.trim().length > 0,
+    then: (schema) => schema.required("Postal code is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  contactNo: Yup.string(),
   email: Yup.string()
     .email("Invalid email address")
     .required("Email is required"),
@@ -121,6 +137,7 @@ export function BranchPage() {
 
   const [isBranchesLoading, setIsBranchesLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [generalError, setGeneralError] = useState<string | null>(null);
   const router = useRouter();
 
   const [profileData, setProfileData] = useState<any>(() => {
@@ -530,6 +547,7 @@ export function BranchPage() {
     initialValues: emptyBranchValues,
     validationSchema: branchValidationSchema,
     onSubmit: async (values, { resetForm, setSubmitting, setFieldError }) => {
+      setGeneralError(null);
       const normalizedName = values.name.trim().toLowerCase();
       const hasDuplicate = branches.some((branch) => {
         const branchName = branch.name.trim().toLowerCase();
@@ -669,19 +687,14 @@ export function BranchPage() {
                 );
               }
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error("Failed to update branch via API", error);
-            setBranches((prev) =>
-              prev.map((branch) =>
-                branch.id === branchBeingEdited.id
-                  ? {
-                      ...branch,
-                      ...values,
-                      isMain: wasMain,
-                    }
-                  : branch,
-              ),
-            );
+            const apiMsg =
+              error?.response?.data?.message ||
+              error?.response?.data?.error ||
+              error?.message;
+            setGeneralError(apiMsg);
+            return;
           }
         } else {
           try {
@@ -787,46 +800,27 @@ export function BranchPage() {
             } else {
               setBranches((prev) => [...prev, createdBranch]);
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error("Failed to create branch via API", error);
-            const fallbackBranch: Branch = {
-              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              name: values.name,
-              address: values.address,
-              city: values.city,
-              state: values.state,
-              country: values.country,
-              postalCode: values.postalCode,
-              contactNo: values.contactNo,
-              email: values.email,
-              size: values.size,
-              status: "Active",
-              isMain: effectiveIsMain,
-              createdAt: Date.now(),
-            };
-
-            setBranches((prev) => {
-              if (effectiveIsMain) {
-                const demoted = prev.map((branch) => ({
-                  ...branch,
-                  isMain: false,
-                }));
-                return [...demoted, fallbackBranch];
-              }
-              return [...prev, fallbackBranch];
-            });
+            const apiMsg =
+              error?.response?.data?.message ||
+              error?.response?.data?.error ||
+              error?.message;
+            setGeneralError(apiMsg);
+            return;
           }
         }
-      } finally {
-        setSubmitting(false);
         resetForm({ values: emptyBranchValues });
         setBranchBeingEdited(null);
         setIsModalOpen(false);
+      } finally {
+        setSubmitting(false);
       }
     },
   });
 
   const openCreateModal = () => {
+    setGeneralError(null);
     setBranchBeingEdited(null);
     formik.resetForm({ values: emptyBranchValues });
     setIsModalOpen(true);
@@ -837,6 +831,7 @@ export function BranchPage() {
   };
 
   const openEditModal = (branch: Branch) => {
+    setGeneralError(null);
     setIsModalOpen(true);
     setBranchBeingEdited(branch);
 
@@ -925,6 +920,7 @@ export function BranchPage() {
   };
 
   const handleRequestCloseModal = () => {
+    setGeneralError(null);
     formik.resetForm({ values: emptyBranchValues });
     setBranchBeingEdited(null);
     setIsModalOpen(false);
@@ -936,6 +932,7 @@ export function BranchPage() {
 
   const handleConfirmDelete = async () => {
     if (!branchToDelete) return;
+    setGeneralError(null);
     const rawId = String(branchToDelete.id);
     const apiId = rawId.length > 36 ? rawId.slice(0, 36) : rawId;
 
@@ -952,15 +949,20 @@ export function BranchPage() {
       } else {
         console.warn("Skipping delete call: invalid apiId", apiId);
       }
-    } catch (error) {
-      console.error("Failed to delete branch via API", error);
-    }
 
-    setBranches((prev) =>
-      prev.filter((branch) => branch.id !== branchToDelete.id),
-    );
-    setBranchToDelete(null);
-    setIsDeleteOpen(false);
+      setBranches((prev) =>
+        prev.filter((branch) => branch.id !== branchToDelete.id),
+      );
+      setBranchToDelete(null);
+      setIsDeleteOpen(false);
+    } catch (error: any) {
+      console.error("Failed to delete branch via API", error);
+      const apiMsg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message;
+      setGeneralError(apiMsg);
+    }
   };
 
   const handleConfirmMainBranchChange = async () => {
@@ -1206,12 +1208,25 @@ export function BranchPage() {
           <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm overflow-hidden">
             <div className="hidden md:block relative min-h-auto">
               {isBranchesLoading ? (
-                <div className="flex items-center justify-center py-20">
-                  <LoadingScreen
-                    isLoading={true}
-                    progress={loadingProgress}
-                    size="lg"
-                  />
+                <div className="w-full">
+                  <div className="bg-zinc-50 border-b border-light-gray-2 flex px-6 py-4">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="flex-1">
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="divide-y divide-light-gray-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="flex px-6 py-8">
+                        {[1, 2, 3, 4, 5, 6].map((j) => (
+                          <div key={j} className="flex-1">
+                            <Skeleton className="h-4 w-24" />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : !hasAnyBranches ? (
                 <div className="px-6 py-12 flex flex-col items-center text-center gap-2">
@@ -1341,12 +1356,23 @@ export function BranchPage() {
 
             <div className="md:hidden divide-y divide-light-gray-2 relative min-h-100">
               {isBranchesLoading ? (
-                <div className="flex items-center justify-center py-20">
-                  <LoadingScreen
-                    isLoading={true}
-                    progress={loadingProgress}
-                    size="lg"
-                  />
+                <div className="space-y-4 p-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="space-y-3 p-4 rounded-2xl border border-light-gray-2"
+                    >
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-1/3" />
+                        <Skeleton className="h-4 w-1/4" />
+                      </div>
+                      <Skeleton className="h-3 w-1/2" />
+                      <div className="flex justify-between pt-2">
+                        <Skeleton className="h-8 w-20 rounded-lg" />
+                        <Skeleton className="h-8 w-20 rounded-lg" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : !hasAnyBranches ? (
                 <div className="px-4 py-10 text-center text-base font-medium text-gray">
@@ -1430,6 +1456,7 @@ export function BranchPage() {
                             <button
                               className="flex-1 h-10 rounded-lg border-2 border-secondary/40 bg-gray/20 text-sm font-semibold cursor-pointer text-dull-gray hover:bg-light-gray transition-colors"
                               onClick={() => {
+                                setGeneralError(null);
                                 setBranchToDelete(branch);
                                 setIsDeleteOpen(true);
                               }}
@@ -1520,626 +1547,662 @@ export function BranchPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 24 }}
                   transition={{ type: "spring", stiffness: 260, damping: 22 }}
-                  className="relative w-full max-w-xl rounded-3xl bg-zinc-50 px-5 py-5 sm:px-6 sm:py-6 shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
+                  className="relative w-full max-w-xl rounded-3xl bg-zinc-50 shadow-[0_24px_60px_rgba(0,0,0,0.18)] max-h-[85vh] overflow-hidden flex flex-col"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button
-                    type="button"
-                    className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#f5f5f5] text-gray hover:bg-[#ebebeb]"
-                    onClick={handleRequestCloseModal}
-                  >
-                    <RxCross2 className="h-4 w-4" />
-                  </button>
+                  <div className="px-5 py-5 sm:px-6 sm:py-6 relative border-b border-light-gray-2 shrink-0">
+                    <button
+                      type="button"
+                      className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#f5f5f5] text-gray hover:bg-[#ebebeb] z-10"
+                      onClick={handleRequestCloseModal}
+                    >
+                      <RxCross2 className="h-4 w-4" />
+                    </button>
 
-                  <div className="space-y-1 pr-8">
-                    <h2 className="text-xl sm:text-2xl font-semibold text-secondary">
-                      {branchBeingEdited ? "Update Branch" : "Add New Branch"}
-                    </h2>
-                    <p className="text-xs sm:text-sm font-medium text-gray">
-                      Fill in the details to{" "}
-                      {branchBeingEdited ? "update" : "create"} a new branch.
-                    </p>
+                    <div className="space-y-1 pr-8">
+                      <h2 className="text-xl sm:text-2xl font-semibold text-secondary">
+                        {branchBeingEdited ? "Update Branch" : "Add New Branch"}
+                      </h2>
+                      <p className="text-xs sm:text-sm font-medium text-gray">
+                        Fill in the details to{" "}
+                        {branchBeingEdited ? "update" : "create"} a new branch.
+                      </p>
+                    </div>
                   </div>
 
-                  <form
-                    onSubmit={formik.handleSubmit}
-                    className="form-group-container"
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="form-field-wrapper">
-                        <label className="form-label">Branch Name</label>
-                        <input
-                          type="text"
-                          name="name"
-                          value={formik.values.name}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          maxLength={15}
-                          placeholder="Enter Branch Name"
-                          className={`form-input ${formik.touched.name && formik.errors.name ? "form-input-error" : ""}`}
-                        />
-                        {formik.touched.name && formik.errors.name && (
-                          <p className="form-error-message">
-                            {formik.errors.name}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="form-field-wrapper">
-                        <label className="form-label">Address</label>
-                        <input
-                          type="text"
-                          name="address"
-                          value={formik.values.address}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          placeholder="Enter Branch Address"
-                          className={`form-input ${formik.touched.address && formik.errors.address ? "form-input-error" : ""}`}
-                        />
-                        {formik.touched.address && formik.errors.address && (
-                          <p className="form-error-message">
-                            {formik.errors.address}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {shouldShowMainToggle && (
-                      <div className="form-toggle-box">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs sm:text-sm font-semibold text-secondary">
-                              Main Branch
-                            </p>
-                            <p className="text-[10px] sm:text-xs font-medium text-gray">
-                              Mark this as your organization&apos;s primary
-                              location.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (
-                                branchBeingEdited &&
-                                branchBeingEdited.id === mainBranchId &&
-                                branchBeingEdited.isMain
-                              ) {
-                                return;
-                              }
-                              if (!formik.values.isMain && hasMainBranch) {
-                                setIsMainBranchConfirmOpen(true);
-                              } else {
-                                formik.setFieldValue(
-                                  "isMain",
-                                  !formik.values.isMain,
-                                );
-                              }
-                            }}
-                            className={`relative inline-flex h-4 w-8 items-center rounded-full border border-transparent transition-colors cursor-pointer ${
-                              formik.values.isMain
-                                ? "bg-secondary"
-                                : "bg-[#d4d4d4]"
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-3 w-3 rounded-full bg-zinc-50 shadow-sm transform transition-transform ${
-                                formik.values.isMain
-                                  ? "translate-x-4"
-                                  : "translate-x-0.5"
-                              }`}
+                  <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="px-5 py-5 sm:px-6 sm:py-6 pt-2 relative">
+                      <form
+                        onSubmit={formik.handleSubmit}
+                        className="form-group-container h-full flex flex-col"
+                        id="branch-form"
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="form-field-wrapper">
+                            <label className="form-label">Branch Name</label>
+                            <input
+                              type="text"
+                              name="name"
+                              value={formik.values.name}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              maxLength={15}
+                              placeholder="Enter Branch Name"
+                              className={`form-input ${formik.touched.name && formik.errors.name ? "form-input-error" : ""}`}
                             />
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                            {formik.touched.name && formik.errors.name && (
+                              <p className="form-error-message">
+                                {formik.errors.name}
+                              </p>
+                            )}
+                          </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="form-field-wrapper">
-                        <label className="form-label">Country</label>
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setIsCountryOpen((prev) => !prev)}
-                            className={`form-dropdown-trigger ${
-                              formik.touched.country && formik.errors.country
-                                ? "form-dropdown-trigger-error"
-                                : ""
-                            }`}
-                          >
-                            <span className="flex items-center gap-2">
-                              {formik.values.country ? (
-                                <>
-                                  {(() => {
-                                    const country = countries.find(
-                                      (c) => c.name === formik.values.country,
-                                    );
-                                    if (!country || !country.flag) return null;
-                                    return (
-                                      <img
-                                        src={country.flag}
-                                        alt={country.name}
-                                        className="h-3.5 w-3.5 rounded-full object-cover"
-                                      />
-                                    );
-                                  })()}
-                                  <span className="text-secondary truncate block max-w-30">
-                                    {formik.values.country}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-gray/60">
-                                  {isCountriesLoading
-                                    ? "Loading..."
-                                    : "Select country"}
-                                </span>
+                          <div className="form-field-wrapper">
+                            <label className="form-label">Address</label>
+                            <input
+                              type="text"
+                              name="address"
+                              value={formik.values.address}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              placeholder="Enter Branch Address"
+                              className={`form-input ${formik.touched.address && formik.errors.address ? "form-input-error" : ""}`}
+                            />
+                            {formik.touched.address &&
+                              formik.errors.address && (
+                                <p className="form-error-message">
+                                  {formik.errors.address}
+                                </p>
                               )}
-                            </span>
-                            <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
-                          </button>
+                          </div>
+                        </div>
 
-                          <AnimatePresence>
-                            {isCountryOpen && (
-                              <>
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  className="fixed inset-0 z-10"
-                                  onClick={() => setIsCountryOpen(false)}
+                        {shouldShowMainToggle && (
+                          <div className="form-toggle-box">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs sm:text-sm font-semibold text-secondary">
+                                  Main Branch
+                                </p>
+                                <p className="text-[10px] sm:text-xs font-medium text-gray">
+                                  Mark this as your organization&apos;s primary
+                                  location.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    branchBeingEdited &&
+                                    branchBeingEdited.id === mainBranchId &&
+                                    branchBeingEdited.isMain
+                                  ) {
+                                    return;
+                                  }
+                                  if (!formik.values.isMain && hasMainBranch) {
+                                    setIsMainBranchConfirmOpen(true);
+                                  } else {
+                                    formik.setFieldValue(
+                                      "isMain",
+                                      !formik.values.isMain,
+                                    );
+                                  }
+                                }}
+                                className={`relative inline-flex h-4 w-8 items-center rounded-full border border-transparent transition-colors cursor-pointer ${
+                                  formik.values.isMain
+                                    ? "bg-secondary"
+                                    : "bg-[#d4d4d4]"
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-3 w-3 rounded-full bg-zinc-50 shadow-sm transform transition-transform ${
+                                    formik.values.isMain
+                                      ? "translate-x-4"
+                                      : "translate-x-0.5"
+                                  }`}
                                 />
-                                <motion.div
-                                  initial={{ opacity: 0, y: 8 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: 8 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
-                                >
-                                  <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
-                                    <input
-                                      type="text"
-                                      value={countrySearch}
-                                      onChange={(e) =>
-                                        setCountrySearch(e.target.value)
-                                      }
-                                      placeholder="Search country"
-                                      className="form-select-search"
-                                    />
-                                  </div>
-                                  {countries
-                                    .filter((country) =>
-                                      country.name
-                                        .toLowerCase()
-                                        .includes(
-                                          countrySearch.trim().toLowerCase(),
-                                        ),
-                                    )
-                                    .map((country) => (
-                                      <button
-                                        key={country.name}
-                                        type="button"
-                                        onClick={() =>
-                                          handleSelectCountry(country.name)
-                                        }
-                                        className={`form-dropdown-item ${
-                                          formik.values.country === country.name
-                                            ? "form-dropdown-item-active"
-                                            : "form-dropdown-item-inactive"
-                                        }`}
-                                      >
-                                        {country.flag && (
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="form-field-wrapper">
+                            <label className="form-label">Country</label>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setIsCountryOpen((prev) => !prev)
+                                }
+                                className={`form-dropdown-trigger ${
+                                  formik.touched.country &&
+                                  formik.errors.country
+                                    ? "form-dropdown-trigger-error"
+                                    : ""
+                                }`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  {formik.values.country ? (
+                                    <>
+                                      {(() => {
+                                        const country = countries.find(
+                                          (c) =>
+                                            c.name === formik.values.country,
+                                        );
+                                        if (!country || !country.flag)
+                                          return null;
+                                        return (
                                           <img
                                             src={country.flag}
                                             alt={country.name}
                                             className="h-3.5 w-3.5 rounded-full object-cover"
                                           />
-                                        )}
-                                        <span className="truncate">
-                                          {country.name}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  {countries.filter((country) =>
-                                    country.name
-                                      .toLowerCase()
-                                      .includes(
-                                        countrySearch.trim().toLowerCase(),
-                                      ),
-                                  ).length === 0 && (
-                                    <p className="px-3 py-2 text-xs text-gray">
-                                      No countries found.
-                                    </p>
+                                        );
+                                      })()}
+                                      <span className="text-secondary truncate block max-w-30">
+                                        {formik.values.country}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray/60">
+                                      {isCountriesLoading
+                                        ? "Loading..."
+                                        : "Select country"}
+                                    </span>
                                   )}
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                                </span>
+                                <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
+                              </button>
 
-                        {formik.touched.country &&
-                          formik.errors.country &&
-                          !formik.values.country && (
-                            <p className="form-error-message">
-                              {formik.errors.country}
-                            </p>
-                          )}
-                      </div>
-                      <div className="form-field-wrapper">
-                        <label className="form-label">State / Region</label>
-                        <div className="relative">
-                          <button
-                            type="button"
-                            disabled={isStateDisabled}
-                            onClick={() => {
-                              if (isStateDisabled) return;
-                              setIsStateOpen((prev) => !prev);
-                            }}
-                            className={`form-dropdown-trigger ${
-                              formik.touched.state && formik.errors.state
-                                ? "form-dropdown-trigger-error"
-                                : ""
-                            } ${
-                              isStateDisabled
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            }`}
-                          >
-                            <span
-                              className={`truncate block max-w-30 ${
-                                formik.values.state
-                                  ? "text-secondary"
-                                  : "text-gray/60"
-                              }`}
-                            >
-                              {formik.values.state ||
-                                (isStateDisabled
-                                  ? "Select country first"
-                                  : "Select state")}
-                            </span>
-                            <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
-                          </button>
-
-                          <AnimatePresence>
-                            {isStateOpen && !isStateDisabled && (
-                              <>
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  className="fixed inset-0 z-10"
-                                  onClick={() => setIsStateOpen(false)}
-                                />
-                                <motion.div
-                                  initial={{ opacity: 0, y: 8 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: 8 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
-                                >
-                                  <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
-                                    <input
-                                      type="text"
-                                      value={stateSearch}
-                                      onChange={(e) =>
-                                        setStateSearch(e.target.value)
-                                      }
-                                      placeholder="Search state"
-                                      className="form-select-search"
+                              <AnimatePresence>
+                                {isCountryOpen && (
+                                  <>
+                                    <motion.div
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      exit={{ opacity: 0 }}
+                                      className="fixed inset-0 z-10"
+                                      onClick={() => setIsCountryOpen(false)}
                                     />
-                                  </div>
-                                  {states
-                                    .filter((state) =>
-                                      state
-                                        .toLowerCase()
-                                        .includes(
-                                          stateSearch.trim().toLowerCase(),
-                                        ),
-                                    )
-                                    .map((state) => (
-                                      <button
-                                        key={state}
-                                        type="button"
-                                        onClick={() => {
-                                          formik.setFieldValue("state", state);
-                                          formik.setFieldTouched(
-                                            "state",
-                                            true,
-                                            false,
-                                          );
-                                          setIsStateOpen(false);
-                                        }}
-                                        className={`form-dropdown-item ${
-                                          formik.values.state === state
-                                            ? "form-dropdown-item-active"
-                                            : "form-dropdown-item-inactive"
-                                        }`}
-                                      >
-                                        {state}
-                                      </button>
-                                    ))}
-                                  {states.filter((state) =>
-                                    state
-                                      .toLowerCase()
-                                      .includes(
-                                        stateSearch.trim().toLowerCase(),
-                                      ),
-                                  ).length === 0 && (
-                                    <p className="px-3 py-2 text-xs text-gray">
-                                      No states found.
-                                    </p>
-                                  )}
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        {formik.touched.state && formik.errors.state && (
-                          <p className="form-error-message">
-                            {formik.errors.state}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 8 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: 8 }}
+                                      transition={{ duration: 0.15 }}
+                                      className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                                    >
+                                      <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+                                        <input
+                                          type="text"
+                                          value={countrySearch}
+                                          onChange={(e) =>
+                                            setCountrySearch(e.target.value)
+                                          }
+                                          placeholder="Search country"
+                                          className="form-select-search"
+                                        />
+                                      </div>
+                                      {countries
+                                        .filter((country) =>
+                                          country.name
+                                            .toLowerCase()
+                                            .includes(
+                                              countrySearch
+                                                .trim()
+                                                .toLowerCase(),
+                                            ),
+                                        )
+                                        .map((country) => (
+                                          <button
+                                            key={country.name}
+                                            type="button"
+                                            onClick={() =>
+                                              handleSelectCountry(country.name)
+                                            }
+                                            className={`form-dropdown-item ${
+                                              formik.values.country ===
+                                              country.name
+                                                ? "form-dropdown-item-active"
+                                                : "form-dropdown-item-inactive"
+                                            }`}
+                                          >
+                                            {country.flag && (
+                                              <img
+                                                src={country.flag}
+                                                alt={country.name}
+                                                className="h-3.5 w-3.5 rounded-full object-cover"
+                                              />
+                                            )}
+                                            <span className="truncate">
+                                              {country.name}
+                                            </span>
+                                          </button>
+                                        ))}
+                                      {countries.filter((country) =>
+                                        country.name
+                                          .toLowerCase()
+                                          .includes(
+                                            countrySearch.trim().toLowerCase(),
+                                          ),
+                                      ).length === 0 && (
+                                        <p className="px-3 py-2 text-xs text-gray">
+                                          No countries found.
+                                        </p>
+                                      )}
+                                    </motion.div>
+                                  </>
+                                )}
+                              </AnimatePresence>
+                            </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="form-field-wrapper">
-                        <label className="form-label">City</label>
-                        <div className="relative">
-                          <button
-                            type="button"
-                            disabled={isCityDisabled}
-                            onClick={() => {
-                              if (isCityDisabled) return;
-                              setIsCityOpen((prev) => !prev);
-                            }}
-                            className={`form-dropdown-trigger ${
-                              formik.touched.city && formik.errors.city
-                                ? "form-dropdown-trigger-error"
-                                : ""
-                            } ${
-                              isCityDisabled
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            }`}
-                          >
-                            <span
-                              className={`truncate block max-w-30 ${
-                                formik.values.city
-                                  ? "text-secondary"
-                                  : "text-gray/60"
-                              }`}
-                            >
-                              {formik.values.city ||
-                                (isCityDisabled
-                                  ? "Select country first"
-                                  : "Select city")}
-                            </span>
-                            <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
-                          </button>
-
-                          <AnimatePresence>
-                            {isCityOpen && !isCityDisabled && (
-                              <>
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  className="fixed inset-0 z-10"
-                                  onClick={() => setIsCityOpen(false)}
-                                />
-                                <motion.div
-                                  initial={{ opacity: 0, y: 8 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: 8 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
-                                >
-                                  <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
-                                    <input
-                                      type="text"
-                                      value={citySearch}
-                                      onChange={(e) =>
-                                        setCitySearch(e.target.value)
-                                      }
-                                      placeholder="Search city"
-                                      className="form-select-search"
-                                    />
-                                  </div>
-                                  {cities
-                                    .filter((city) =>
-                                      city
-                                        .toLowerCase()
-                                        .includes(
-                                          citySearch.trim().toLowerCase(),
-                                        ),
-                                    )
-                                    .map((city) => (
-                                      <button
-                                        key={city}
-                                        type="button"
-                                        onClick={() => {
-                                          formik.setFieldValue("city", city);
-                                          formik.setFieldTouched(
-                                            "city",
-                                            true,
-                                            false,
-                                          );
-                                          setIsCityOpen(false);
-                                        }}
-                                        className={`form-dropdown-item ${
-                                          formik.values.city === city
-                                            ? "form-dropdown-item-active"
-                                            : "form-dropdown-item-inactive"
-                                        }`}
-                                      >
-                                        {city}
-                                      </button>
-                                    ))}
-                                  {cities.filter((city) =>
-                                    city
-                                      .toLowerCase()
-                                      .includes(
-                                        citySearch.trim().toLowerCase(),
-                                      ),
-                                  ).length === 0 && (
-                                    <p className="px-3 py-2 text-xs text-gray">
-                                      No cities found.
-                                    </p>
-                                  )}
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
-                        </div>
-
-                        {formik.touched.city && formik.errors.city && (
-                          <p className="form-error-message">
-                            {formik.errors.city}
-                          </p>
-                        )}
-                      </div>
-                      <div className="form-field-wrapper">
-                        <label className="form-label">Postal Code</label>
-                        <input
-                          type="text"
-                          name="postalCode"
-                          value={formik.values.postalCode}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          placeholder="Enter postal code"
-                          className={`form-input ${formik.touched.postalCode && formik.errors.postalCode ? "form-input-error" : ""}`}
-                        />
-                        {formik.touched.postalCode &&
-                          formik.errors.postalCode && (
-                            <p className="form-error-message">
-                              {formik.errors.postalCode}
-                            </p>
-                          )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="form-field-wrapper">
-                        <label className="form-label">Contact Number</label>
-                        <input
-                          type="text"
-                          name="contactNo"
-                          value={formik.values.contactNo}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          placeholder="Enter contact number"
-                          className={`form-input ${formik.touched.contactNo && formik.errors.contactNo ? "form-input-error" : ""}`}
-                        />
-                        {formik.touched.contactNo &&
-                          formik.errors.contactNo && (
-                            <p className="form-error-message">
-                              {formik.errors.contactNo}
-                            </p>
-                          )}
-                      </div>
-                      <div className="form-field-wrapper">
-                        <label className="form-label">Branch Email</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={formik.values.email}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          placeholder="Enter branch email"
-                          className={`form-input ${formik.touched.email && formik.errors.email ? "form-input-error" : ""}`}
-                        />
-                        {formik.touched.email && formik.errors.email && (
-                          <p className="form-error-message">
-                            {formik.errors.email}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="form-field-wrapper">
-                      <label className="form-label">Branch Size</label>
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setIsSizeOpen((prev) => !prev)}
-                          className={`form-dropdown-trigger ${
-                            formik.touched.size && formik.errors.size
-                              ? "form-dropdown-trigger-error"
-                              : ""
-                          }`}
-                        >
-                          <span
-                            className={
-                              formik.values.size
-                                ? "text-secondary"
-                                : "text-gray/60"
-                            }
-                          >
-                            {formik.values.size || "Select branch size"}
-                          </span>
-                          <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
-                        </button>
-
-                        <AnimatePresence>
-                          {isSizeOpen && (
-                            <>
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-10"
-                                onClick={() => setIsSizeOpen(false)}
-                              />
-                              <motion.div
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 8 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute bottom-full mb-1 z-20 w-full overflow-hidden rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+                            {formik.touched.country &&
+                              formik.errors.country &&
+                              !formik.values.country && (
+                                <p className="form-error-message">
+                                  {formik.errors.country}
+                                </p>
+                              )}
+                          </div>
+                          <div className="form-field-wrapper">
+                            <label className="form-label">State / Region</label>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                disabled={isStateDisabled}
+                                onClick={() => {
+                                  if (isStateDisabled) return;
+                                  setIsStateOpen((prev) => !prev);
+                                }}
+                                className={`form-dropdown-trigger ${
+                                  formik.touched.state && formik.errors.state
+                                    ? "form-dropdown-trigger-error"
+                                    : ""
+                                } ${
+                                  isStateDisabled
+                                    ? "opacity-60 cursor-not-allowed"
+                                    : ""
+                                }`}
                               >
-                                {[
-                                  "1-10 employees",
-                                  "11-50 employees",
-                                  "51-200 employees",
-                                  "200+ employees",
-                                ].map((option) => (
-                                  <button
-                                    key={option}
-                                    type="button"
-                                    onClick={() => {
-                                      formik.setFieldValue("size", option);
-                                      formik.setFieldTouched(
-                                        "size",
-                                        true,
-                                        false,
-                                      );
-                                      setIsSizeOpen(false);
-                                    }}
-                                    className={`form-dropdown-item ${
-                                      formik.values.size === option
-                                        ? "form-dropdown-item-active"
-                                        : "form-dropdown-item-inactive"
-                                    }`}
+                                <span
+                                  className={`truncate block max-w-30 ${
+                                    formik.values.state
+                                      ? "text-secondary"
+                                      : "text-gray/60"
+                                  }`}
+                                >
+                                  {formik.values.state ||
+                                    (isStateDisabled
+                                      ? "Select country first"
+                                      : "Select state")}
+                                </span>
+                                <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
+                              </button>
+
+                              <AnimatePresence>
+                                {isStateOpen && !isStateDisabled && (
+                                  <>
+                                    <motion.div
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      exit={{ opacity: 0 }}
+                                      className="fixed inset-0 z-10"
+                                      onClick={() => setIsStateOpen(false)}
+                                    />
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 8 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: 8 }}
+                                      transition={{ duration: 0.15 }}
+                                      className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                                    >
+                                      <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+                                        <input
+                                          type="text"
+                                          value={stateSearch}
+                                          onChange={(e) =>
+                                            setStateSearch(e.target.value)
+                                          }
+                                          placeholder="Search state"
+                                          className="form-select-search"
+                                        />
+                                      </div>
+                                      {states
+                                        .filter((state) =>
+                                          state
+                                            .toLowerCase()
+                                            .includes(
+                                              stateSearch.trim().toLowerCase(),
+                                            ),
+                                        )
+                                        .map((state) => (
+                                          <button
+                                            key={state}
+                                            type="button"
+                                            onClick={() => {
+                                              formik.setFieldValue(
+                                                "state",
+                                                state,
+                                              );
+                                              formik.setFieldTouched(
+                                                "state",
+                                                true,
+                                                false,
+                                              );
+                                              setIsStateOpen(false);
+                                            }}
+                                            className={`form-dropdown-item ${
+                                              formik.values.state === state
+                                                ? "form-dropdown-item-active"
+                                                : "form-dropdown-item-inactive"
+                                            }`}
+                                          >
+                                            {state}
+                                          </button>
+                                        ))}
+                                      {states.filter((state) =>
+                                        state
+                                          .toLowerCase()
+                                          .includes(
+                                            stateSearch.trim().toLowerCase(),
+                                          ),
+                                      ).length === 0 && (
+                                        <p className="px-3 py-2 text-xs text-gray">
+                                          No states found.
+                                        </p>
+                                      )}
+                                    </motion.div>
+                                  </>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                            {formik.touched.state && formik.errors.state && (
+                              <p className="form-error-message">
+                                {formik.errors.state}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="form-field-wrapper">
+                            <label className="form-label">City</label>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                disabled={isCityDisabled}
+                                onClick={() => {
+                                  if (isCityDisabled) return;
+                                  setIsCityOpen((prev) => !prev);
+                                }}
+                                className={`form-dropdown-trigger ${
+                                  formik.touched.city && formik.errors.city
+                                    ? "form-dropdown-trigger-error"
+                                    : ""
+                                } ${
+                                  isCityDisabled
+                                    ? "opacity-60 cursor-not-allowed"
+                                    : ""
+                                }`}
+                              >
+                                <span
+                                  className={`truncate block max-w-30 ${
+                                    formik.values.city
+                                      ? "text-secondary"
+                                      : "text-gray/60"
+                                  }`}
+                                >
+                                  {formik.values.city ||
+                                    (isCityDisabled
+                                      ? "Select country first"
+                                      : "Select city")}
+                                </span>
+                                <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
+                              </button>
+
+                              <AnimatePresence>
+                                {isCityOpen && !isCityDisabled && (
+                                  <>
+                                    <motion.div
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      exit={{ opacity: 0 }}
+                                      className="fixed inset-0 z-10"
+                                      onClick={() => setIsCityOpen(false)}
+                                    />
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 8 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: 8 }}
+                                      transition={{ duration: 0.15 }}
+                                      className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                                    >
+                                      <div className="sticky top-0 z-10 bg-zinc-50 px-2 pt-2 pb-1.5 border-b border-light-gray-2">
+                                        <input
+                                          type="text"
+                                          value={citySearch}
+                                          onChange={(e) =>
+                                            setCitySearch(e.target.value)
+                                          }
+                                          placeholder="Search city"
+                                          className="form-select-search"
+                                        />
+                                      </div>
+                                      {cities
+                                        .filter((city) =>
+                                          city
+                                            .toLowerCase()
+                                            .includes(
+                                              citySearch.trim().toLowerCase(),
+                                            ),
+                                        )
+                                        .map((city) => (
+                                          <button
+                                            key={city}
+                                            type="button"
+                                            onClick={() => {
+                                              formik.setFieldValue(
+                                                "city",
+                                                city,
+                                              );
+                                              formik.setFieldTouched(
+                                                "city",
+                                                true,
+                                                false,
+                                              );
+                                              setIsCityOpen(false);
+                                            }}
+                                            className={`form-dropdown-item ${
+                                              formik.values.city === city
+                                                ? "form-dropdown-item-active"
+                                                : "form-dropdown-item-inactive"
+                                            }`}
+                                          >
+                                            {city}
+                                          </button>
+                                        ))}
+                                      {cities.filter((city) =>
+                                        city
+                                          .toLowerCase()
+                                          .includes(
+                                            citySearch.trim().toLowerCase(),
+                                          ),
+                                      ).length === 0 && (
+                                        <p className="px-3 py-2 text-xs text-gray">
+                                          No cities found.
+                                        </p>
+                                      )}
+                                    </motion.div>
+                                  </>
+                                )}
+                              </AnimatePresence>
+                            </div>
+
+                            {formik.touched.city && formik.errors.city && (
+                              <p className="form-error-message">
+                                {formik.errors.city}
+                              </p>
+                            )}
+                          </div>
+                          <div className="form-field-wrapper">
+                            <label className="form-label">Postal Code</label>
+                            <input
+                              type="text"
+                              name="postalCode"
+                              value={formik.values.postalCode}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              placeholder="Enter postal code"
+                              className={`form-input ${formik.touched.postalCode && formik.errors.postalCode ? "form-input-error" : ""}`}
+                            />
+                            {formik.touched.postalCode &&
+                              formik.errors.postalCode && (
+                                <p className="form-error-message">
+                                  {formik.errors.postalCode}
+                                </p>
+                              )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="form-field-wrapper">
+                            <label className="form-label">
+                              Contact Number{" "}
+                              <span className="text-gray text-xs font-normal">
+                                {" "}
+                                (optional)
+                              </span>
+                            </label>
+                            <input
+                              type="text"
+                              name="contactNo"
+                              value={formik.values.contactNo}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              placeholder="Enter contact number"
+                              className={`form-input ${formik.touched.contactNo && formik.errors.contactNo ? "form-input-error" : ""}`}
+                            />
+                            {formik.touched.contactNo &&
+                              formik.errors.contactNo && (
+                                <p className="form-error-message">
+                                  {formik.errors.contactNo}
+                                </p>
+                              )}
+                          </div>
+                          <div className="form-field-wrapper">
+                            <label className="form-label">Branch Email</label>
+                            <input
+                              type="email"
+                              name="email"
+                              value={formik.values.email}
+                              onChange={formik.handleChange}
+                              onBlur={formik.handleBlur}
+                              placeholder="Enter branch email"
+                              className={`form-input ${formik.touched.email && formik.errors.email ? "form-input-error" : ""}`}
+                            />
+                            {formik.touched.email && formik.errors.email && (
+                              <p className="form-error-message">
+                                {formik.errors.email}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="form-field-wrapper">
+                          <label className="form-label">Branch Size</label>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsSizeOpen((prev) => !prev)}
+                              className={`form-dropdown-trigger ${
+                                formik.touched.size && formik.errors.size
+                                  ? "form-dropdown-trigger-error"
+                                  : ""
+                              }`}
+                            >
+                              <span
+                                className={
+                                  formik.values.size
+                                    ? "text-secondary"
+                                    : "text-gray/60"
+                                }
+                              >
+                                {formik.values.size || "Select branch size"}
+                              </span>
+                              <MdKeyboardArrowDown className="ml-2 h-4 w-4 text-gray shrink-0" />
+                            </button>
+
+                            <AnimatePresence>
+                              {isSizeOpen && (
+                                <>
+                                  <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setIsSizeOpen(false)}
+                                  />
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 8 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute bottom-full mb-1 z-20 w-full overflow-y-auto max-h-60 rounded-xl border border-light-gray-2 bg-zinc-50 shadow-[0_10px_30px_rgba(0,0,0,0.12)] scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                                   >
-                                    {option}
-                                  </button>
-                                ))}
-                              </motion.div>
-                            </>
+                                    {[
+                                      "1-10 employees",
+                                      "11-50 employees",
+                                      "51-200 employees",
+                                      "200+ employees",
+                                    ].map((option) => (
+                                      <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => {
+                                          formik.setFieldValue("size", option);
+                                          formik.setFieldTouched(
+                                            "size",
+                                            true,
+                                            false,
+                                          );
+                                          setIsSizeOpen(false);
+                                        }}
+                                        className={`form-dropdown-item ${
+                                          formik.values.size === option
+                                            ? "form-dropdown-item-active"
+                                            : "form-dropdown-item-inactive"
+                                        }`}
+                                      >
+                                        {option}
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          {formik.touched.size && formik.errors.size && (
+                            <p className="form-error-message">
+                              {formik.errors.size}
+                            </p>
                           )}
-                        </AnimatePresence>
-                      </div>
+                        </div>
 
-                      {formik.touched.size && formik.errors.size && (
-                        <p className="form-error-message">
-                          {formik.errors.size}
-                        </p>
-                      )}
+                        {generalError && (
+                          <div className="mb-4 rounded-xl border border-red/30 bg-red/5 px-4 py-2 text-xs font-medium text-red">
+                            {generalError}
+                          </div>
+                        )}
+                      </form>
                     </div>
+                  </div>
 
-                    <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-4">
+                  <div className="p-5 sm:px-6 sm:py-6 border-t border-light-gray-2 bg-zinc-50 shrink-0">
+                    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-4">
                       <Button
                         variant="primary"
-                        className="h-10 sm:h-11 hover:text-primary rounded-xl px-6 text-sm font-semibold border border-light-gray-2 bg-primary"
+                        className="h-10 sm:h-11 hover:text-primary rounded-xl px-6 text-sm font-semibold border border-light-gray-2 bg-primary cursor-pointer"
                         type="button"
                         onClick={handleRequestCloseModal}
                       >
@@ -2147,14 +2210,15 @@ export function BranchPage() {
                       </Button>
                       <Button
                         type="submit"
+                        form="branch-form"
                         variant="secondary"
-                        className="h-10 sm:h-11 rounded-xl px-6 text-sm font-semibold shadow-[0_20px_40px_rgba(0,0,0,0.18)] disabled:opacity-60"
+                        className="h-10 sm:h-11 rounded-xl px-6 text-sm font-semibold shadow-[0_20px_40px_rgba(0,0,0,0.18)] disabled:opacity-60 cursor-pointer"
                         disabled={formik.isSubmitting}
                       >
                         {branchBeingEdited ? "Update Branch" : "Create Branch"}
                       </Button>
                     </div>
-                  </form>
+                  </div>
                 </motion.div>
               </motion.div>
             )}
@@ -2177,47 +2241,57 @@ export function BranchPage() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="relative w-full max-w-md rounded-3xl bg-zinc-50 px-6 py-6 shadow-2xl"
+                  className="relative w-full max-w-md rounded-3xl bg-zinc-50 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-light-gray-2">
-                      <FaExclamation className="text-lg text-secondary" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold text-secondary">
-                        Delete Branch
-                      </h3>
-                      <p className="text-sm leading-relaxed text-gray">
-                        Are you sure you want to delete{" "}
-                        <span className="text-secondary font-medium">
-                          {branchToDelete.name}
-                        </span>
-                        ? This action cannot be undone and will remove all
-                        associated data, including assessments and audit records
-                        linked to this branch.
-                      </p>
-                    </div>
-                  </div>
+                  <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="px-6 py-6">
+                      <div className="flex items-start gap-4">
+                        <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-light-gray-2">
+                          <FaExclamation className="text-lg text-secondary" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-lg font-semibold text-secondary">
+                            Delete Branch
+                          </h3>
+                          <p className="text-sm leading-relaxed text-gray">
+                            Are you sure you want to delete{" "}
+                            <span className="text-secondary font-medium">
+                              {branchToDelete.name}
+                            </span>
+                            ? This action cannot be undone and will remove all
+                            associated data, including assessments and audit
+                            records linked to this branch.
+                          </p>
+                        </div>
+                      </div>
 
-                  <div className="mt-6 flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-zinc-50 hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                      onClick={() => {
-                        setIsDeleteOpen(false);
-                        setBranchToDelete(null);
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="flex-1 h-10 rounded-xl bg-red text-sm font-semibold text-white hover:bg-red/90 transition-all shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                      onClick={handleConfirmDelete}
-                    >
-                      Delete Branch
-                    </button>
+                      {generalError && (
+                        <div className="mt-4 rounded-xl border border-red/30 bg-red/5 px-4 py-2 text-xs font-medium text-red">
+                          {generalError}
+                        </div>
+                      )}
+
+                      <div className="mt-6 flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-zinc-50 hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                          onClick={() => {
+                            setIsDeleteOpen(false);
+                            setBranchToDelete(null);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="flex-1 h-10 rounded-xl bg-red text-sm font-semibold text-white hover:bg-red/90 transition-all shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                          onClick={handleConfirmDelete}
+                        >
+                          Delete Branch
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               </motion.div>
@@ -2238,49 +2312,53 @@ export function BranchPage() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="relative w-full max-w-md rounded-3xl bg-zinc-50 px-6 py-6 shadow-2xl"
+                  className="relative w-full max-w-md rounded-3xl bg-zinc-50 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                      <FaStar className="text-lg text-amber-600" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold text-secondary">
-                        Change Main Branch
-                      </h3>
-                      <p className="text-sm leading-relaxed text-gray">
-                        {branches.find((b) => b.isMain) && (
-                          <>
-                            The branch{" "}
-                            <span className="text-secondary font-medium">
-                              {branches.find((b) => b.isMain)?.name}
-                            </span>{" "}
-                            will no longer be the main branch.{" "}
-                          </>
-                        )}
-                        This new branch will be marked as your organization's
-                        primary location. Only one main branch is allowed at a
-                        time.
-                      </p>
-                    </div>
-                  </div>
+                  <div className="w-full flex-1 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="px-6 py-6">
+                      <div className="flex items-start gap-4">
+                        <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                          <FaStar className="text-lg text-amber-600" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-lg font-semibold text-secondary">
+                            Change Main Branch
+                          </h3>
+                          <p className="text-sm leading-relaxed text-gray">
+                            {branches.find((b) => b.isMain) && (
+                              <>
+                                The branch{" "}
+                                <span className="text-secondary font-medium">
+                                  {branches.find((b) => b.isMain)?.name}
+                                </span>{" "}
+                                will no longer be the main branch.{" "}
+                              </>
+                            )}
+                            This new branch will be marked as your
+                            organization's primary location. Only one main
+                            branch is allowed at a time.
+                          </p>
+                        </div>
+                      </div>
 
-                  <div className="mt-6 flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-zinc-50 hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                      onClick={() => setIsMainBranchConfirmOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="flex-1 h-10 rounded-xl bg-secondary text-sm font-semibold text-white hover:bg-black transition-all shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                      onClick={handleConfirmMainBranchChange}
-                    >
-                      Confirm Change
-                    </button>
+                      <div className="mt-6 flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="flex-1 h-10 rounded-xl border border-secondary text-sm font-semibold text-secondary bg-zinc-50 hover:bg-light-gray transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                          onClick={() => setIsMainBranchConfirmOpen(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="flex-1 h-10 rounded-xl bg-secondary text-sm font-semibold text-white hover:bg-black transition-all shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                          onClick={handleConfirmMainBranchChange}
+                        >
+                          Confirm Change
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               </motion.div>

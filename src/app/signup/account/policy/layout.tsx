@@ -39,7 +39,6 @@ export default function PolicyLayout({
               </div>
             </Link>
 
-           
             <div className="hidden max-w-lg flex-1 lg:flex lg:px-12">
               <div className="relative flex w-full items-center rounded-xl border border-gray-200 bg-white p-1 pl-4 shadow-sm transition-all focus-within:ring-2 focus-within:ring-secondary/10 hover:border-gray-300">
                 <input
@@ -53,7 +52,7 @@ export default function PolicyLayout({
               </div>
             </div>
 
-           {/* Auth Buttons */}
+            {/* Auth Buttons */}
             <div className="flex items-center gap-3">
               <Link href="/login">
                 <Button
@@ -63,14 +62,13 @@ export default function PolicyLayout({
                   Login
                 </Button>
               </Link>
-              <Link href="/signup">
-                <Button
-                  variant="primary"
-                  className="h-10 rounded-lg bg-[#2F2F2F] px-6 font-semibold text-white shadow-lg hover:bg-black"
-                >
-                  Register
-                </Button>
-              </Link>
+              <Button
+                variant="primary"
+                onClick={() => router.back()}
+                className="h-10 rounded-lg bg-[#2F2F2F] px-6 font-semibold text-white shadow-lg hover:bg-black"
+              >
+                Signup
+              </Button>
             </div>
           </div>
         </div>
@@ -78,6 +76,25 @@ export default function PolicyLayout({
         {/* Navigation Tabs - Subheader */}
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-secondary hover:bg-gray-50 transition-all border border-gray-200 mr-2"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              Back
+            </button>
             <button
               onClick={handleTermsClick}
               className={`rounded-lg px-6 py-2.5 text-sm font-semibold transition-all ${
@@ -111,4 +128,3 @@ export default function PolicyLayout({
     </div>
   );
 }
-

@@ -201,6 +201,9 @@ function CreateCertificationPageContent() {
   const [acesRatedEmerald, setAcesRatedEmerald] = useState("");
 
   const [acesVerifiedBronze, setAcesVerifiedBronze] = useState("");
+  const [acesVerifiedSilver, setAcesVerifiedSilver] = useState("");
+  const [acesVerifiedGold, setAcesVerifiedGold] = useState("");
+  const [acesVerifiedEmerald, setAcesVerifiedEmerald] = useState("");
 
   const [acesCertifiedSilver, setAcesCertifiedSilver] = useState("");
   const [acesCertifiedGold, setAcesCertifiedGold] = useState("");
@@ -244,6 +247,9 @@ function CreateCertificationPageContent() {
     acesRatedGold?: string;
     acesRatedEmerald?: string;
     acesVerifiedBronze?: string;
+    acesVerifiedSilver?: string;
+    acesVerifiedGold?: string;
+    acesVerifiedEmerald?: string;
     acesCertifiedSilver?: string;
     acesCertifiedGold?: string;
     acesCertifiedEmerald?: string;
@@ -614,6 +620,12 @@ function CreateCertificationPageContent() {
                 badge.colors.forEach((color: any) => {
                   if (color.color === "#CD7F32")
                     setAcesVerifiedBronze(color.min_score?.toString() || "");
+                  if (color.color === "#C0C0C0")
+                    setAcesVerifiedSilver(color.min_score?.toString() || "");
+                  if (color.color === "#FFD700")
+                    setAcesVerifiedGold(color.min_score?.toString() || "");
+                  if (color.color === "#00C853")
+                    setAcesVerifiedEmerald(color.min_score?.toString() || "");
                 });
               }
               if (badge.name === "ACES Certified" && badge.colors) {
@@ -1680,17 +1692,37 @@ function CreateCertificationPageContent() {
       });
     }
 
-    if (acesVerifiedBronze) {
+    const acesVerifiedColors: any[] = [];
+    if (acesVerifiedEmerald)
+      acesVerifiedColors.push({
+        color: "#00C853",
+        min_score: parseInt(acesVerifiedEmerald) || 90,
+        max_score: 100,
+      });
+    if (acesVerifiedGold)
+      acesVerifiedColors.push({
+        color: "#FFD700",
+        min_score: parseInt(acesVerifiedGold) || 80,
+        max_score: parseInt(acesVerifiedEmerald) || 89,
+      });
+    if (acesVerifiedSilver)
+      acesVerifiedColors.push({
+        color: "#C0C0C0",
+        min_score: parseInt(acesVerifiedSilver) || 70,
+        max_score: parseInt(acesVerifiedGold) || 79,
+      });
+    if (acesVerifiedBronze)
+      acesVerifiedColors.push({
+        color: "#CD7F32",
+        min_score: parseInt(acesVerifiedBronze) || 50,
+        max_score: parseInt(acesVerifiedSilver) || 69,
+      });
+
+    if (acesVerifiedColors.length > 0) {
       badges.push({
         slot: 2,
         name: "ACES Verified",
-        colors: [
-          {
-            color: "#CD7F32",
-            min_score: parseInt(acesVerifiedBronze) || 50,
-            max_score: 100,
-          },
-        ],
+        colors: acesVerifiedColors.reverse(),
       });
     }
 
@@ -2571,37 +2603,85 @@ function CreateCertificationPageContent() {
                 )}
               </div>
               <div>
-                <label className="block text-xs text-gray-300 mb-1">
-                  Silver*
-                </label>
+                <label className="block text-xs text-gray mb-1">Silver*</label>
                 <input
-                  type="text"
+                  type="number"
                   placeholder="Enter Score"
-                  className="w-full h-[42px] px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 bg-gray-50 text-sm font-normal leading-[19.2px] tracking-normal"
-                  disabled
+                  value={acesVerifiedSilver}
+                  onChange={(e) => {
+                    setAcesVerifiedSilver(e.target.value);
+                    if (errors.acesVerifiedSilver) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        acesVerifiedSilver: undefined,
+                      }));
+                    }
+                  }}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesVerifiedSilver
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
+                {errors.acesVerifiedSilver && (
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesVerifiedSilver}
+                  </span>
+                )}
               </div>
               <div>
-                <label className="block text-xs text-gray-300 mb-1">
-                  Gold*
-                </label>
+                <label className="block text-xs text-gray mb-1">Gold*</label>
                 <input
-                  type="text"
+                  type="number"
                   placeholder="Enter Score"
-                  className="w-full h-[42px] px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 bg-gray-50 text-sm font-normal leading-[19.2px] tracking-normal"
-                  disabled
+                  value={acesVerifiedGold}
+                  onChange={(e) => {
+                    setAcesVerifiedGold(e.target.value);
+                    if (errors.acesVerifiedGold) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        acesVerifiedGold: undefined,
+                      }));
+                    }
+                  }}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesVerifiedGold
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
+                {errors.acesVerifiedGold && (
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesVerifiedGold}
+                  </span>
+                )}
               </div>
               <div>
-                <label className="block text-xs text-gray-300 mb-1">
-                  Emerald*
-                </label>
+                <label className="block text-xs text-gray mb-1">Emerald*</label>
                 <input
-                  type="text"
+                  type="number"
                   placeholder="Enter Score"
-                  className="w-full h-[42px] px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 bg-gray-50 text-sm font-normal leading-[19.2px] tracking-normal"
-                  disabled
+                  value={acesVerifiedEmerald}
+                  onChange={(e) => {
+                    setAcesVerifiedEmerald(e.target.value);
+                    if (errors.acesVerifiedEmerald) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        acesVerifiedEmerald: undefined,
+                      }));
+                    }
+                  }}
+                  className={`w-full h-[42px] px-4 py-3 border rounded-md focus:outline-none focus:ring-2 text-sm font-normal leading-[19.2px] tracking-normal ${
+                    errors.acesVerifiedEmerald
+                      ? "border-red-500 focus:ring-red-200"
+                      : "border-zinc-200 focus:ring-zinc-200"
+                  }`}
                 />
+                {errors.acesVerifiedEmerald && (
+                  <span className="text-xs text-red-500 mt-1 block">
+                    {errors.acesVerifiedEmerald}
+                  </span>
+                )}
               </div>
             </div>
 

@@ -137,7 +137,6 @@ export default function EmployeeSidebar() {
   }, []);
 
   const filteredNavigation = navigation.filter((item) => {
-    // For employee dashboard, we MUST have profileData to filter correctly.
     if (!profileData || Object.keys(profileData).length === 0) return false;
 
     if (profileData?._type !== "employee") return true;

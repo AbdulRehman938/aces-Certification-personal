@@ -6,7 +6,14 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { axiosInstance } from "@/lib/axios";
 import { persistOrganizationId } from "@/lib/auth-utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, AlertCircle } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronLeft,
+  AlertCircle,
+  Trophy,
+  Clock,
+  CheckCircle2,
+} from "lucide-react";
 import {
   RadialBarChart,
   RadialBar,
@@ -18,9 +25,11 @@ import {
   SubmissionDetails,
   SubmissionCertificate,
 } from "../certificate/submission-details";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
 import { Tooltip } from "@/components/ui/tooltip";
+import { AcesDynamicBadge } from "@/components/AcesDynamicBadge";
+import { downloadBadgePdf } from "@/lib/downloadBadgePdf";
 
 interface DashboardCertificate extends SubmissionCertificate {
   id: string | number;
@@ -41,7 +50,12 @@ interface DashboardCertificate extends SubmissionCertificate {
   certificateId?: string;
   paymentId?: string;
   assessmentType?: string;
+  branchId?: string | null;
   isPending?: boolean;
+  badges?: any[];
+  validity?: string;
+  questionsCount?: number;
+  certificateProductId?: string;
 }
 
 interface Recommendation {
@@ -57,6 +71,9 @@ interface Recommendation {
   name: string;
   disclosure_price: string;
   assured_price: string;
+  badges?: any[];
+  validity?: string;
+  questionsCount?: number;
 }
 
 const overviewCertificates: DashboardCertificate[] = [];
@@ -124,6 +141,7 @@ export function DashboardPage() {
   const notificationAssessmentIdParam = searchParams.get("assessment_id");
   const notificationCertificateIdParam = searchParams.get("certificate_id");
   const notificationTabParam = searchParams.get("tab");
+  const sidParam = searchParams.get("sid");
   const [selectedCert, setSelectedCert] = useState<{
     id: number | string;
     title: string;
@@ -173,17 +191,32 @@ export function DashboardPage() {
 
   const [pollingId, setPollingId] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [isDownloadingId, setIsDownloadingId] = useState<
+    string | number | null
+  >(null);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [resultsData, setResultsData] = useState<any>(null);
+  const [selectedCertForResults, setSelectedCertForResults] =
+    useState<DashboardCertificate | null>(null);
+  const [flaggedQuestions, setFlaggedQuestions] = useState<any[]>([]);
+  const [isFlagsLoading, setIsFlagsLoading] = useState(false);
   const resultsStatus = String(resultsData?.status || "").toLowerCase();
   const isResultsBlocked = resultsStatus.includes("blocked");
   const isResultsRejected = resultsStatus.includes("rejected");
   const isResultsFailed =
-    resultsStatus === "failed" || isResultsBlocked || isResultsRejected;
+    resultsStatus === "failed" ||
+    isResultsBlocked ||
+    isResultsRejected ||
+    (resultsData?.score !== null && resultsData?.score < 70);
+  const isNoFlagsRestartState =
+    resultsData?.score === null &&
+    flaggedQuestions.length === 0 &&
+    !isFlagsLoading;
   const isResultsPending =
-    resultsStatus === "ai_reviewing" ||
-    resultsStatus === "pending" ||
-    resultsStatus.includes("review");
+    (resultsStatus === "ai_reviewing" ||
+      resultsStatus === "pending" ||
+      resultsStatus.includes("review")) &&
+    !isNoFlagsRestartState;
   const canShowNumericScore =
     !isResultsPending && !(isResultsBlocked || isResultsRejected);
 
@@ -206,6 +239,116 @@ export function DashboardPage() {
       confirmText,
       cancelText,
     });
+  };
+
+  const handleDownloadBadge = async (cert: DashboardCertificate) => {
+    const certId = cert.id;
+    try {
+      setIsDownloadingId(certId);
+
+      // Determine badge level from score if we can fetch it
+      let score: number | null = null;
+      try {
+        const scoreRes = await axiosInstance.get(
+          `/assessments/${certId}/score`,
+          {
+            headers: { "Assessment-UUID": String(certId) },
+          },
+        );
+        score = scoreRes.data?.data?.score ?? null;
+      } catch {
+        // Score not available — use null
+      }
+
+      const badgeLabel: "RATED" | "VERIFIED" | "CERTIFIED" =
+        score !== null && score >= 90
+          ? "CERTIFIED"
+          : score !== null && score >= 80
+            ? "VERIFIED"
+            : "RATED";
+
+      const level: "BRONZE" | "SILVER" | "GOLD" =
+        badgeLabel === "CERTIFIED"
+          ? "GOLD"
+          : badgeLabel === "VERIFIED"
+            ? "SILVER"
+            : "BRONZE";
+
+      // Fetch org name from local storage or profile API
+      const profile = localStorage.getItem("profile");
+      let orgName = "Organization";
+      try {
+        const parsed = JSON.parse(profile || "{}");
+        orgName = parsed?.name || parsed?.organization_name || "Organization";
+      } catch {
+        /* noop */
+      }
+
+      // Fetch detailed review data for rich PDF
+      let reviewData: any = null;
+      try {
+        const reviewRes = await axiosInstance.get(
+          `/assessments/${certId}/review-overview`,
+        );
+        reviewData = reviewRes.data?.data || reviewRes.data;
+      } catch {
+        // fallback gracefully
+      }
+
+      const fmtDate = (d?: string) =>
+        d
+          ? new Date(d).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : undefined;
+
+      const auditorName =
+        reviewData?.auditor?.name ||
+        reviewData?.auditor_name ||
+        (reviewData?.assignedAuditor?.firstName
+          ? `${reviewData.assignedAuditor.firstName} ${reviewData.assignedAuditor.lastName || ""}`.trim()
+          : undefined);
+
+      const reviewerName =
+        reviewData?.reviewer?.name || reviewData?.reviewer_name;
+
+      await downloadBadgePdf({
+        organizationName: orgName,
+        certificateName: cert.title || "Assessment",
+        badgeLabel,
+        level,
+        score,
+        serialNumber: String(certId),
+        assessmentType: cert.type || "Self-Disclosure",
+        issuedDate: fmtDate(reviewData?.updated_at || reviewData?.created_at),
+        auditorName,
+        auditorEmail: reviewData?.auditor?.email,
+        auditorRole: "Lead ESG Auditor",
+        reviewerName,
+        reviewerEmail: reviewData?.reviewer?.email,
+        reviewerRole: "Senior ESG Reviewer",
+        auditPeriodStart: fmtDate(
+          reviewData?.audit_start_date || reviewData?.submitted_at,
+        ),
+        auditPeriodEnd: fmtDate(
+          reviewData?.audit_end_date || reviewData?.updated_at,
+        ),
+        validUntil: fmtDate(reviewData?.valid_until || reviewData?.expiry_date),
+        auditStandard: reviewData?.audit_standard || reviewData?.standard_code,
+        auditSummary:
+          reviewData?.auditor?.notes?.audit_summary ||
+          reviewData?.auditor?.notes?.audit_description,
+        assuranceFirmName:
+          reviewData?.auditor?.firm_name || reviewData?.assurance_firm,
+        assuranceFirmWebsite: reviewData?.auditor?.firm_website,
+      });
+    } catch (error) {
+      console.error("Badge PDF generation failed", error);
+    } finally {
+      setIsDownloadingId(null);
+    }
   };
 
   const initDashboard = async (silent = false) => {
@@ -324,6 +467,14 @@ export function DashboardPage() {
           name: item.name,
           disclosure_price: item.disclosure_price,
           assured_price: item.assured_price,
+          badges: item.badges || [],
+          validity:
+            item.validity_years > 0
+              ? `${item.validity_years} Year${item.validity_years > 1 ? "s" : ""}`
+              : item.validity_months > 0
+                ? `${item.validity_months} Months`
+                : "N/A",
+          questionsCount: item.questions_count,
         }));
         setRecommendations(mapped);
         setLoadingProgress(70);
@@ -334,118 +485,107 @@ export function DashboardPage() {
 
       let allCerts: DashboardCertificate[] = [];
       try {
-        const branchRes = await axiosInstance.get("/branches/list");
-        const branches = branchRes.data?.data || branchRes.data || [];
-        const branch = branches.find((b: any) => b.is_main) || branches[0];
+        const assessmentsRes = await axiosInstance.get("/assessments", {
+          params: { page: 1, limit: 100 },
+        });
+        const apiData =
+          assessmentsRes.data?.data?.data || assessmentsRes.data?.data || [];
 
-        if (branch) {
-          const myCertsRes = await axiosInstance.get("/my-certificates", {
-            params: { branchid: branch.id },
-          });
-          const apiData =
-            myCertsRes.data?.data?.data ||
-            myCertsRes.data?.data ||
-            myCertsRes.data ||
-            [];
+        allCerts = apiData.map((item: any) => {
+          const rawStatus = String(item.status || "").toLowerCase();
+          let displayStatus = "In Progress";
 
-          allCerts = apiData.map((item: any) => {
-            const rawStatus = String(item.status || "").toLowerCase();
-            let displayStatus = "Active";
-            if (rawStatus === "expired") displayStatus = "Expired";
-            if (
-              rawStatus === "pending" ||
-              rawStatus === "in_progress" ||
-              rawStatus === "ai_reviewing"
-            )
-              displayStatus = "In Progress";
+          if (
+            rawStatus === "expired" ||
+            rawStatus === "rejected" ||
+            rawStatus === "failed"
+          ) {
+            displayStatus = "Expired";
+          } else if (
+            rawStatus === "active" ||
+            rawStatus === "completed" ||
+            rawStatus === "passed" ||
+            rawStatus === "published" ||
+            rawStatus === "certified"
+          ) {
+            displayStatus = "Active";
+          } else if (
+            rawStatus === "pending" ||
+            rawStatus === "in_progress" ||
+            rawStatus === "ai_reviewing" ||
+            rawStatus === "submitted" ||
+            rawStatus === "awaiting_review"
+          ) {
+            displayStatus = "In Progress";
+          }
 
-            const isAIReviewing = rawStatus === "ai_reviewing";
-            const total = parseInt(item.total_questions) || 0;
-            const progress = parseInt(item.answered_questions) || 0;
+          const isAIReviewing =
+            rawStatus === "ai_reviewing" ||
+            rawStatus === "submitted" ||
+            rawStatus === "awaiting_review" ||
+            item.is_submitted;
+          const total = parseInt(item.total_questions) || 0;
+          const progress = parseInt(item.answered_questions) || 0;
 
-            return {
-              id: item.id,
-              title: item.name || item.certificate?.name || "Certificate",
-              category:
-                (item.industry_names && item.industry_names[0]) ||
-                (item.certificate?.industry_names &&
-                  item.certificate.industry_names[0]) ||
-                "General",
-              status: displayStatus,
-              type:
-                item.assessment_type === "self_disclosure"
-                  ? "Self-disclosure"
-                  : "Assured",
-              description: isAIReviewing
-                ? "Your assessment is currently under AI review."
-                : item.description ||
-                  item.certificate?.description ||
-                  "Complete your assessment and get certified.",
-              progress: isAIReviewing ? 100 : progress,
-              total: isAIReviewing ? 100 : total || 10,
-              isPending: isAIReviewing,
-              isSubmitted: item.is_submitted || rawStatus === "ai_reviewing",
-              certificateId: item.certificate_id || item.certificate?.id,
-              paymentId: item.payment_id,
-              assessmentType: item.assessment_type,
-              subDescription:
-                item.certificate_id || item.certificate?.certificate_id,
-              disclosure_price:
-                item.disclosure_price || item.certificate?.disclosure_price,
-              assured_price:
-                item.assured_price || item.certificate?.assured_price,
-            };
-          });
-        }
+          return {
+            id: item.id,
+            title: item.certificate_name || item.name || "Assessment",
+            category: "General",
+            status: displayStatus,
+            type:
+              item.assessment_type === "self_disclosure"
+                ? "Self-disclosure"
+                : "Assured",
+            description: isAIReviewing
+              ? `Your assessment for ${item.certificate_name || item.name || "this certificate"} is currently under AI review.`
+              : item.certificate_description ||
+                item.description ||
+                "Access your assessment and complete the required sections.",
+            progress: isAIReviewing ? 100 : progress,
+            total: isAIReviewing ? 100 : total || 10,
+            isPending: isAIReviewing,
+            isSubmitted:
+              item.is_submitted ||
+              rawStatus === "ai_reviewing" ||
+              rawStatus === "completed" ||
+              rawStatus === "passed",
+            certificateId: item.certificate_id,
+            paymentId: item.payment_id,
+            assessmentType: item.assessment_type,
+            branchId: item.branch_id,
+            subDescription: item.certificate_id,
+            badges: item.badges || [],
+            validity:
+              item.validity_years > 0
+                ? `${item.validity_years} Year${item.validity_years > 1 ? "s" : ""}`
+                : item.validity_months > 0
+                  ? `${item.validity_months} Months`
+                  : "N/A",
+            questionsCount: item.questions_count,
+            certificateProductId: item.certificate_product_id,
+          };
+        });
       } catch (error) {
-        console.error("Failed to fetch my certificates", error);
-      }
-
-      try {
-        const response = await axiosInstance.get("/assessments/pending");
-        const apiData = response.data?.data?.data || [];
-        const pendingMapped: DashboardCertificate[] = apiData.map(
-          (item: any) => {
-            const isAIReviewing = item.status === "ai_reviewing";
-            const total = parseInt(item.total_questions) || 0;
-            const progress = parseInt(item.answered_questions) || 0;
-
-            return {
-              id: item.id,
-              title: item.certificate_name || "Assessment",
-              category: "General",
-              status: "In Progress",
-              type:
-                item.assessment_type === "self_disclosure"
-                  ? "Self-disclosure"
-                  : "Assured",
-              description: isAIReviewing
-                ? "Your assessment is currently under AI review."
-                : "Complete your assessment and get certified.",
-              progress: isAIReviewing ? 100 : progress,
-              total: isAIReviewing ? 100 : total || 10,
-              isPending: isAIReviewing,
-              isSubmitted: item.is_submitted,
-              certificateId: item.certificate_id,
-              paymentId: item.payment_id,
-              assessmentType: item.assessment_type,
-              subDescription: item.certificate_id,
-            };
-          },
-        );
-
-        if (pendingMapped.length > 0) {
-          const existingIds = new Set(allCerts.map((c) => String(c.id)));
-          const newOnly = pendingMapped.filter(
-            (m) => !existingIds.has(String(m.id)),
-          );
-          allCerts = [...allCerts, ...newOnly];
-        }
-      } catch (error) {
-        console.error("Failed to fetch pending assessments", error);
+        console.error("Failed to fetch assessments", error);
       }
 
       setCertificates(allCerts);
+
+      if (sidParam && !silent) {
+        const match = allCerts.find((c) => String(c.id) === sidParam);
+        if (match) {
+          if (match.status === "In Progress") {
+            handleContinueSubmission(match);
+          } else {
+            const params = new URLSearchParams(window.location.search);
+            params.delete("sid");
+            router.replace(
+              `${base}${params.toString() ? "?" + params.toString() : ""}`,
+            );
+          }
+        }
+      }
+
       setLoadingProgress(100);
       if (!silent) setTimeout(() => setIsLoading(false), 500);
     } catch (e) {
@@ -462,17 +602,53 @@ export function DashboardPage() {
     null,
   );
 
-  const handleCheckResults = async (certificateId: string | number) => {
-    setIsCheckingId(certificateId);
+  const handleCheckResults = async (
+    certOrId: DashboardCertificate | string | number,
+  ) => {
+    const cert =
+      typeof certOrId === "object"
+        ? certOrId
+        : certificates.find((c) => String(c.id) === String(certOrId));
+
+    if (!cert) return;
+
+    setSelectedCertForResults(cert);
+    setIsCheckingId(cert.id);
     try {
-      const response = await axiosInstance.get(
-        `/assessments/${certificateId}/score`,
-      );
+      const response = await axiosInstance.get(`/assessments/${cert.id}/score`);
 
       const data = response.data?.data || response.data;
 
       if (data && typeof data === "object") {
         setResultsData(data);
+        setFlaggedQuestions([]); // Clear previous
+
+        // If score is null or less than 70%, fetch flagged questions with UUID header
+        const score = data.score;
+        const needsFlags =
+          score === null || (typeof score === "number" && score < 70);
+
+        if (needsFlags) {
+          setIsFlagsLoading(true);
+          try {
+            const flagsRes = await axiosInstance.get(
+              `/assessments/${cert.id}/flagged-questions`,
+              {
+                headers: {
+                  "Assessment-UUID": String(cert.id),
+                },
+              },
+            );
+            if (flagsRes.data?.success) {
+              setFlaggedQuestions(flagsRes.data.data || []);
+            }
+          } catch (flagErr) {
+            console.error("Failed to fetch flags", flagErr);
+          } finally {
+            setIsFlagsLoading(false);
+          }
+        }
+
         setShowResultsModal(true);
         if (
           data.score !== undefined ||
@@ -492,6 +668,46 @@ export function DashboardPage() {
       showMessage(
         "Check Failed",
         "Unable to retrieve results at this time. Please try again.",
+        "error",
+      );
+    } finally {
+      setIsCheckingId(null);
+    }
+  };
+
+  const handleRestartAssessment = async () => {
+    if (!selectedCertForResults) return;
+
+    try {
+      setIsCheckingId(selectedCertForResults.id);
+
+      // We call POST /assessments to start a fresh one with the SAME payment
+      const response = await axiosInstance.post("/assessments", {
+        certificate_id: selectedCertForResults.certificateId,
+        payment_id: selectedCertForResults.paymentId,
+        assessment_type: selectedCertForResults.assessmentType || "assured",
+        branch_id: selectedCertForResults.branchId || null,
+      });
+
+      if (response.data?.success) {
+        const newAssessment = response.data.data;
+        localStorage.setItem(
+          "pending_assessment_ids",
+          JSON.stringify({
+            assessment_id: newAssessment.id,
+            certificate_id: selectedCertForResults.certificateId,
+            payment_id: selectedCertForResults.paymentId,
+            assessment_type: selectedCertForResults.assessmentType,
+          }),
+        );
+        router.push(`${base}/assessment`);
+      }
+    } catch (error: any) {
+      console.error("Restart Assessment Error", error);
+      showMessage(
+        "Restart Failed",
+        error.response?.data?.message ||
+          "Unable to restart the assessment. Please try again.",
         "error",
       );
     } finally {
@@ -553,7 +769,11 @@ export function DashboardPage() {
     if (assessmentId && notificationActionParam === "dashboard_submission") {
       const match = certificates.find((c) => String(c.id) === assessmentId);
       if (match) {
-        setSelectedSubmission(match);
+        if (match.status === "In Progress") {
+          handleContinueSubmission(match);
+        } else {
+          setSelectedSubmission(match);
+        }
       } else {
         showMessage(
           "Certificate Not Found",
@@ -589,7 +809,11 @@ export function DashboardPage() {
       if (notificationActionParam === "dashboard_certificate_results") {
         void handleCheckResults(match.id);
       } else {
-        setSelectedSubmission(match);
+        if (match.status === "In Progress") {
+          handleContinueSubmission(match);
+        } else {
+          setSelectedSubmission(match);
+        }
       }
 
       clearNotificationParams();
@@ -611,12 +835,7 @@ export function DashboardPage() {
   ]);
 
   useEffect(() => {
-    if (
-      showResultsModal ||
-      messageModal.show ||
-      !!selectedCert ||
-      !!selectedSubmission
-    ) {
+    if (showResultsModal || messageModal.show) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "unset";
@@ -624,7 +843,7 @@ export function DashboardPage() {
     return () => {
       document.body.style.overflow = "unset";
     };
-  }, [showResultsModal, messageModal.show, selectedCert, selectedSubmission]);
+  }, [showResultsModal, messageModal.show]);
 
   const filteredCertificates = useMemo(() => {
     let filtered = certificates.filter((cert) => cert.status === activeTab);
@@ -660,16 +879,17 @@ export function DashboardPage() {
   );
 
   const handleContinueSubmission = (cert: DashboardCertificate) => {
-    if (!cert.isSubmitted) {
-      localStorage.setItem(
-        "pending_assessment_ids",
-        JSON.stringify({
-          assessment_id: cert.id,
-          certificate_id: cert.certificateId,
-          payment_id: cert.paymentId,
-          assessment_type: cert.assessmentType,
-        }),
-      );
+    localStorage.setItem(
+      "pending_assessment_ids",
+      JSON.stringify({
+        assessment_id: cert.id,
+        certificate_id: cert.certificateId,
+        payment_id: cert.paymentId,
+        assessment_type: cert.assessmentType,
+      }),
+    );
+
+    if (cert.status === "In Progress") {
       router.push(`${base}/assessment`);
     } else {
       setSelectedSubmission(cert);
@@ -721,12 +941,28 @@ export function DashboardPage() {
   }
 
   if (selectedSubmission) {
+    // Sync the assessment ID into the URL so reload restores this view
+    const currentSid = searchParams.get("sid");
+    if (currentSid !== String(selectedSubmission.id)) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("sid", String(selectedSubmission.id));
+      router.replace(`${base}?${params.toString()}`);
+    }
+
+    const handleBackFromSubmission = () => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("sid");
+      const qs = params.toString();
+      router.replace(qs ? `${base}?${qs}` : base);
+      setSelectedSubmission(null);
+    };
+
     return (
-      <div className="p-6 lg:p-10 bg-dull-white/10">
+      <div className="p-6 lg:p-10 lg:pt-5 bg-dull-white/10">
         <div className="max-w-7xl mx-auto">
           <SubmissionDetails
             certificate={selectedSubmission}
-            onBack={() => setSelectedSubmission(null)}
+            onBack={handleBackFromSubmission}
           />
         </div>
       </div>
@@ -738,7 +974,7 @@ export function DashboardPage() {
       <div className="p-6 lg:p-10 lg:pt-3 bg-light-gray">
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 ">
             <div className="space-y-1">
               <h1 className="text-[22px] md:text-[24px] font-semibold text-secondary leading-tight">
                 Dashboard
@@ -854,7 +1090,7 @@ export function DashboardPage() {
 
                 <div className="space-y-6">
                   {/* Tabs */}
-                  <div className="flex bg-zinc-50 rounded-2xl p-1.5 border border-dull-white/40 shadow-sm overflow-x-auto w-full max-w-[33%] no-scrollbar">
+                  <div className="flex bg-zinc-50 rounded-2xl p-1.5 border border-dull-white/40 shadow-sm overflow-x-auto w-fit no-scrollbar">
                     <div className="flex min-w-max gap-1">
                       {["In Progress", "Active", "Expired"].map((tab) => (
                         <button
@@ -877,12 +1113,19 @@ export function DashboardPage() {
 
                   <div className="space-y-6 relative min-h-64 pb-2">
                     {isLoading ? (
-                      <div className="flex h-104 items-center justify-center">
-                        <LoadingScreen
-                          isLoading={true}
-                          progress={loadingProgress}
-                          size="lg"
-                        />
+                      <div className="space-y-4">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="bg-zinc-50 rounded-2xl border border-zinc-100 p-6 flex items-center justify-between"
+                          >
+                            <div className="space-y-3 flex-1">
+                              <Skeleton className="h-4 w-1/2" />
+                              <Skeleton className="h-3 w-1/3" />
+                            </div>
+                            <Skeleton className="h-20 w-20 rounded-full" />
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <AnimatePresence mode="wait">
@@ -894,7 +1137,17 @@ export function DashboardPage() {
                               animate={{ opacity: 1, x: 0 }}
                               exit={{ opacity: 0, x: 20 }}
                               transition={{ delay: i * 0.1 }}
-                              className="bg-zinc-50 rounded-3xl md:rounded-4xl border border-dull-white/40 shadow-sm p-5 md:p-5 min-h-56"
+                              className={`bg-zinc-50 rounded-3xl md:rounded-4xl border border-dull-white/40 shadow-sm p-5 md:p-5 min-h-56 cursor-pointer hover:border-[#1A1A1A] transition-all`}
+                              onClick={() => {
+                                if (
+                                  cert.status === "Active" ||
+                                  (cert as any).isPending
+                                ) {
+                                  handleCheckResults(cert);
+                                } else if (cert.status === "In Progress") {
+                                  handleContinueSubmission(cert);
+                                }
+                              }}
                             >
                               {cert.status === "Active" ? (
                                 <div className="flex flex-col gap-2 overflow-visible">
@@ -935,80 +1188,78 @@ export function DashboardPage() {
                                   <div className="relative">
                                     <div className="space-y-4 mt-3">
                                       <div className="flex items-center gap-3 flex-wrap">
-                                        <div className="px-8 md:px-16 py-2 bg-[#1A1A1A] text-white rounded-full text-xs md:text-[13px] font-medium">
+                                        <div className="px-3 md:px-8 py-2 bg-[#1A1A1A] text-white rounded-md text-xs md:text-[13px] font-medium">
                                           {cert.type === "Self-disclosure"
                                             ? "Self-disclosure Badge"
                                             : `${cert.currentLevel || "Emerald"} Badge`}
                                         </div>
-                                        {cert.type === "Self-disclosure" && (
-                                          <span className="text-xs md:text-[13px] font-medium text-[#1A1A1A]">
-                                            72/100 (Eligible for Certification)
-                                          </span>
-                                        )}
+                                        {cert.type === "Self-disclosure" &&
+                                          cert.progress != null &&
+                                          cert.total != null && (
+                                            <span className="text-xs md:text-[13px] font-medium text-[#1A1A1A]">
+                                              {cert.progress}/{cert.total}{" "}
+                                              (Eligible for Certification)
+                                            </span>
+                                          )}
                                       </div>
 
-                                      {cert.type === "Self-disclosure" && (
-                                        <div className="flex gap-2">
-                                          {[
-                                            "Bronze",
-                                            "Silver",
-                                            "Gold",
-                                            "Emerald",
-                                          ].map((tag) => (
-                                            <span
-                                              key={tag}
-                                              className="px-3 py-1 bg-[#F5F5F5] text-[#737373] rounded-full text-[11px] font-semibold"
-                                            >
-                                              {tag}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
+                                      {cert.badges &&
+                                        cert.badges.length > 0 && (
+                                          <div className="flex gap-2 flex-wrap">
+                                            {cert.badges.map((badge: any) => (
+                                              <span
+                                                key={badge.id || badge.name}
+                                                className="px-3 py-1 bg-[#F5F5F5] text-[#737373] rounded-full text-[11px] font-semibold"
+                                              >
+                                                {badge.name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
                                     </div>
 
                                     <div className="absolute -top-4 md:top-0 right-0 scale-75 md:scale-100 origin-right">
                                       <CircularProgress
-                                        progress={
-                                          cert.type === "Self-disclosure"
-                                            ? 20
-                                            : 60
-                                        }
-                                        total={
-                                          cert.type === "Self-disclosure"
-                                            ? 20
-                                            : 100
-                                        }
+                                        progress={cert.progress}
+                                        total={cert.total}
                                         label={
                                           cert.type === "Self-disclosure"
-                                            ? "20/20"
-                                            : "60%"
+                                            ? `${cert.progress}/${cert.total}`
+                                            : `${Math.round(((cert.progress || 0) / (cert.total || 1)) * 100)}%`
                                         }
                                       />
                                     </div>
                                   </div>
 
                                   <p className="text-[#737373] text-xs md:text-[13px] leading-[1.6] w-full md:max-w-[60%]">
-                                    Evaluates day-to-day hotel operations across
-                                    energy, water, waste and purchasing to
-                                    minimise environmental impact without
-                                    compromising guest comfort
+                                    {cert.description}
                                   </p>
 
                                   <div className="mt-6">
-                                    <div className="h-px bg-[#999] w-full mb-6" />
                                     <div className="flex flex-row justify-between items-end gap-4">
                                       <div className="flex  gap-3">
                                         <Button
                                           variant="secondary"
-                                          className="h-10 cursor-pointer rounded-md whitespace-nowrap px-2 w-48 bg-white border border-[#E5E5E5] text-[#1A1A1A] text-[13px] font-semibold hover:bg-gray-50  shadow-none"
+                                          className="h-10 cursor-pointer rounded-md whitespace-nowrap px-2 w-48 bg-white border border-[#E5E5E5] text-[#1A1A1A] text-[13px] font-semibold hover:bg-gray-50 shadow-none disabled:opacity-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDownloadBadge(cert);
+                                          }}
+                                          disabled={isDownloadingId === cert.id}
                                         >
-                                          Download Badge
+                                          {isDownloadingId === cert.id
+                                            ? "Downloading..."
+                                            : "Download Badge"}
                                         </Button>
 
                                         {cert.type === "Self-disclosure" ? (
                                           <Button
                                             variant="primary"
                                             className="h-10 cursor-pointer rounded-md whitespace-nowrap px-2 w-48 bg-[#1A1A1A] text-white text-[13px] font-semibold hover:bg-black "
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedSubmission(cert);
+                                            }}
                                           >
                                             Get Certified
                                           </Button>
@@ -1016,9 +1267,18 @@ export function DashboardPage() {
                                           <>
                                             <Button
                                               variant="secondary"
-                                              className="h-10 cursor-pointer whitespace-nowrap px-2 w-48 bg-[#EAEAEA] text-[#1A1A1A] text-[13px] font-semibold hover:bg-[#d4d4d4]  shadow-none"
+                                              className="h-10 cursor-pointer whitespace-nowrap px-2 w-48 bg-[#EAEAEA] text-[#1A1A1A] text-[13px] font-semibold hover:bg-[#d4d4d4] shadow-none disabled:opacity-50"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownloadBadge(cert);
+                                              }}
+                                              disabled={
+                                                isDownloadingId === cert.id
+                                              }
                                             >
-                                              Download Certificate
+                                              {isDownloadingId === cert.id
+                                                ? "Downloading..."
+                                                : "Download Certificate"}
                                             </Button>
                                             <Button
                                               variant="primary"
@@ -1030,39 +1290,47 @@ export function DashboardPage() {
                                         )}
                                       </div>
 
-                                      <div className="text-right">
-                                        <p className="text-[12px] font-semibold text-[#1A1A1A]">
-                                          Active Period
-                                        </p>
-                                        <p className="text-[12px] text-[#A3A3A3]">
-                                          15 Jan 2026 - 14 Jan 2028 (2 years)
-                                        </p>
-                                      </div>
+                                      {(cert as any).completed_at && (
+                                        <div className="text-right">
+                                          <p className="text-[12px] font-semibold text-[#1A1A1A]">
+                                            Active Since
+                                          </p>
+                                          <p className="text-[12px] text-[#A3A3A3]">
+                                            {new Date(
+                                              (cert as any).completed_at,
+                                            ).toLocaleDateString("en-US", {
+                                              month: "short",
+                                              day: "numeric",
+                                              year: "numeric",
+                                            })}
+                                            {cert.validity &&
+                                            cert.validity !== "N/A"
+                                              ? ` · ${cert.validity}`
+                                              : ""}
+                                          </p>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
                               ) : cert.status === "In Progress" ? (
                                 <div className="flex flex-col overflow-visible">
                                   <div className="relative mb-1">
-                                    <div className="flex-1 min-w-0 pr-45">
+                                    <div className="flex-1 min-w-0 pr-4 mt-0.5">
                                       <div className="space-y-1">
-                                        <div className="flex items-center gap-3">
-                                          <h3
-                                            className="text-[18px] font-bold text-[#1A1A1A] leading-tight truncate"
-                                            title={cert.title}
-                                          >
-                                            {cert.title}
-                                          </h3>
-                                          <span className="px-2.5 py-0.5 rounded-full bg-[#F5F5F5] text-secondary text-[10px] font-semibold border border-[#E5E5E5] shrink-0">
-                                            {cert.type}
-                                          </span>
-                                        </div>
+                                        <h3
+                                          className="text-[17px] font-bold text-[#1A1A1A] leading-tight truncate"
+                                          title={cert.title}
+                                        >
+                                          {cert.title}
+                                        </h3>
                                         <p className="text-[12px] font-medium text-[#A3A3A3] truncate">
-                                          {cert.subDescription?.startsWith(
-                                            "Best",
-                                          )
-                                            ? "HOS-WKP-HR"
-                                            : cert.subDescription}
+                                          {cert.certificateProductId ||
+                                            (cert.subDescription?.startsWith(
+                                              "Best",
+                                            )
+                                              ? "HOS-WKP-HR"
+                                              : cert.subDescription)}
                                         </p>
                                       </div>
                                     </div>
@@ -1111,9 +1379,10 @@ export function DashboardPage() {
                                           variant="secondary"
                                           disabled={isCheckingId === cert.id}
                                           className="bg-[#1A1A1A] w-full md:max-w-[18%] text-white h-12 px-6 rounded-lg text-[13px] font-semibold hover:bg-black transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                                          onClick={() =>
-                                            handleCheckResults(cert.id)
-                                          }
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCheckResults(cert);
+                                          }}
                                         >
                                           {isCheckingId === cert.id
                                             ? "Checking..."
@@ -1124,9 +1393,10 @@ export function DashboardPage() {
                                       <Button
                                         variant="secondary"
                                         className="bg-[#1A1A1A] w-full md:max-w-[18%] text-white h-12 px-6 rounded-lg text-[13px] font-semibold hover:bg-black transition-colors"
-                                        onClick={() =>
-                                          handleContinueSubmission(cert)
-                                        }
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleContinueSubmission(cert);
+                                        }}
                                       >
                                         Continue Submission
                                       </Button>
@@ -1136,15 +1406,15 @@ export function DashboardPage() {
                               ) : (
                                 <div className="flex flex-col gap-4 overflow-visible">
                                   <div className="relative mb-1">
-                                    <div className="flex-1 min-w-0 pr-45">
+                                    <div className="flex-1 min-w-0 pr-4 mt-0.5">
                                       <div className="flex items-center gap-2">
                                         <h3
-                                          className="text-[18px] font-bold text-[#1A1A1A] truncate"
+                                          className="text-[17px] font-bold text-[#1A1A1A] truncate shrink grow"
                                           title={cert.title}
                                         >
                                           {cert.title}
                                         </h3>
-                                        <div className="flex gap-2 shrink-0">
+                                        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
                                           <span className="px-2.5 py-0.5 bg-[#FEE2E2] text-[#DC2626] rounded-full text-[10px] font-semibold">
                                             Expired
                                           </span>
@@ -1165,53 +1435,33 @@ export function DashboardPage() {
                                     </div>
                                   </div>
 
-                                  <p className="text-[13px] text-[#A3A3A3] font-medium">
-                                    Best for: hotels seeking a broad operational
-                                    sustainability baseline.
-                                  </p>
+                                  {cert.description && (
+                                    <p className="text-[13px] text-[#A3A3A3] font-medium">
+                                      {cert.description}
+                                    </p>
+                                  )}
 
-                                  <div className="inline-flex">
-                                    <div className="px-16 py-2 bg-[#E8E8E8] text-[#525252] rounded-full text-[13px] font-medium">
-                                      Green Operations Badge
+                                  {cert.badges && cert.badges.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                      {cert.badges.map(
+                                        (badge: any, idx: number) => (
+                                          <div
+                                            key={idx}
+                                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8E8E8] text-[#525252] text-[12px] font-medium"
+                                          >
+                                            <img
+                                              src="/assets/imgs/icons/GoldRank.svg"
+                                              alt="Gold Rank"
+                                              className="w-8 h-8 shrink-0"
+                                            />
+                                            <span>{badge.name}</span>
+                                          </div>
+                                        ),
+                                      )}
                                     </div>
-                                  </div>
-
-                                  <p className="text-[#737373] text-xs md:text-[13px] leading-[1.6] max-w-full md:max-w-[80%]">
-                                    Evaluates day-to-day hotel operations across
-                                    energy, water, waste and purchasing to
-                                    minimise environmental impact without
-                                    compromising guest comfort.
-                                  </p>
+                                  )}
 
                                   <div className="h-px w-full bg-[#99999958]" />
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 my-4">
-                                    <div>
-                                      <p className="text-[14px] font-semibold text-[#1A1A1A] mb-1">
-                                        Self-assessment: USD 500
-                                      </p>
-                                      <p className="text-[12px] text-[#A3A3A3]">
-                                        Per property, online checklist.
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[14px] font-semibold text-[#1A1A1A] mb-1">
-                                        Renew: USD 3,500-6,000
-                                      </p>
-                                      <p className="text-[12px] text-[#A3A3A3]">
-                                        This is the price of renew certificate.
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[14px] font-semibold text-[#1A1A1A] mb-1">
-                                        Assured: USD 3,500-6,000
-                                      </p>
-                                      <p className="text-[12px] text-[#A3A3A3]">
-                                        Per certification, range by size and
-                                        complexity.
-                                      </p>
-                                    </div>
-                                  </div>
 
                                   <div className="flex w-full max-w-[50%] gap-3 mt-6">
                                     <Button
@@ -1366,12 +1616,22 @@ export function DashboardPage() {
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center p-20">
-                <LoadingScreen
-                  isLoading={true}
-                  progress={loadingProgress}
-                  size="lg"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-zinc-50 rounded-2xl border border-zinc-100 p-5 space-y-4"
+                  >
+                    <div className="flex justify-between">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-4 w-1/4" />
+                    </div>
+                    <Skeleton className="h-16 w-full" />
+                    <div className="flex justify-end">
+                      <Skeleton className="h-8 w-24 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1393,15 +1653,43 @@ export function DashboardPage() {
                             {item.category}
                           </span>
                         </div>
-                        <p className="text-[12px] text-[#A3A3A3] font-medium mb-3">
-                          {item.code}
-                        </p>
-                        <div className="mb-2">
-                          <img
-                            src="/assets/imgs/icons/GoldRank.svg"
-                            alt="Gold Rank"
-                            className="w-7 h-7 object-contain"
-                          />
+                        <div className="flex items-center gap-3 mb-2">
+                          <p className="text-[12px] text-[#A3A3A3] font-medium">
+                            {item.code}
+                          </p>
+                          <div className="w-1 h-1 bg-[#D4D4D4] rounded-full" />
+                          <p className="text-[11px] text-[#737373] font-semibold">
+                            {item.validity} Validity
+                          </p>
+                          <div className="w-1 h-1 bg-[#D4D4D4] rounded-full" />
+                          <p className="text-[11px] text-[#737373] font-semibold">
+                            {item.questionsCount} Questions
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {item.badges && item.badges.length > 0 ? (
+                            item.badges.map((badge: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-[#F5F5F5] bg-[#FAFAFA]/50"
+                              >
+                                <img
+                                  src="/assets/imgs/icons/GoldRank.svg"
+                                  alt="Gold Rank"
+                                  className="w-4 h-4 shrink-0"
+                                />
+                                <span className="text-[10px] font-bold text-[#525252] uppercase tracking-wider">
+                                  {badge.name}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <img
+                              src="/assets/imgs/icons/GoldRank.svg"
+                              alt="Gold Rank"
+                              className="w-7 h-7 shrink-0"
+                            />
+                          )}
                         </div>
 
                         <p className="text-[#737373] text-[12px] leading-[1.6] mb-3 max-w-120 line-clamp-3 overflow-hidden">
@@ -1474,60 +1762,62 @@ export function DashboardPage() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-3xl w-full max-w-sm p-8 text-center space-y-6 shadow-2xl"
+              className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col max-h-[80vh] overflow-hidden"
             >
-              <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
-                  messageModal.type === "error"
-                    ? "bg-red-50 text-red-500"
-                    : messageModal.type === "success"
-                      ? "bg-blue-50 text-blue-500"
-                      : "bg-blue-50 text-blue-500"
-                }`}
-              >
-                {messageModal.type === "error" ? (
-                  <AlertCircle className="w-8 h-8" />
-                ) : messageModal.type === "success" ? (
-                  <div className="text-2xl">🎉</div>
-                ) : (
-                  <AlertCircle className="w-8 h-8" />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-xl font-black text-zinc-900 leading-tight">
-                  {messageModal.title}
-                </h3>
-                <p className="text-gray-400 font-medium text-sm leading-relaxed">
-                  {messageModal.message}
-                </p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Button
-                  onClick={() => {
-                    if (messageModal.onConfirm) messageModal.onConfirm();
-                    setMessageModal((prev) => ({ ...prev, show: false }));
-                  }}
-                  className={`w-full h-12 font-black rounded-xl text-sm ${
+              <div className="flex-1 overflow-y-auto scrollbar-hide space-y-6">
+                <div
+                  className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
                     messageModal.type === "error"
-                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      ? "bg-red-50 text-red-500"
                       : messageModal.type === "success"
-                        ? "bg-blue-500 hover:bg-blue-600 text-white"
-                        : "bg-zinc-900 hover:bg-black text-white"
+                        ? "bg-blue-50 text-blue-500"
+                        : "bg-blue-50 text-blue-500"
                   }`}
                 >
-                  {messageModal.confirmText || "Got it"}
-                </Button>
-                {messageModal.onCancel && (
-                  <button
+                  {messageModal.type === "error" ? (
+                    <AlertCircle className="w-8 h-8" />
+                  ) : messageModal.type === "success" ? (
+                    <div className="text-2xl">🎉</div>
+                  ) : (
+                    <AlertCircle className="w-8 h-8" />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-xl font-black text-zinc-900 leading-tight">
+                    {messageModal.title}
+                  </h3>
+                  <p className="text-gray-400 font-medium text-sm leading-relaxed">
+                    {messageModal.message}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <Button
                     onClick={() => {
-                      messageModal.onCancel?.();
+                      if (messageModal.onConfirm) messageModal.onConfirm();
                       setMessageModal((prev) => ({ ...prev, show: false }));
                     }}
-                    className="w-full h-10 text-zinc-400 hover:text-zinc-600 font-bold text-sm transition-colors"
+                    className={`w-full h-12 font-black rounded-xl text-sm ${
+                      messageModal.type === "error"
+                        ? "bg-red-500 hover:bg-red-600 text-white"
+                        : messageModal.type === "success"
+                          ? "bg-blue-500 hover:bg-blue-600 text-white"
+                          : "bg-zinc-900 hover:bg-black text-white"
+                    }`}
                   >
-                    {messageModal.cancelText || "Cancel"}
-                  </button>
-                )}
+                    {messageModal.confirmText || "Got it"}
+                  </Button>
+                  {messageModal.onCancel && (
+                    <button
+                      onClick={() => {
+                        messageModal.onCancel?.();
+                        setMessageModal((prev) => ({ ...prev, show: false }));
+                      }}
+                      className="w-full h-10 text-zinc-400 hover:text-zinc-600 font-bold text-sm transition-colors"
+                    >
+                      {messageModal.cancelText || "Cancel"}
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1541,118 +1831,246 @@ export function DashboardPage() {
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
-              className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl relative overflow-hidden"
+              className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[80vh]"
             >
-              <div
-                className={`absolute top-0 left-0 w-full h-32 bg-linear-to-b -z-10 ${
-                  resultsData.status === "failed"
-                    ? "from-red-50/50"
-                    : "from-blue-50/50"
-                } to-transparent`}
-              />
-
-              <div className="p-10 text-center space-y-8">
-                <div
-                  className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto ring-8 ${
-                    resultsData.status === "failed"
-                      ? "bg-red-50 ring-red-50/30"
-                      : resultsData.status === "ai_reviewing" ||
-                          resultsData.status === "pending"
-                        ? "bg-blue-50 ring-blue-50/30"
-                        : "bg-blue-50 ring-blue-50/30"
-                  }`}
-                >
-                  <div
-                    className={`text-5xl ${resultsData.status !== "failed" && resultsData.status !== "ai_reviewing" ? "animate-bounce" : ""}`}
-                  >
-                    {resultsData.status === "failed"
-                      ? "📑"
-                      : resultsData.status === "ai_reviewing" ||
-                          resultsData.status === "pending"
-                        ? "⏳"
-                        : "🏆"}
-                  </div>
-                </div>
-
+              <div className="flex-1 overflow-y-auto scrollbar-hide p-10 text-center space-y-8">
                 <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-2 mb-2 text-zinc-400 font-bold text-[10px] tracking-[0.2em] uppercase">
+                    <span className="w-8 h-[1px] bg-zinc-200" />
+                    Assessment Results
+                    <span className="w-8 h-[1px] bg-zinc-200" />
+                  </div>
                   <h2 className="text-3xl font-black text-zinc-900 tracking-tight">
                     {resultsData.status === "failed"
-                      ? "Assessment Completed"
-                      : resultsData.status === "ai_reviewing" ||
-                          resultsData.status === "pending"
-                        ? "Still Under Review"
-                        : "Congratulations!"}
+                      ? "Assessment Failed"
+                      : flaggedQuestions.length > 0 || isNoFlagsRestartState
+                        ? "Improvement Required"
+                        : resultsData.score < 70 && resultsData.score !== null
+                          ? "Improvement Required"
+                          : isResultsPending
+                            ? "Still Under Review"
+                            : resultsData.score === null
+                              ? "Finalizing Results"
+                              : "Congratulations!"}
                   </h2>
-                  <p className="text-gray-400 font-medium text-base">
+                  <p className="text-gray-400 font-medium text-sm max-w-sm mx-auto">
                     {resultsData.status === "failed"
-                      ? "You have completed the assessment. Review your score below."
-                      : resultsData.status === "ai_reviewing" ||
-                          resultsData.status === "pending"
-                        ? "Our AI system is still processing your responses. Please check back shortly for your final results."
-                        : "You have successfully completed the assessment and earned your badge."}
+                      ? `Your score of ${resultsData.score ?? 0}% is below the minimum criteria.`
+                      : flaggedQuestions.length > 0
+                        ? `AI has flagged ${flaggedQuestions.length} responses that need improvement.`
+                        : resultsData.score < 70 && resultsData.score !== null
+                          ? `Your score of ${resultsData.score}% is below the ACES Rated requirement.`
+                          : isResultsPending
+                            ? "Our AI system is still processing your responses. Please check back shortly."
+                            : "You have successfully completed the assessment and earned your badge."}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
+                {/* Score and Details Stats Grid */}
+                <div className="grid grid-cols-3 gap-4 py-6 border-y border-zinc-100">
+                  <div className="text-center">
+                    <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider mb-1">
                       Final Score
                     </p>
-                    <p className="text-4xl font-black text-zinc-900">
-                      {resultsData.status === "ai_reviewing" ||
-                      resultsData.status === "pending"
-                        ? "--"
-                        : (resultsData.score ?? 0)}
-                      {resultsData.status !== "ai_reviewing" &&
-                        resultsData.status !== "pending" && (
-                          <span className="text-lg opacity-30 ml-0.5">%</span>
-                        )}
+                    <p className="text-xl font-black text-zinc-900">
+                      {resultsData.score !== null
+                        ? `${resultsData.score}%`
+                        : "N/A"}
                     </p>
                   </div>
-                  <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
-                      Badge Earned
+                  <div className="text-center border-x border-zinc-100">
+                    <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider mb-1">
+                      Submitted on
                     </p>
-                    <p className="text-lg font-black text-zinc-900 leading-tight">
-                      {resultsData.status === "ai_reviewing" ||
-                      resultsData.status === "pending"
-                        ? "Under Review"
-                        : resultsData.badge_name ||
-                          (resultsData.status === "failed"
-                            ? "None"
-                            : "Verified")}
+                    <p className="text-base font-bold text-zinc-900">
+                      {new Date().toLocaleDateString("en-US", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
                     </p>
-                    <div
-                      className={`mt-2 text-xs font-bold px-3 py-1 rounded-full inline-block ${
-                        resultsData.status === "failed"
-                          ? "text-red-600 bg-red-50"
-                          : resultsData.status === "ai_reviewing" ||
-                              resultsData.status === "pending"
-                            ? "text-gray-600 bg-blue-50"
-                            : "text-gray-600 bg-blue-50"
-                      }`}
-                    >
-                      {resultsData.status === "failed"
-                        ? "Failed"
-                        : resultsData.status === "ai_reviewing" ||
-                            resultsData.status === "pending"
-                          ? ""
-                          : "Active"}
-                    </div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider mb-1">
+                      Ref ID
+                    </p>
+                    <p className="text-sm font-bold text-zinc-900 truncate px-2">
+                      #{resultsData.id?.slice(-6).toUpperCase() || "ACES"}
+                    </p>
                   </div>
                 </div>
 
+                {resultsData.score !== null &&
+                resultsData.score >= 70 &&
+                !isResultsPending ? (
+                  <div className="flex justify-center p-4">
+                    <AcesDynamicBadge
+                      size={200}
+                      name={
+                        resultsData.score >= 90
+                          ? "ACES Certified"
+                          : resultsData.score >= 80
+                            ? "ACES Verified"
+                            : "ACES Rated"
+                      }
+                      level={
+                        resultsData.score >= 90
+                          ? "GOLD"
+                          : resultsData.score >= 80
+                            ? "SILVER"
+                            : "BRONZE"
+                      }
+                      title={resultsData.certificate_name || "Assessment"}
+                      serial={
+                        resultsData.badge_id || `SN-${resultsData.id || "0000"}`
+                      }
+                      date={new Date().toLocaleDateString("en-US", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
+                        Final Score
+                      </p>
+                      <p className="text-4xl font-black text-zinc-900">
+                        {isResultsPending ? "--" : (resultsData.score ?? 0)}
+                        {!isResultsPending && (
+                          <span className="text-lg opacity-30 ml-0.5">%</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-3xl p-6 text-center shadow-sm">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
+                        Badge Earned
+                      </p>
+                      <p className="text-lg font-black text-zinc-900 leading-tight">
+                        {isResultsPending
+                          ? "Under Review"
+                          : resultsData.score === null || resultsData.score < 70
+                            ? "None"
+                            : resultsData.badge_name ||
+                              (resultsData.score >= 90
+                                ? "Certified"
+                                : resultsData.score >= 80
+                                  ? "Verified"
+                                  : "Rated")}
+                      </p>
+                      <div
+                        className={`mt-2 text-xs font-bold px-3 py-1 rounded-full inline-block ${
+                          resultsData.status === "failed" ||
+                          (resultsData.score !== null &&
+                            resultsData.score < 70) ||
+                          (resultsData.score === null &&
+                            flaggedQuestions.length === 0 &&
+                            !isResultsPending)
+                            ? "text-red-600 bg-red-50"
+                            : isResultsPending
+                              ? "text-gray-600 bg-blue-50"
+                              : "text-gray-600 bg-blue-50"
+                        }`}
+                      >
+                        {resultsData.status === "failed" ||
+                        (resultsData.score !== null && resultsData.score < 70)
+                          ? "Retry Required"
+                          : isResultsPending
+                            ? "Processing"
+                            : "Active"}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4 pt-4">
+                  {flaggedQuestions.length > 0 ? (
+                    <div className="text-left space-y-2 max-h-40 overflow-y-auto mb-4 border border-red-100 p-4 rounded-3xl bg-red-50/50">
+                      <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest px-1">
+                        Flags to Address:
+                      </p>
+                      {flaggedQuestions.map((fq: any, idx: number) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 shrink-0" />
+                          <p className="text-xs text-red-900 line-clamp-2">
+                            {fq.question_text}:{" "}
+                            <span className="font-semibold">
+                              {fq.flag_reason}
+                            </span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    resultsData.score === null &&
+                    !isResultsPending && (
+                      <div className="p-6 border border-dashed border-zinc-200 rounded-3xl bg-zinc-50/50 mb-4">
+                        <p className="text-sm text-zinc-400 font-medium italic">
+                          No flagged questions found.
+                        </p>
+                      </div>
+                    )
+                  )}
+
+                  {(resultsData.status === "failed" ||
+                    (resultsData.score !== null && resultsData.score < 70) ||
+                    (resultsData.score === null &&
+                      flaggedQuestions.length === 0 &&
+                      !isResultsPending)) && (
+                    <Button
+                      onClick={handleRestartAssessment}
+                      disabled={isCheckingId !== null}
+                      className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl shadow-2xl shadow-red-900/20 text-base disabled:opacity-50"
+                    >
+                      {isCheckingId !== null
+                        ? "Restarting..."
+                        : "Restart Assessment"}
+                    </Button>
+                  )}
+
+                  {flaggedQuestions.length > 0 && (
+                    <Button
+                      onClick={() => {
+                        if (selectedCertForResults) {
+                          handleContinueSubmission(selectedCertForResults);
+                        } else {
+                          const targetCert = certificates.find(
+                            (c) => String(c.id) === String(resultsData.id),
+                          );
+                          if (targetCert) {
+                            handleContinueSubmission(targetCert);
+                          } else {
+                            // Fallback if not found in current list
+                            localStorage.setItem(
+                              "pending_assessment_ids",
+                              JSON.stringify({ assessment_id: resultsData.id }),
+                            );
+                            router.push(`${base}/assessment`);
+                          }
+                        }
+                      }}
+                      className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl shadow-2xl shadow-red-900/20 text-base"
+                    >
+                      Fix Flagged Questions
+                    </Button>
+                  )}
+
                   <Button
                     onClick={() => setShowResultsModal(false)}
-                    className="w-full h-14 bg-zinc-900 hover:bg-black text-white font-black rounded-2xl shadow-2xl shadow-zinc-900/20 text-base"
+                    className={`w-full h-14 bg-zinc-900 hover:bg-black text-white font-black rounded-2xl shadow-2xl shadow-zinc-900/20 text-base ${flaggedQuestions.length > 0 ? "h-11 text-sm bg-white border border-gray-200 !text-zinc-400 !shadow-none hover:!bg-gray-50" : ""}`}
                   >
                     Close
                   </Button>
                   {resultsData.status !== "ai_reviewing" &&
-                    resultsData.status !== "pending" && (
+                    resultsData.status !== "pending" &&
+                    resultsData.completed_at && (
                       <p className="text-[10px] font-bold text-zinc-300 uppercase tracking-[0.2em]">
-                        Result issued on {new Date().toLocaleDateString()}
+                        Result issued on{" "}
+                        {new Date(resultsData.completed_at).toLocaleDateString(
+                          "en-US",
+                          { month: "short", day: "numeric", year: "numeric" },
+                        )}
                       </p>
                     )}
                 </div>

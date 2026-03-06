@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Award, CreditCard, FileText } from "lucide-react";
 import { useEffect } from "react";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useApplicantNotifications } from "../../common/NotificationsContext";
 import type { ApplicantNotification } from "../../common/NotificationsContext";
 import {
@@ -111,12 +111,16 @@ export const NotificationsPage = () => {
 
           <div className="space-y-3">
             {isLoading ? (
-              <div className="flex items-center justify-center py-20 min-h-100">
-                <LoadingScreen
-                  isLoading={true}
-                  progress={loadingProgress}
-                  size="lg"
-                />
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex gap-4 p-4 bg-zinc-50 rounded-xl">
+                    <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-1/4" />
+                      <Skeleton className="h-3 w-3/4" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : notifications.length > 0 ? (
               notifications.map((item) => (
@@ -164,4 +168,3 @@ export const NotificationsPage = () => {
     </div>
   );
 };
-

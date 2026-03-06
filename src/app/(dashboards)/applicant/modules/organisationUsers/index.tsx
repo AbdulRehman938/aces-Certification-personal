@@ -7,7 +7,7 @@ import * as Yup from "yup";
 import { Button } from "@/components/ui";
 import { axiosInstance } from "@/lib/axios";
 import type { ApiError } from "@/lib/api-error";
-import { LoadingScreen } from "../../common/loading-screen";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEmployeePermissions } from "@/hooks/useEmployeePermissions";
 import { Lock } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -158,6 +158,8 @@ export function OrganisationUsersPage() {
   const [resendCooldowns, setResendCooldowns] = useState<
     Record<string, number>
   >({});
+  const [isResending, setIsResending] = useState<Record<string, boolean>>({});
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "pending"
@@ -615,33 +617,31 @@ export function OrganisationUsersPage() {
       console.error("Failed to load employees", apiError);
     }
   };
-  if (!canAccess) {
-    const isEmployee = pathname.startsWith("/employee");
-    const base = isEmployee ? "/employee" : "/applicant";
-    return (
-      <div className="p-6 lg:p-10 bg-dull-white/10 min-h-[80vh] flex items-center justify-center">
-        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm border border-zinc-100">
-          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Lock className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold text-secondary mb-2">
-            Access Denied
-          </h2>
-          <p className="text-gray text-sm mb-6">
-            You do not have permission to view this page. Please contact your
-            administrator to request access.
-          </p>
-          <Button
-            variant="secondary"
-            className="w-full h-12 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl"
-            onClick={() => router.push(base)}
-          >
-            Go Back to Dashboard
-          </Button>
-        </div>
-      </div>
-    );
-  }
+
+  const canWriteOrgUsers = useMemo(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const raw = localStorage.getItem("organization_profile");
+      if (!raw) return true;
+      const profile = JSON.parse(raw);
+      if (profile?._type !== "employee") return true;
+      const perms: { resource: string; action: string[] | string }[] =
+        profile?.permissions ?? [];
+      return perms.some((p) => {
+        const actions = Array.isArray(p.action)
+          ? p.action
+          : typeof p.action === "string"
+            ? [p.action]
+            : [];
+        return (
+          p.resource === "organization_users" &&
+          actions.some((a) => a.toLowerCase() === "write")
+        );
+      });
+    } catch {
+      return true;
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -742,6 +742,34 @@ export function OrganisationUsersPage() {
 
     return () => clearInterval(interval);
   }, [resendCooldowns]);
+
+  if (!canAccess) {
+    const isEmployee = pathname.startsWith("/employee");
+    const base = isEmployee ? "/employee" : "/applicant";
+    return (
+      <div className="p-6 lg:p-10 bg-dull-white/10 min-h-[80vh] flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm border border-zinc-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-secondary mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray text-sm mb-6">
+            You do not have permission to view this page. Please contact your
+            administrator to request access.
+          </p>
+          <Button
+            variant="secondary"
+            className="w-full h-12 bg-secondary text-primary hover:bg-zinc-800 transition-colors rounded-xl"
+            onClick={() => router.push(base)}
+          >
+            Go Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -868,30 +896,36 @@ export function OrganisationUsersPage() {
       formik.handleSubmit();
     }, 0);
   };
-  const canWriteOrgUsers = useMemo(() => {
-    if (typeof window === "undefined") return true;
+
+  const handleResendCredentials = async (email: string) => {
+    if (isResending[email]) return;
+
     try {
-      const raw = localStorage.getItem("organization_profile");
-      if (!raw) return true;
-      const profile = JSON.parse(raw);
-      if (profile?._type !== "employee") return true;
-      const perms: { resource: string; action: string[] | string }[] =
-        profile?.permissions ?? [];
-      return perms.some((p) => {
-        const actions = Array.isArray(p.action)
-          ? p.action
-          : typeof p.action === "string"
-            ? [p.action]
-            : [];
-        return (
-          p.resource === "organization_users" &&
-          actions.some((a) => a.toLowerCase() === "write")
-        );
-      });
-    } catch {
-      return true;
+      setApiErrorMessage(null);
+      setIsResending((prev) => ({ ...prev, [email]: true }));
+
+      await axiosInstance.post("/auth/resend-credentials", { email });
+
+      setResendSuccess(`Credentials sent successfully to ${email}`);
+      setTimeout(() => setResendSuccess(null), 5000);
+
+      setResendCooldowns((prev) => ({
+        ...prev,
+        [email]: 60,
+      }));
+    } catch (error: any) {
+      const apiError = error as ApiError;
+      const message =
+        apiError?.message || "Failed to resend credentials. Please try again.";
+      setApiErrorMessage(message);
+      // Auto-clear error if not in modal
+      if (!isInviteOpen) {
+        setTimeout(() => setApiErrorMessage(null), 5000);
+      }
+    } finally {
+      setIsResending((prev) => ({ ...prev, [email]: false }));
     }
-  }, []);
+  };
 
   return (
     <div className="bg-zinc-50 px-4 py-6 md:pt-3 md:px-8 md:py-8">
@@ -923,6 +957,29 @@ export function OrganisationUsersPage() {
             >
               Invite Organization User
             </Button>
+          )}
+        </div>
+        <div className="space-y-3">
+          {resendSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border border-secondary/20 bg-secondary/5 px-4 py-3 text-sm font-medium text-secondary flex items-center gap-2"
+            >
+              <div className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+              {resendSuccess}
+            </motion.div>
+          )}
+
+          {apiErrorMessage && !isInviteOpen && !isDeleteOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border border-red/20 bg-red/5 px-4 py-3 text-sm font-medium text-red flex items-center gap-2"
+            >
+              <IoIosAlert className="w-5 h-5" />
+              {apiErrorMessage}
+            </motion.div>
           )}
         </div>
 
@@ -1028,11 +1085,26 @@ export function OrganisationUsersPage() {
         {isInitialLoading || users.length === 0 ? (
           <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm flex flex-col items-center justify-center px-4 py-12 sm:px-8 sm:py-16 text-center min-h-100">
             {isInitialLoading ? (
-              <LoadingScreen
-                isLoading={true}
-                progress={loadingProgress}
-                size="lg"
-              />
+              <div className="w-full">
+                <div className="bg-zinc-50 border-b border-light-gray-2 flex px-6 py-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex-1">
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  ))}
+                </div>
+                <div className="divide-y divide-light-gray-2">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="flex px-6 py-8">
+                      {[1, 2, 3, 4, 5].map((j) => (
+                        <div key={j} className="flex-1">
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <>
                 <p className="text-xl sm:text-2xl font-semibold text-secondary mb-2">
@@ -1170,23 +1242,28 @@ export function OrganisationUsersPage() {
                             {user.status === "Pending" && (
                               <button
                                 type="button"
-                                disabled={isCoolingDown}
+                                disabled={
+                                  isCoolingDown || isResending[user.email]
+                                }
                                 className={`h-9 md:h-10 px-3 md:px-4 rounded-lg text-[11px] md:text-xs font-semibold cursor-pointer transition-colors ${
-                                  isCoolingDown
+                                  isCoolingDown || isResending[user.email]
                                     ? "border-light-gray-2 bg-light-gray text-dull-gray cursor-not-allowed"
                                     : "border-yellow-400 border-2 bg-dull-yellow/30 text-yellow hover:bg-dull-yellow"
                                 }`}
-                                onClick={() => {
-                                  if (isCoolingDown) return;
-                                  setResendCooldowns((prev) => ({
-                                    ...prev,
-                                    [user.email]: 10,
-                                  }));
-                                }}
+                                onClick={() =>
+                                  handleResendCredentials(user.email)
+                                }
                               >
-                                {isCoolingDown
-                                  ? `${cooldown}s`
-                                  : "Resend Invite"}
+                                {isResending[user.email] ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 border-2 border-yellow border-t-transparent rounded-full animate-spin" />
+                                    <span>Sending...</span>
+                                  </div>
+                                ) : isCoolingDown ? (
+                                  `${cooldown}s`
+                                ) : (
+                                  "Resend Credentials"
+                                )}
                               </button>
                             )}
                           </div>
@@ -1276,21 +1353,24 @@ export function OrganisationUsersPage() {
                       {user.status === "Pending" && (
                         <button
                           type="button"
-                          disabled={isCoolingDown}
+                          disabled={isCoolingDown || isResending[user.email]}
                           className={`flex-1 h-9 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
-                            isCoolingDown
+                            isCoolingDown || isResending[user.email]
                               ? "border-light-gray-2 bg-light-gray text-dull-gray cursor-not-allowed"
                               : "border-yellow-700 border-2 bg-dull-yellow/30 text-yellow hover:bg-dull-yellow"
                           }`}
-                          onClick={() => {
-                            if (isCoolingDown) return;
-                            setResendCooldowns((prev) => ({
-                              ...prev,
-                              [user.email]: 10,
-                            }));
-                          }}
+                          onClick={() => handleResendCredentials(user.email)}
                         >
-                          {isCoolingDown ? `${cooldown}s` : "Resend Invite"}
+                          {isResending[user.email] ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="w-3 h-3 border-2 border-yellow border-t-transparent rounded-full animate-spin" />
+                              <span>Sending...</span>
+                            </div>
+                          ) : isCoolingDown ? (
+                            `${cooldown}s`
+                          ) : (
+                            "Resend Credentials"
+                          )}
                         </button>
                       )}
                       {canWriteOrgUsers ? (
@@ -1387,7 +1467,7 @@ export function OrganisationUsersPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 overflow-y-auto"
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 overflow-y-auto scrollbar-hide"
           >
             <div
               className="absolute inset-0 bg-secondary/30 backdrop-blur-sm"
@@ -1429,7 +1509,7 @@ export function OrganisationUsersPage() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 min-h-0">
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-6 py-5 space-y-6 min-h-0">
                   <div className="space-y-6">
                     <div className="space-y-4">
                       <div className="space-y-0.5">
@@ -1703,7 +1783,7 @@ export function OrganisationUsersPage() {
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 8 }}
                                     transition={{ duration: 0.15 }}
-                                    className="absolute z-20 mt-1 w-full rounded-xl bg-zinc-50 border border-light-gray-2 shadow-[0_10px_40px_rgba(0,0,0,0.15)] max-h-56 overflow-y-auto"
+                                    className="absolute z-20 mt-1 w-full rounded-xl bg-zinc-50 border border-light-gray-2 shadow-[0_10px_40px_rgba(0,0,0,0.15)] max-h-56 overflow-y-auto scrollbar-hide"
                                   >
                                     <div className="p-2 border-b border-light-gray-2 bg-primary/95 sticky top-0 backdrop-blur-sm z-30">
                                       <input
@@ -2129,6 +2209,33 @@ export function OrganisationUsersPage() {
                     >
                       {isEditMode ? "Cancel" : "Close"}
                     </button>
+                    {isEditMode && (
+                      <button
+                        type="button"
+                        disabled={
+                          isResending[formik.values.email] ||
+                          (resendCooldowns[formik.values.email] ?? 0) > 0
+                        }
+                        onClick={() =>
+                          handleResendCredentials(formik.values.email)
+                        }
+                        className={`h-10 px-6 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
+                          (resendCooldowns[formik.values.email] ?? 0) > 0 ||
+                          isResending[formik.values.email]
+                            ? "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
+                            : "bg-yellow-50 text-yellow border border-yellow-200 hover:bg-yellow-100"
+                        }`}
+                      >
+                        {isResending[formik.values.email] ? (
+                          <div className="w-4 h-4 border-2 border-yellow border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <FiRefreshCw className="w-3.5 h-3.5" />
+                        )}
+                        {(resendCooldowns[formik.values.email] ?? 0) > 0
+                          ? `Resend in ${resendCooldowns[formik.values.email]}s`
+                          : "Resend Credentials"}
+                      </button>
+                    )}
                     <Button
                       type="submit"
                       variant="secondary"
