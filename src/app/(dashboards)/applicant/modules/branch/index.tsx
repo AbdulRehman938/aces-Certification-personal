@@ -1243,114 +1243,116 @@ export function BranchPage() {
                   No branches match your search.
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead className="bg-zinc-50 border-b border-light-gray-2">
-                    <tr>
-                      <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
-                        Branch Name
-                      </th>
-                      <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
-                        Main Branch
-                      </th>
-                      <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
-                        Location
-                      </th>
-                      <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
-                        Size
-                      </th>
-                      <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-light-gray-2">
-                    {paginatedBranches.map((branch) => (
-                      <tr
-                        key={branch.id}
-                        data-branch-id={branch.id}
-                        className="bg-primary"
-                      >
-                        <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center gap-2">
-                            {branch.isMain && (
-                              <FaStar className="text-secondary text-xs" />
-                            )}
-                            <span className="text-sm font-medium text-secondary">
-                              {branch.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 align-middle">
-                          <span
-                            className={`inline-flex items-center justify-center rounded-lg px-8 py-1 text-sm font-semibold ${
-                              branch.isMain
-                                ? "bg-secondary/5 text-secondary"
-                                : "bg-secondary/5 text-dull-gray"
-                            }`}
-                          >
-                            {branch.isMain ? "Yes" : "No"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 align-middle font-semibold text-sm text-secondary">
-                          <div className="flex flex-col gap-0.5">
-                            {branch.address && (
-                              <span className="text-sm font-medium text-secondary">
-                                {branch.address}
-                              </span>
-                            )}
-                            <span className="text-xs text-gray">
-                              {branch.city}
-                              {branch.state ? `, ${branch.state}` : ""}
-                              {branch.country ? `, ${branch.country}` : ""}
-                              {branch.postalCode
-                                ? `, ${branch.postalCode}`
-                                : ""}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 align-middle font-semibold text-sm text-secondary">
-                          {branch.size}
-                        </td>
-                        <td className="px-6 py-4 align-middle">
-                          <span className="inline-flex items-center justify-center rounded-lg border-2 border-secondary bg-secondary/10 px-8 py-1 text-base font-semibold text-secondary">
-                            Active
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center justify-start gap-2">
-                            {canWriteBranch ? (
-                              <>
-                                <Button
-                                  variant="secondary"
-                                  className="w-auto px-8 py-2 h-10 rounded-lg text-base font-semibold cursor-pointer"
-                                  onClick={() => openEditModal(branch)}
-                                >
-                                  Edit
-                                </Button>
-                                <button
-                                  className="h-10 px-6 py-2 rounded-lg border border-light-gray-2 bg-secondary/5 text-base font-semibold cursor-pointer text-dull-gray hover:bg-light-gray transition-colors"
-                                  onClick={() => {
-                                    setBranchToDelete(branch);
-                                    setIsDeleteOpen(true);
-                                  }}
-                                >
-                                  Delete
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-xs text-zinc-400 italic">
-                                Read only
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-max">
+                    <thead className="bg-zinc-50 border-b border-light-gray-2">
+                      <tr>
+                        <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
+                          Branch Name
+                        </th>
+                        <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
+                          Main Branch
+                        </th>
+                        <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
+                          Location
+                        </th>
+                        <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
+                          Size
+                        </th>
+                        <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
+                          Status
+                        </th>
+                        <th className="px-6 py-4 whitespace-nowrap text-left text-[11px] font-semibold text-dull-gray/50  tracking-[0.18em]">
+                          Action
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-light-gray-2">
+                      {paginatedBranches.map((branch) => (
+                        <tr
+                          key={branch.id}
+                          data-branch-id={branch.id}
+                          className="bg-primary"
+                        >
+                          <td className="px-6 py-4 align-middle">
+                            <div className="flex items-center gap-2">
+                              {branch.isMain && (
+                                <FaStar className="text-secondary text-xs" />
+                              )}
+                              <span className="text-sm font-medium text-secondary">
+                                {branch.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 align-middle">
+                            <span
+                              className={`inline-flex items-center justify-center rounded-lg px-8 py-1 text-sm font-semibold ${
+                                branch.isMain
+                                  ? "bg-secondary/5 text-secondary"
+                                  : "bg-secondary/5 text-dull-gray"
+                              }`}
+                            >
+                              {branch.isMain ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 align-middle font-semibold text-sm text-secondary">
+                            <div className="flex flex-col gap-0.5">
+                              {branch.address && (
+                                <span className="text-sm font-medium text-secondary">
+                                  {branch.address}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray">
+                                {branch.city}
+                                {branch.state ? `, ${branch.state}` : ""}
+                                {branch.country ? `, ${branch.country}` : ""}
+                                {branch.postalCode
+                                  ? `, ${branch.postalCode}`
+                                  : ""}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 align-middle font-semibold text-sm text-secondary">
+                            {branch.size}
+                          </td>
+                          <td className="px-6 py-4 align-middle">
+                            <span className="inline-flex items-center justify-center rounded-lg border-2 border-secondary bg-secondary/10 px-8 py-1 text-base font-semibold text-secondary">
+                              Active
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 align-middle">
+                            <div className="flex items-center justify-start gap-2">
+                              {canWriteBranch ? (
+                                <>
+                                  <Button
+                                    variant="secondary"
+                                    className="w-auto px-8 py-2 h-10 rounded-lg text-base font-semibold cursor-pointer"
+                                    onClick={() => openEditModal(branch)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <button
+                                    className="h-10 px-6 py-2 rounded-lg border border-light-gray-2 bg-secondary/5 text-base font-semibold cursor-pointer text-dull-gray hover:bg-light-gray transition-colors"
+                                    onClick={() => {
+                                      setBranchToDelete(branch);
+                                      setIsDeleteOpen(true);
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-xs text-zinc-400 italic">
+                                  Read only
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
 

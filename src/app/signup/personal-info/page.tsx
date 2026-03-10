@@ -377,6 +377,9 @@ export default function PersonalInformationPage() {
   const savedSitesCount = sites.filter((s) => s.isSaved).length;
   const isAddDisabled = false;
 
+  // True if the user has entered ANY data on this form
+  const hasAnyInput = formik.dirty || sites.length > 0 || logoFileName !== "";
+
   const handleDeleteSite = async (index: number) => {
     const site = sites[index];
     if (site.branchId) {
@@ -386,7 +389,7 @@ export default function PersonalInformationPage() {
           headers: accessToken
             ? { Authorization: `Bearer ${accessToken}` }
             : undefined,
-          // @ts-expect-error - _skipAuthRedirect is a custom property handled by the axios interceptor
+          // @ts-expect-error
           _skipAuthRedirect: true,
         });
       } catch (error) {
@@ -1305,27 +1308,32 @@ export default function PersonalInformationPage() {
                 ))}
               </div>
 
-              {/* Buttons Row */}
-              <div className="pt-0 flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={handleSkip}
-                  className="flex-1 py-3.5 bg-white text-secondary border border-zinc-200 rounded-xl text-base font-semibold hover:bg-zinc-50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Do it later
-                </button>
-                <button
-                  type="submit"
-                  disabled={formik.isSubmitting || isLogoUploading}
-                  className="flex-1 py-3.5 bg-[#2E2E2E] text-white rounded-xl text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Continue
-                </button>
+              {/* Button Row */}
+              <div className="pt-0">
+                {hasAnyInput ? (
+                  <button
+                    type="submit"
+                    disabled={formik.isSubmitting || isLogoUploading}
+                    className="w-full py-3.5 bg-[#2E2E2E] text-white rounded-xl text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {formik.isSubmitting
+                      ? "Submitting..."
+                      : "Submit and Continue"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSkip}
+                    className="w-full py-3.5 bg-[#2E2E2E] text-white rounded-xl text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-zinc-200"
+                  >
+                    Skip and Continue
+                  </button>
+                )}
               </div>
             </form>
           </div>
         </div>
-      </div>  
+      </div>
     </div>
   );
 }
