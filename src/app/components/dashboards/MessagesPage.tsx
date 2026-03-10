@@ -24,8 +24,8 @@ const mockThreads = [
 
 export default function DashboardMessagesPage() {
   return (
-    <div className="p-3 md:p-6 bg-light-gray min-h-screen">
-      <div className="mb-4 md:mb-6">
+    <div className="p-3 md:p-6 bg-light-gray h-full min-h-0 overflow-hidden flex flex-col">
+      <div className="mb-4 md:mb-6 shrink-0">
         <h1 className="text-[20px] md:text-[24px] font-semibold text-secondary mb-1 md:mb-2 leading-[21.6px]">
           Messages
         </h1>
@@ -34,14 +34,14 @@ export default function DashboardMessagesPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        <div className="xl:col-span-4 bg-white border border-zinc-100 rounded-xl shadow-sm">
-          <div className="px-4 py-3 border-b border-zinc-100">
+      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 grid-rows-2 xl:grid-rows-1 gap-4">
+        <div className="xl:col-span-4 min-h-0 flex flex-col overflow-hidden bg-white border border-zinc-100 rounded-xl shadow-sm">
+          <div className="px-4 py-3 border-b border-zinc-100 shrink-0">
             <h2 className="text-sm font-semibold text-secondary">
               Conversations
             </h2>
           </div>
-          <div className="p-2">
+          <div className="p-2 flex-1 min-h-0 overflow-y-auto">
             {mockThreads.map((thread) => (
               <div
                 key={thread.id}
@@ -55,28 +55,28 @@ export default function DashboardMessagesPage() {
                     {thread.time}
                   </span>
                 </div>
-                <p className="text-xs text-gray mt-1 truncate">
-                  {thread.preview}
-                </p>
-                {thread.unread > 0 ? (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-medium bg-black text-white">
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-xs text-gray flex-1 truncate">
+                    {thread.preview}
+                  </p>
+                  {thread.unread > 0 ? (
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-medium bg-black text-white shrink-0">
                       {thread.unread}
                     </span>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="xl:col-span-8 bg-white border border-zinc-100 rounded-xl shadow-sm">
-          <div className="px-4 py-3 border-b border-zinc-100">
+        <div className="xl:col-span-8 min-h-0 flex flex-col overflow-hidden bg-white border border-zinc-100 rounded-xl shadow-sm">
+          <div className="px-4 py-3 border-b border-zinc-100 shrink-0">
             <h2 className="text-sm font-semibold text-secondary">
               Conversation
             </h2>
           </div>
-          <div className="p-6 flex flex-col items-center justify-center min-h-[320px] text-center">
+          <div className="p-6 flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center text-center">
             <p className="text-base font-medium text-secondary">
               Messages page is ready
             </p>
