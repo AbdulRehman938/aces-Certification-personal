@@ -904,9 +904,11 @@ export function OrganisationUsersPage() {
       setApiErrorMessage(null);
       setIsResending((prev) => ({ ...prev, [email]: true }));
 
-      await axiosInstance.post("/auth/resend-credentials", { email });
+      await axiosInstance.post("/employee/resend-invite", { email });
 
-      setResendSuccess(`Credentials sent successfully to ${email}`);
+      setResendSuccess(
+        `Invite resent successfully. New credentials have been sent to ${email}`,
+      );
       setTimeout(() => setResendSuccess(null), 5000);
 
       setResendCooldowns((prev) => ({
@@ -918,7 +920,6 @@ export function OrganisationUsersPage() {
       const message =
         apiError?.message || "Failed to resend credentials. Please try again.";
       setApiErrorMessage(message);
-      // Auto-clear error if not in modal
       if (!isInviteOpen) {
         setTimeout(() => setApiErrorMessage(null), 5000);
       }
@@ -1118,9 +1119,9 @@ export function OrganisationUsersPage() {
             )}
           </div>
         ) : (
-          <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm">
-            <div className="hidden md:block">
-              <table className="w-full">
+          <div className="mt-2 bg-zinc-50 rounded-3xl border border-light-gray-2 shadow-sm overflow-hidden">
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full min-w-max">
                 <thead className="bg-transparent border-b border-light-gray-2">
                   <tr>
                     <th className="px-4 py-3 md:px-6 md:py-4 text-left text-xs md:text-sm font-semibold text-dull-gray  tracking-[0.08em]">
@@ -1262,7 +1263,7 @@ export function OrganisationUsersPage() {
                                 ) : isCoolingDown ? (
                                   `${cooldown}s`
                                 ) : (
-                                  "Resend Credentials"
+                                  "Resend Invite"
                                 )}
                               </button>
                             )}
@@ -1369,7 +1370,7 @@ export function OrganisationUsersPage() {
                           ) : isCoolingDown ? (
                             `${cooldown}s`
                           ) : (
-                            "Resend Credentials"
+                            "Resend Invite"
                           )}
                         </button>
                       )}

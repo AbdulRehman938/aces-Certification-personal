@@ -370,19 +370,34 @@ function VerifyEmailContent() {
           Your email has been verified successfully. Let&apos;s finish setting
           up your Organisation information to complete your registration.
         </p>
-        <Button
-          onClick={() => {
-            document.cookie =
-              "signup_verified=true; Path=/; Max-Age=1800; SameSite=Lax";
-            document.cookie =
-              "signup_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT";
+        <div className="flex flex-col gap-3 w-full items-center">
+          <Button
+            onClick={() => {
+              document.cookie =
+                "signup_verified=true; Path=/; Max-Age=1800; SameSite=Lax";
+              document.cookie =
+                "signup_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT";
 
-            window.location.href = "/signup/personal-info";
-          }}
-          className="max-w-[clamp(16rem,40vw,20rem)] h-[clamp(3.5rem,8vh,4rem)] text-[clamp(1rem,2.5vw,1.125rem)] font-semibold shadow-xl"
-        >
-          Continue to Organisation Info
-        </Button>
+              window.location.href = "/signup/personal-info";
+            }}
+            className="max-w-[clamp(16rem,40vw,20rem)] h-[clamp(3.5rem,8vh,4rem)] text-[clamp(1rem,2.5vw,1.125rem)] font-semibold shadow-xl"
+          >
+            Continue to Organisation Info
+          </Button>
+          <button
+            onClick={() => {
+              document.cookie =
+                "signup_verified=true; Path=/; Max-Age=1800; SameSite=Lax";
+              document.cookie =
+                "signup_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT";
+
+              window.location.href = "/applicant";
+            }}
+            className="text-secondary font-semibold hover:underline cursor-pointer"
+          >
+            Do it later
+          </button>
+        </div>
       </div>
     );
   }
@@ -481,14 +496,6 @@ export default function VerifyEmailPage() {
       <Suspense fallback={<div>Loading...</div>}>
         <VerifyEmailContent />
       </Suspense>
-
-      <div className="mt-5 text-center text-secondary font-medium">
-        Already have an account?{" "}
-        <Link href="/login" replace className="font-semibold underline">
-          Sign in
-        </Link>
-      </div>
     </div>
   );
 }
-
