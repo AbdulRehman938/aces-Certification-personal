@@ -55,6 +55,17 @@ type MainSection = {
   isExpanded: boolean;
 };
 
+type EditingSectionTarget = {
+  mainSectionId: string;
+  sectionId: string;
+};
+
+type EditingSubSectionTarget = {
+  mainSectionId: string;
+  sectionId: string;
+  subSectionId: string;
+};
+
 type Industry = {
   id: string;
   name: string;
@@ -119,14 +130,21 @@ function CreateCertificationPageContent() {
   const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
   const [showAddMainSectionInput, setShowAddMainSectionInput] = useState(false);
   const [newMainSectionName, setNewMainSectionName] = useState("");
+  const [editingMainSectionId, setEditingMainSectionId] = useState<
+    string | null
+  >(null);
   const [showAddSectionInput, setShowAddSectionInput] = useState<string | null>(
     null,
   );
   const [newSectionName, setNewSectionName] = useState("");
+  const [editingSectionTarget, setEditingSectionTarget] =
+    useState<EditingSectionTarget | null>(null);
   const [showAddSubSectionInput, setShowAddSubSectionInput] = useState<
     string | null
   >(null);
   const [newSubSectionName, setNewSubSectionName] = useState("");
+  const [editingSubSectionTarget, setEditingSubSectionTarget] =
+    useState<EditingSubSectionTarget | null>(null);
   const [mainSections, setMainSections] = useState<MainSection[]>([]);
   const [selectedMainSection, setSelectedMainSection] = useState<string | null>(
     null,
@@ -225,6 +243,9 @@ function CreateCertificationPageContent() {
     string | null
   >(null);
   const [isDeletingQuestion, setIsDeletingQuestion] = useState<string | null>(
+    null,
+  );
+  const [isUpdatingStructure, setIsUpdatingStructure] = useState<string | null>(
     null,
   );
   const [databaseQuestionCount, setDatabaseQuestionCount] = useState<
@@ -791,6 +812,24 @@ function CreateCertificationPageContent() {
     };
   }, [showIndustryDropdown]);
 
+  const resetMainSectionEditor = () => {
+    setShowAddMainSectionInput(false);
+    setEditingMainSectionId(null);
+    setNewMainSectionName("");
+  };
+
+  const resetSectionEditor = () => {
+    setShowAddSectionInput(null);
+    setEditingSectionTarget(null);
+    setNewSectionName("");
+  };
+
+  const resetSubSectionEditor = () => {
+    setShowAddSubSectionInput(null);
+    setEditingSubSectionTarget(null);
+    setNewSubSectionName("");
+  };
+
   const createMainSectionAPI = async (name: string) => {
     if (!certificateId) {
       console.error("Certificate ID is required");
@@ -806,6 +845,24 @@ function CreateCertificationPageContent() {
       return response.data?.data?.[0] || null;
     } catch (err) {
       console.error("Failed to create main section:", err);
+      throw err;
+    }
+  };
+
+  const updateMainSectionAPI = async (
+    mainSectionId: string,
+    name: string,
+  ) => {
+    try {
+      const response = await axiosInstance.patch(
+        `/main-sections/${mainSectionId}`,
+        {
+          name: name.trim(),
+        },
+      );
+      return response.data?.data || null;
+    } catch (err) {
+      console.error("Failed to update main section:", err);
       throw err;
     }
   };
@@ -883,14 +940,48 @@ function CreateCertificationPageContent() {
           isExpanded: true,
         };
         setMainSections([...mainSections, newMainSection]);
-        setNewMainSectionName("");
-        setShowAddMainSectionInput(false);
+        resetMainSectionEditor();
       }
     } catch (err) {
       console.error("Error creating main section:", err);
       showAlert("Failed to create main section. Please try again.");
     } finally {
       setIsCreatingSection(false);
+    }
+  };
+
+  const startEditingMainSection = (mainSection: MainSection) => {
+    setShowAddMainSectionInput(false);
+    setEditingMainSectionId(mainSection.id);
+    setNewMainSectionName(mainSection.name);
+  };
+
+  const updateMainSection = async () => {
+    if (!editingMainSectionId || !newMainSectionName.trim()) {
+      return;
+    }
+
+    setIsUpdatingStructure(editingMainSectionId);
+    try {
+      const response = await updateMainSectionAPI(
+        editingMainSectionId,
+        newMainSectionName,
+      );
+      const updatedName = response?.name || newMainSectionName.trim();
+
+      setMainSections((prev) =>
+        prev.map((mainSection) =>
+          mainSection.id === editingMainSectionId
+            ? { ...mainSection, name: updatedName }
+            : mainSection,
+        ),
+      );
+      resetMainSectionEditor();
+    } catch (err) {
+      console.error("Error updating main section:", err);
+      showAlert("Failed to update main section. Please try again.");
+    } finally {
+      setIsUpdatingStructure(null);
     }
   };
 
@@ -903,9 +994,15 @@ function CreateCertificationPageContent() {
       ),
     );
 
-    if (showAddSectionInput === mainSectionId) {
-      setShowAddSectionInput(null);
-      setNewSectionName("");
+    if (
+      showAddSectionInput === mainSectionId ||
+      editingSectionTarget?.mainSectionId === mainSectionId
+    ) {
+      resetSectionEditor();
+    }
+
+    if (editingSubSectionTarget?.mainSectionId === mainSectionId) {
+      resetSubSectionEditor();
     }
   };
 
@@ -931,9 +1028,19 @@ function CreateCertificationPageContent() {
         setSelectedQuestion(null);
       }
 
-      if (showAddSectionInput === mainSectionId) {
-        setShowAddSectionInput(null);
-        setNewSectionName("");
+      if (
+        showAddSectionInput === mainSectionId ||
+        editingSectionTarget?.mainSectionId === mainSectionId
+      ) {
+        resetSectionEditor();
+      }
+
+      if (editingMainSectionId === mainSectionId) {
+        resetMainSectionEditor();
+      }
+
+      if (editingSubSectionTarget?.mainSectionId === mainSectionId) {
+        resetSubSectionEditor();
       }
     } catch (err) {
       console.error("Error deleting main section:", err);
@@ -959,6 +1066,33 @@ function CreateCertificationPageContent() {
       return response.data?.data?.[0] || null;
     } catch (err) {
       console.error("Failed to create section:", err);
+      throw err;
+    }
+  };
+
+  const updateSectionAPI = async (sectionId: string, name: string) => {
+    try {
+      const response = await axiosInstance.patch(`/sections/${sectionId}`, {
+        name: name.trim(),
+      });
+      return response.data?.data || null;
+    } catch (err) {
+      console.error("Failed to update section:", err);
+      throw err;
+    }
+  };
+
+  const updateSubSectionAPI = async (subSectionId: string, name: string) => {
+    try {
+      const response = await axiosInstance.patch(
+        `/subsections/${subSectionId}`,
+        {
+          name: name.trim(),
+        },
+      );
+      return response.data?.data || null;
+    } catch (err) {
+      console.error("Failed to update subsection:", err);
       throw err;
     }
   };
@@ -996,14 +1130,60 @@ function CreateCertificationPageContent() {
             return mainSection;
           }),
         );
-        setNewSectionName("");
-        setShowAddSectionInput(null);
+        resetSectionEditor();
       }
     } catch (err) {
       console.error("Error creating section:", err);
       showAlert("Failed to create section. Please try again.");
     } finally {
       setIsCreatingSection(false);
+    }
+  };
+
+  const startEditingSection = (mainSectionId: string, section: Section) => {
+    setShowAddSectionInput(null);
+    setEditingSectionTarget({
+      mainSectionId,
+      sectionId: section.id,
+    });
+    setNewSectionName(section.name);
+  };
+
+  const updateSection = async () => {
+    if (!editingSectionTarget || !newSectionName.trim()) {
+      return;
+    }
+
+    setIsUpdatingStructure(editingSectionTarget.sectionId);
+    try {
+      const response = await updateSectionAPI(
+        editingSectionTarget.sectionId,
+        newSectionName,
+      );
+      const updatedName = response?.name || newSectionName.trim();
+
+      setMainSections((prev) =>
+        prev.map((mainSection) => {
+          if (mainSection.id !== editingSectionTarget.mainSectionId) {
+            return mainSection;
+          }
+
+          return {
+            ...mainSection,
+            sections: mainSection.sections.map((section) =>
+              section.id === editingSectionTarget.sectionId
+                ? { ...section, name: updatedName }
+                : section,
+            ),
+          };
+        }),
+      );
+      resetSectionEditor();
+    } catch (err) {
+      console.error("Error updating section:", err);
+      showAlert("Failed to update section. Please try again.");
+    } finally {
+      setIsUpdatingStructure(null);
     }
   };
 
@@ -1024,9 +1204,11 @@ function CreateCertificationPageContent() {
       }),
     );
 
-    if (showAddSubSectionInput === sectionId) {
-      setShowAddSubSectionInput(null);
-      setNewSubSectionName("");
+    if (
+      showAddSubSectionInput === sectionId ||
+      editingSubSectionTarget?.sectionId === sectionId
+    ) {
+      resetSubSectionEditor();
     }
   };
 
@@ -1062,8 +1244,15 @@ function CreateCertificationPageContent() {
       }
 
       if (showAddSubSectionInput === sectionId) {
-        setShowAddSubSectionInput(null);
-        setNewSubSectionName("");
+        resetSubSectionEditor();
+      }
+
+      if (editingSectionTarget?.sectionId === sectionId) {
+        resetSectionEditor();
+      }
+
+      if (editingSubSectionTarget?.sectionId === sectionId) {
+        resetSubSectionEditor();
       }
     } catch (err) {
       console.error("Error deleting section:", err);
@@ -1114,14 +1303,74 @@ function CreateCertificationPageContent() {
             return mainSection;
           }),
         );
-        setNewSubSectionName("");
-        setShowAddSubSectionInput(null);
+        resetSubSectionEditor();
       }
     } catch (err) {
       console.error("Error creating subsection:", err);
       showAlert("Failed to create subsection. Please try again.");
     } finally {
       setIsCreatingSubSection(false);
+    }
+  };
+
+  const startEditingSubSection = (
+    mainSectionId: string,
+    sectionId: string,
+    subSection: SubSection,
+  ) => {
+    setShowAddSubSectionInput(null);
+    setEditingSubSectionTarget({
+      mainSectionId,
+      sectionId,
+      subSectionId: subSection.id,
+    });
+    setNewSubSectionName(subSection.name);
+  };
+
+  const updateSubSection = async () => {
+    if (!editingSubSectionTarget || !newSubSectionName.trim()) {
+      return;
+    }
+
+    setIsUpdatingStructure(editingSubSectionTarget.subSectionId);
+    try {
+      const response = await updateSubSectionAPI(
+        editingSubSectionTarget.subSectionId,
+        newSubSectionName,
+      );
+      const updatedName = response?.name || newSubSectionName.trim();
+
+      setMainSections((prev) =>
+        prev.map((mainSection) => {
+          if (mainSection.id !== editingSubSectionTarget.mainSectionId) {
+            return mainSection;
+          }
+
+          return {
+            ...mainSection,
+            sections: mainSection.sections.map((section) => {
+              if (section.id !== editingSubSectionTarget.sectionId) {
+                return section;
+              }
+
+              return {
+                ...section,
+                subSections: section.subSections.map((subSection) =>
+                  subSection.id === editingSubSectionTarget.subSectionId
+                    ? { ...subSection, name: updatedName }
+                    : subSection,
+                ),
+              };
+            }),
+          };
+        }),
+      );
+      resetSubSectionEditor();
+    } catch (err) {
+      console.error("Error updating subsection:", err);
+      showAlert("Failed to update subsection. Please try again.");
+    } finally {
+      setIsUpdatingStructure(null);
     }
   };
 
@@ -1165,6 +1414,10 @@ function CreateCertificationPageContent() {
       if (selectedSubSection === subSectionId) {
         setSelectedSubSection(null);
         setSelectedQuestion(null);
+      }
+
+      if (editingSubSectionTarget?.subSectionId === subSectionId) {
+        resetSubSectionEditor();
       }
     } catch (err) {
       console.error("Error deleting subsection:", err);
@@ -2946,9 +3199,16 @@ function CreateCertificationPageContent() {
                 Main Sections
               </h2>
               <button
-                onClick={() =>
-                  setShowAddMainSectionInput(!showAddMainSectionInput)
-                }
+                onClick={() => {
+                  if (showAddMainSectionInput) {
+                    resetMainSectionEditor();
+                    return;
+                  }
+
+                  setEditingMainSectionId(null);
+                  setNewMainSectionName("");
+                  setShowAddMainSectionInput(true);
+                }}
                 className="w-9 h-9 bg-black text-white rounded-md flex items-center justify-center hover:bg-gray-800 transition-colors"
               >
                 <span className="text-xl">+</span>
@@ -2975,10 +3235,7 @@ function CreateCertificationPageContent() {
                   {isCreatingSection ? "Adding..." : "Add"}
                 </button>
                 <button
-                  onClick={() => {
-                    setShowAddMainSectionInput(false);
-                    setNewMainSectionName("");
-                  }}
+                  onClick={resetMainSectionEditor}
                   className="w-10 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
                   title="Cancel"
                 >
@@ -3014,7 +3271,11 @@ function CreateCertificationPageContent() {
                   No main sections created yet
                 </p>
                 <button
-                  onClick={() => setShowAddMainSectionInput(true)}
+                  onClick={() => {
+                    setEditingMainSectionId(null);
+                    setNewMainSectionName("");
+                    setShowAddMainSectionInput(true);
+                  }}
                   className="px-4 py-2 border border-zinc-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors inline-flex items-center gap-2"
                 >
                   <span>+</span> Add Main Section
@@ -3065,6 +3326,7 @@ function CreateCertificationPageContent() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => {
+                            setEditingSectionTarget(null);
                             setShowAddSectionInput(mainSection.id);
                             setNewSectionName("");
                           }}
@@ -3077,6 +3339,34 @@ function CreateCertificationPageContent() {
                             className="w-5 h-5"
                             style={{ filter: "brightness(0)" }}
                           />
+                        </button>
+                        <button
+                          onClick={() => startEditingMainSection(mainSection)}
+                          className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded"
+                          title="Edit Main Section"
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M12 20H21"
+                              stroke="#262626"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M16.5 3.5C17.3284 2.67157 18.6716 2.67157 19.5 3.5C20.3284 4.32843 20.3284 5.67157 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z"
+                              stroke="#262626"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
                         </button>
                         <button
                           onClick={() => deleteMainSection(mainSection.id)}
@@ -3095,6 +3385,46 @@ function CreateCertificationPageContent() {
                         </button>
                       </div>
                     </div>
+
+                    {editingMainSectionId === mainSection.id && (
+                      <div className="p-3 bg-white">
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            value={newMainSectionName}
+                            onChange={(e) =>
+                              setNewMainSectionName(e.target.value)
+                            }
+                            placeholder="Enter Main Section Name"
+                            className="flex-1 px-3 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                            onKeyPress={(e) =>
+                              e.key === "Enter" && updateMainSection()
+                            }
+                            autoFocus
+                          />
+                          <button
+                            onClick={updateMainSection}
+                            disabled={isUpdatingStructure === mainSection.id}
+                            className="px-3 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            {isUpdatingStructure === mainSection.id
+                              ? "Updating..."
+                              : "Update"}
+                          </button>
+                          <button
+                            onClick={resetMainSectionEditor}
+                            className="w-10 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
+                            title="Cancel"
+                          >
+                            <img
+                              src="/assets/imgs/admin/commons/cross.svg"
+                              alt="Cancel"
+                              className="w-5 h-5"
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {showAddSectionInput === mainSection.id && (
                       <div className="pl-6 p-3 bg-white">
@@ -3118,10 +3448,7 @@ function CreateCertificationPageContent() {
                             {isCreatingSection ? "Adding..." : "Add"}
                           </button>
                           <button
-                            onClick={() => {
-                              setShowAddSectionInput(null);
-                              setNewSectionName("");
-                            }}
+                            onClick={resetSectionEditor}
                             className="w-10 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors"
                             title="Cancel"
                           >
@@ -3215,6 +3542,7 @@ function CreateCertificationPageContent() {
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => {
+                                      setEditingSubSectionTarget(null);
                                       setShowAddSubSectionInput(section.id);
                                       setNewSubSectionName("");
                                     }}
@@ -3227,6 +3555,40 @@ function CreateCertificationPageContent() {
                                       className="w-4 h-4"
                                       style={{ filter: "brightness(0)" }}
                                     />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditingSection(
+                                        mainSection.id,
+                                        section,
+                                      );
+                                    }}
+                                    className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded"
+                                    title="Edit Section"
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                      <path
+                                        d="M12 20H21"
+                                        stroke="#262626"
+                                        strokeWidth="1.8"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                      <path
+                                        d="M16.5 3.5C17.3284 2.67157 18.6716 2.67157 19.5 3.5C20.3284 4.32843 20.3284 5.67157 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z"
+                                        stroke="#262626"
+                                        strokeWidth="1.8"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
                                   </button>
                                   <button
                                     onClick={() =>
@@ -3247,6 +3609,46 @@ function CreateCertificationPageContent() {
                                   </button>
                                 </div>
                               </div>
+
+                              {editingSectionTarget?.sectionId === section.id && (
+                                <div className="pl-6 p-3 bg-white">
+                                  <div className="flex gap-2 items-center">
+                                    <input
+                                      type="text"
+                                      value={newSectionName}
+                                      onChange={(e) =>
+                                        setNewSectionName(e.target.value)
+                                      }
+                                      placeholder="Enter Section Name"
+                                      className="flex-1 max-w-[220px] px-3 py-2 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                                      onKeyPress={(e) =>
+                                        e.key === "Enter" && updateSection()
+                                      }
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={updateSection}
+                                      disabled={isUpdatingStructure === section.id}
+                                      className="px-3 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {isUpdatingStructure === section.id
+                                        ? "Updating..."
+                                        : "Update"}
+                                    </button>
+                                    <button
+                                      onClick={resetSectionEditor}
+                                      className="w-6 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
+                                      title="Cancel"
+                                    >
+                                      <img
+                                        src="/assets/imgs/admin/commons/cross.svg"
+                                        alt="Cancel"
+                                        className="w-5 h-5"
+                                      />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
 
                               {showAddSubSectionInput === section.id && (
                                 <div className="pl-6 p-3 bg-white">
@@ -3283,10 +3685,7 @@ function CreateCertificationPageContent() {
                                         : "Add"}
                                     </button>
                                     <button
-                                      onClick={() => {
-                                        setShowAddSubSectionInput(null);
-                                        setNewSubSectionName("");
-                                      }}
+                                      onClick={resetSubSectionEditor}
                                       className="w-6 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
                                       title="Cancel"
                                     >
@@ -3396,35 +3795,120 @@ function CreateCertificationPageContent() {
                                               {subSection.name}
                                             </span>
                                           </div>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              deleteSubSection(
-                                                mainSection.id,
-                                                section.id,
-                                                subSection.id,
-                                              );
-                                            }}
-                                            disabled={
-                                              isDeletingSubSection ===
-                                              subSection.id
-                                            }
-                                            className="w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                          >
-                                            {isDeletingSubSection ===
-                                            subSection.id ? (
-                                              <span className="text-xs">
-                                                ...
-                                              </span>
-                                            ) : (
-                                              <img
-                                                src="/assets/imgs/admin/certifications/delete.svg"
-                                                alt="Delete"
-                                                className="w-4 h-4"
-                                              />
-                                            )}
-                                          </button>
+                                          <div className="flex items-center gap-1">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                startEditingSubSection(
+                                                  mainSection.id,
+                                                  section.id,
+                                                  subSection,
+                                                );
+                                              }}
+                                              className="w-6 h-6 flex items-center justify-center hover:bg-gray-200 rounded"
+                                              title="Edit Sub-Section"
+                                            >
+                                              <svg
+                                                width="14"
+                                                height="14"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                              >
+                                                <path
+                                                  d="M12 20H21"
+                                                  stroke="#262626"
+                                                  strokeWidth="1.8"
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                />
+                                                <path
+                                                  d="M16.5 3.5C17.3284 2.67157 18.6716 2.67157 19.5 3.5C20.3284 4.32843 20.3284 5.67157 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z"
+                                                  stroke="#262626"
+                                                  strokeWidth="1.8"
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteSubSection(
+                                                  mainSection.id,
+                                                  section.id,
+                                                  subSection.id,
+                                                );
+                                              }}
+                                              disabled={
+                                                isDeletingSubSection ===
+                                                subSection.id
+                                              }
+                                              className="w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                              {isDeletingSubSection ===
+                                              subSection.id ? (
+                                                <span className="text-xs">
+                                                  ...
+                                                </span>
+                                              ) : (
+                                                <img
+                                                  src="/assets/imgs/admin/certifications/delete.svg"
+                                                  alt="Delete"
+                                                  className="w-4 h-4"
+                                                />
+                                              )}
+                                            </button>
+                                          </div>
                                         </div>
+
+                                        {editingSubSectionTarget?.subSectionId ===
+                                          subSection.id && (
+                                          <div className="pl-6 p-3 bg-white">
+                                            <div className="flex gap-2 items-center">
+                                              <input
+                                                type="text"
+                                                value={newSubSectionName}
+                                                onChange={(e) =>
+                                                  setNewSubSectionName(
+                                                    e.target.value,
+                                                  )
+                                                }
+                                                placeholder="Enter Sub-Section Name"
+                                                className="flex-1 max-w-[220px] px-3 py-2 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                                                onKeyPress={(e) =>
+                                                  e.key === "Enter" &&
+                                                  updateSubSection()
+                                                }
+                                                autoFocus
+                                              />
+                                              <button
+                                                onClick={updateSubSection}
+                                                disabled={
+                                                  isUpdatingStructure ===
+                                                  subSection.id
+                                                }
+                                                className="px-3 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              >
+                                                {isUpdatingStructure ===
+                                                subSection.id
+                                                  ? "Updating..."
+                                                  : "Update"}
+                                              </button>
+                                              <button
+                                                onClick={resetSubSectionEditor}
+                                                className="w-6 h-10 flex items-center justify-center border border-zinc-200 rounded-md hover:bg-gray-50 transition-colors shrink-0"
+                                                title="Cancel"
+                                              >
+                                                <img
+                                                  src="/assets/imgs/admin/commons/cross.svg"
+                                                  alt="Cancel"
+                                                  className="w-5 h-5"
+                                                />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
 
                                         {subSection.questions.length > 0 && (
                                           <div className="pl-6 bg-white">

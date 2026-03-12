@@ -330,6 +330,7 @@ export function CertificateDetails({
 
   const router = useRouter();
   const pathname = usePathname();
+  const isAdmin = pathname.startsWith("/admin");
   const isEmployee = pathname.startsWith("/employee");
   const base = isEmployee ? "/employee" : "/applicant";
 
@@ -347,7 +348,7 @@ export function CertificateDetails({
 
   const { isEmployee: isEmployeeRole, hasWrite } =
     useEmployeePermissions(profileData);
-  const canInitiate = !isEmployeeRole || hasWrite("certificates");
+  const canInitiate = !isAdmin && (!isEmployeeRole || hasWrite("certificates"));
 
   useEffect(() => {
     if (orgProfile) {
@@ -1006,23 +1007,25 @@ export function CertificateDetails({
 
               {/* Timelines and Action */}
               <div className="flex flex-col gap-8">
-                <div className="flex justify-end w-full md:max-w-[25%] ml-auto mt-4 md:mt-0">
-                  <Tooltip
-                    content="Read-only access. You do not have permission to initiate a certification."
-                    disabled={canInitiate}
-                  >
-                    <Button
-                      variant="secondary"
-                      disabled={!canInitiate}
-                      className="bg-[#1A1A1A] hover:bg-black text-white px-8 h-12 md:h-auto py-3 rounded-lg text-sm font-semibold transition-all w-full md:w-auto shadow-md md:shadow-none whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={() => {
-                        setShowModal(true);
-                      }}
+                {!isAdmin && (
+                  <div className="flex justify-end w-full md:max-w-[25%] ml-auto mt-4 md:mt-0">
+                    <Tooltip
+                      content="Read-only access. You do not have permission to initiate a certification."
+                      disabled={canInitiate}
                     >
-                      Get Started
-                    </Button>
-                  </Tooltip>
-                </div>
+                      <Button
+                        variant="secondary"
+                        disabled={!canInitiate}
+                        className="bg-[#1A1A1A] hover:bg-black text-white px-8 h-12 md:h-auto py-3 rounded-lg text-sm font-semibold transition-all w-full md:w-auto shadow-md md:shadow-none whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          setShowModal(true);
+                        }}
+                      >
+                        Get Started
+                      </Button>
+                    </Tooltip>
+                  </div>
+                )}
               </div>
             </div>
           )}
