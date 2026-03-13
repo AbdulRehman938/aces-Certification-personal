@@ -457,23 +457,36 @@ export default function AuditorDashboard() {
   });
 
   useEffect(() => {
+    const controller = new AbortController();
+    let isMounted = true;
+
     const fetchDashboardAnalytics = async () => {
       try {
         const response =
           await axiosInstance.get<ReviewerDashboardAnalyticsResponse>(
             "/reviewers/dashboard-analytics",
+            {
+              signal: controller.signal,
+            },
           );
-        console.log("reviewer dashboard analytics:", response.data);
+        if (!isMounted) return;
         setAnalytics(response.data?.data ?? null);
       } catch (error) {
+        if (!isMounted || controller.signal.aborted) return;
         console.error("Failed to fetch reviewer dashboard analytics:", error);
         setAnalytics(null);
       } finally {
+        if (!isMounted || controller.signal.aborted) return;
         setIsLoading(false);
       }
     };
 
     void fetchDashboardAnalytics();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, []);
 
   return (

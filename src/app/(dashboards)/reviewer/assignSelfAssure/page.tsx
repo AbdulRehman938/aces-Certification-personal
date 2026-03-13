@@ -11,7 +11,6 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { axiosInstance } from "@/lib/axios";
-import axios from "axios";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
@@ -64,6 +63,7 @@ export default function AssignSelfAssure() {
   const [assignedAudits, setAssignedAudits] = useState<AssignedAudit[]>([]);
 
   useEffect(() => {
+    const controller = new AbortController();
     let isCancelled = false;
 
     const fetchAssignedAssessments = async () => {
@@ -76,11 +76,11 @@ export default function AssignSelfAssure() {
               page: 1,
               limit: 10,
             },
+            signal: controller.signal,
           },
         );
 
-        if (isCancelled) return;
-        console.log("reviewer certificate assessments response:", response.data);
+        if (isCancelled || controller.signal.aborted) return;
 
         const payload = response.data?.data;
         const items: ReviewerCertificateAssessmentItem[] = Array.isArray(
@@ -109,14 +109,14 @@ export default function AssignSelfAssure() {
 
         setAssignedAudits(mappedRows);
       } catch (error) {
-        if (isCancelled) return;
-        console.error("Failed to fetch reviewer certificate assessments:", error);
-        if (axios.isAxiosError(error)) {
-          console.error("API message:", error.response?.data?.message);
-        }
+        if (isCancelled || controller.signal.aborted) return;
+        console.error(
+          "Failed to fetch reviewer certificate assessments:",
+          error,
+        );
         setAssignedAudits([]);
       } finally {
-        if (!isCancelled) {
+        if (!isCancelled && !controller.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -126,6 +126,7 @@ export default function AssignSelfAssure() {
 
     return () => {
       isCancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -280,7 +281,9 @@ export default function AssignSelfAssure() {
                     : "bg-[#262626] text-white border-[#262626]"
                 }`}
                 onClick={() =>
-                  router.push(`/reviewer/assignSelfAssure/review?id=${targetId}`)
+                  router.push(
+                    `/reviewer/assignSelfAssure/review?id=${targetId}`,
+                  )
                 }
               >
                 {isView ? "View" : "Review"}
