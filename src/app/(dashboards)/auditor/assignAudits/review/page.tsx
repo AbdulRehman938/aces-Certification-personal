@@ -27,7 +27,9 @@ const getFileNameFromUrl = (value: string): string => {
   }
 };
 
-const normalizeAttachments = (value: any): Array<{ name: string; url: string }> => {
+const normalizeAttachments = (
+  value: any,
+): Array<{ name: string; url: string }> => {
   if (!value) return [];
   const list = Array.isArray(value) ? value : [value];
 
@@ -43,7 +45,11 @@ const normalizeAttachments = (value: any): Array<{ name: string; url: string }> 
 
       if (typeof item === "object") {
         const fileUrl =
-          item.url || item.fileUrl || item.path || item.link || item.downloadUrl;
+          item.url ||
+          item.fileUrl ||
+          item.path ||
+          item.link ||
+          item.downloadUrl;
 
         if (typeof fileUrl !== "string" || !fileUrl.trim()) return null;
 
@@ -62,7 +68,9 @@ const normalizeAttachments = (value: any): Array<{ name: string; url: string }> 
     .filter(Boolean) as Array<{ name: string; url: string }>;
 };
 
-const extractQuestionAttachments = (question: any): Array<{ name: string; url: string }> => {
+const extractQuestionAttachments = (
+  question: any,
+): Array<{ name: string; url: string }> => {
   const knownAttachmentSources = [
     question?.attachments,
     question?.files,
@@ -108,7 +116,11 @@ const isFileQuestionType = (
   responseType?: string | null,
 ): boolean => {
   const types = [questionType, responseType]
-    .map((value) => String(value || "").toLowerCase().trim())
+    .map((value) =>
+      String(value || "")
+        .toLowerCase()
+        .trim(),
+    )
     .filter(Boolean);
 
   return types.some(
@@ -139,7 +151,8 @@ const toDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Unable to read selected document"));
+    reader.onerror = () =>
+      reject(new Error("Unable to read selected document"));
     reader.readAsDataURL(file);
   });
 
@@ -173,6 +186,12 @@ function AssignAuditsReviewContent() {
     "approved" | "conditional" | "rejected" | null
   >(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [clarificationRequest, setClarificationRequest] = useState("");
+  const [clarificationTargetQuestionId, setClarificationTargetQuestionId] =
+    useState<string | null>(null);
+  const [clarificationModalError, setClarificationModalError] = useState("");
+  const [isSubmittingClarification, setIsSubmittingClarification] =
+    useState(false);
   const [organizationName, setOrganizationName] = useState("Acme Corporation");
   const [certificateId, setCertificateId] = useState("");
   const [certificateName, setCertificateName] = useState("ISO 27001:2022");
@@ -194,6 +213,10 @@ function AssignAuditsReviewContent() {
   const [noteSaveFeedbackByQuestion, setNoteSaveFeedbackByQuestion] = useState<
     Record<string, NoteSaveFeedback>
   >({});
+  const [clarificationFeedbackByQuestion, setClarificationFeedbackByQuestion] =
+    useState<Record<string, { type: "success" | "error"; message: string }>>(
+      {},
+    );
   const auditSummaryDocInputRef = useRef<HTMLInputElement | null>(null);
 
   const formatStatusLabel = (value?: string | null): string => {
@@ -242,6 +265,21 @@ function AssignAuditsReviewContent() {
     .replace(/_/g, " ")
     .trim();
   const isCompletedAssessment = normalizedAssessmentStatus === "completed";
+
+  const closeClarificationModal = () => {
+    if (isSubmittingClarification) return;
+    setShowSubmitModal(false);
+    setClarificationRequest("");
+    setClarificationTargetQuestionId(null);
+    setClarificationModalError("");
+  };
+
+  const handleOpenClarificationModal = (questionId: string) => {
+    setClarificationTargetQuestionId(questionId);
+    setClarificationRequest("");
+    setClarificationModalError("");
+    setShowSubmitModal(true);
+  };
 
   useEffect(() => {
     if (!assessmentId) {
@@ -340,49 +378,62 @@ function AssignAuditsReviewContent() {
                         },
                       ];
 
-                return sourceSubSections.map((subSection: any, subIndex: number) => {
-                  const questions = Array.isArray(subSection.questions)
-                    ? subSection.questions
-                    : [];
+                return sourceSubSections.map(
+                  (subSection: any, subIndex: number) => {
+                    const questions = Array.isArray(subSection.questions)
+                      ? subSection.questions
+                      : [];
 
-                  return {
-                    id:
-                      subSection.subSectionId ||
-                      section.sectionId ||
-                      `section-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}`,
-                    name:
-                      subSection.subSectionName ||
-                      section.sectionName ||
-                      `Section ${sectionIndex + 1}`,
-                    questions: questions.map((question: any, questionIndex: number) => ({
+                    return {
                       id:
-                        question.questionId ||
-                        `question-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}-${questionIndex + 1}`,
-                      text: question.questionText || `Question ${questionIndex + 1}`,
-                      applicantAnswer:
-                        typeof question.applicantAnswer === "string"
-                          ? question.applicantAnswer
-                          : question.applicantAnswer == null
-                            ? "N/A"
-                            : JSON.stringify(question.applicantAnswer),
-                      aiSummary:
-                        question.aiReview?.summary || "No AI analysis available",
-                      reviewerNotes:
-                        question.reviewerNotes || "No reviewer notes available",
-                      auditorNotes: question.auditorNotes || "",
-                      isFlagged: Boolean(question.aiReview?.isFlagged),
-                      questionType: String(question.questionType || "").toLowerCase(),
-                      responseType: String(question.responseType || "").toLowerCase(),
-                      attachments: extractQuestionAttachments(question),
-                    })),
-                  };
-                });
+                        subSection.subSectionId ||
+                        section.sectionId ||
+                        `section-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}`,
+                      name:
+                        subSection.subSectionName ||
+                        section.sectionName ||
+                        `Section ${sectionIndex + 1}`,
+                      questions: questions.map(
+                        (question: any, questionIndex: number) => ({
+                          id:
+                            question.questionId ||
+                            `question-${mainIndex + 1}-${sectionIndex + 1}-${subIndex + 1}-${questionIndex + 1}`,
+                          text:
+                            question.questionText ||
+                            `Question ${questionIndex + 1}`,
+                          applicantAnswer:
+                            typeof question.applicantAnswer === "string"
+                              ? question.applicantAnswer
+                              : question.applicantAnswer == null
+                                ? "N/A"
+                                : JSON.stringify(question.applicantAnswer),
+                          aiSummary:
+                            question.aiReview?.summary ||
+                            "No AI analysis available",
+                          reviewerNotes:
+                            question.reviewerNotes ||
+                            "No reviewer notes available",
+                          auditorNotes: question.auditorNotes || "",
+                          isFlagged: Boolean(question.aiReview?.isFlagged),
+                          questionType: String(
+                            question.questionType || "",
+                          ).toLowerCase(),
+                          responseType: String(
+                            question.responseType || "",
+                          ).toLowerCase(),
+                          attachments: extractQuestionAttachments(question),
+                        }),
+                      ),
+                    };
+                  },
+                );
               },
             );
 
             return {
               id: mainSection.mainSectionId || `main-${mainIndex + 1}`,
-              name: mainSection.mainSectionName || `Main Section ${mainIndex + 1}`,
+              name:
+                mainSection.mainSectionName || `Main Section ${mainIndex + 1}`,
               isExpanded: mainIndex === 0,
               sections: mappedSections,
             };
@@ -423,7 +474,9 @@ function AssignAuditsReviewContent() {
               ]),
             ),
           );
-          setActiveSubsection(mappedMainSections[0]?.sections?.[0]?.name || null);
+          setActiveSubsection(
+            mappedMainSections[0]?.sections?.[0]?.name || null,
+          );
           setSelectedQuestionIndex(0);
           setShowAllQuestions(false);
         }
@@ -548,6 +601,58 @@ function AssignAuditsReviewContent() {
     }
   };
 
+  const handleClarificationSubmit = async () => {
+    if (!assessmentId || !clarificationTargetQuestionId) {
+      setClarificationModalError("Assessment or question id is missing.");
+      return;
+    }
+
+    const message = clarificationRequest.trim();
+    if (!message) {
+      setClarificationModalError("Please add a clarification message.");
+      return;
+    }
+
+    const targetQuestionId = clarificationTargetQuestionId;
+    setClarificationModalError("");
+    setIsSubmittingClarification(true);
+
+    try {
+      const response = await axiosInstance.post(
+        `/audits/assessment/${encodeURIComponent(assessmentId)}/questions/${encodeURIComponent(targetQuestionId)}/compliance-action`,
+        {
+          action: "request_clarification",
+          message,
+        },
+      );
+
+      console.log("auditor clarification response:", response.data);
+      setClarificationFeedbackByQuestion((prev) => ({
+        ...prev,
+        [targetQuestionId]: {
+          type: "success",
+          message: "Clarification requested successfully.",
+        },
+      }));
+      setShowSubmitModal(false);
+      setClarificationRequest("");
+      setClarificationTargetQuestionId(null);
+      setClarificationModalError("");
+    } catch (error) {
+      let message = "Failed to request clarification";
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.message || message;
+      }
+      setClarificationModalError(message);
+      setClarificationFeedbackByQuestion((prev) => ({
+        ...prev,
+        [targetQuestionId]: { type: "error", message },
+      }));
+    } finally {
+      setIsSubmittingClarification(false);
+    }
+  };
+
   const handleAuditSummaryDocSelect = async (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
@@ -600,7 +705,9 @@ function AssignAuditsReviewContent() {
       return;
     }
     if (isCompletedAssessment) {
-      setSubmitReportError("Audit report is already submitted for this assessment.");
+      setSubmitReportError(
+        "Audit report is already submitted for this assessment.",
+      );
       return;
     }
 
@@ -698,7 +805,12 @@ function AssignAuditsReviewContent() {
   if (showLoader) {
     return (
       <div className="p-3 md:p-6 bg-light-gray min-h-screen flex items-center justify-center">
-        <Loading isLoading size="sm" progress={loadingProgress} className="p-4" />
+        <Loading
+          isLoading
+          size="sm"
+          progress={loadingProgress}
+          className="p-4"
+        />
       </div>
     );
   }
@@ -712,7 +824,9 @@ function AssignAuditsReviewContent() {
               Assigned Audits
             </h1>
             <div className="px-3 py-1.5 bg-[#e9e9e9] rounded-full">
-              <span className="text-sm font-medium text-secondary">Reviewer</span>
+              <span className="text-sm font-medium text-secondary">
+                Reviewer
+              </span>
             </div>
           </div>
           {certificateId ? (
@@ -969,7 +1083,10 @@ function AssignAuditsReviewContent() {
                     ? selectedSection.questions
                     : [];
                   const fileQuestions = allQuestions.filter((question: any) =>
-                    isFileQuestionType(question.questionType, question.responseType),
+                    isFileQuestionType(
+                      question.questionType,
+                      question.responseType,
+                    ),
                   );
                   const hasFileQuestions = fileQuestions.length > 0;
                   const visibleQuestions =
@@ -977,7 +1094,8 @@ function AssignAuditsReviewContent() {
                       ? allQuestions
                       : fileQuestions;
                   const hasHiddenQuestions =
-                    hasFileQuestions && fileQuestions.length < allQuestions.length;
+                    hasFileQuestions &&
+                    fileQuestions.length < allQuestions.length;
                   const questionsCount = visibleQuestions.length;
 
                   return (
@@ -1020,6 +1138,8 @@ function AssignAuditsReviewContent() {
                             Boolean(String(q.auditorNotes || "").trim());
                           const noteSaveFeedback =
                             noteSaveFeedbackByQuestion[questionId];
+                          const clarificationFeedback =
+                            clarificationFeedbackByQuestion[questionId];
                           const showAttachments = isFileQuestionType(
                             q.questionType,
                             q.responseType,
@@ -1030,148 +1150,162 @@ function AssignAuditsReviewContent() {
                               key={q.id}
                               className="mt-6 border border-zinc-100 rounded-md p-6"
                             >
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex items-center gap-4">
-                                <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-sm font-semibold">
-                                  {idx + 1}
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-sm font-semibold">
+                                    {idx + 1}
+                                  </div>
+                                  <h4 className="text-sm font-medium text-secondary leading-[21.6px]">
+                                    {q.text}
+                                  </h4>
                                 </div>
-                                <h4 className="text-sm font-medium text-secondary leading-[21.6px]">
-                                  {q.text}
-                                </h4>
-                              </div>
-                              <span
-                                className="inline-flex items-center px-6 py-0.5 rounded-md text-sm font-medium"
-                                style={{
-                                  color: "#FAAB00",
-                                  backgroundColor: "#FEF7E5",
-                                  border: "1px solid #FAAB00",
-                                }}
-                              >
-                                {q.isFlagged ? "AI Flagged" : "AI Reviewed"}
-                              </span>
-                            </div>
-
-                            <div className="space-y-4 pl-12 pr-4">
-                              <div>
-                                <h5 className="text-sm font-medium text-gray leading-[21.6px] mb-2">
-                                  Applicant Response
-                                </h5>
-                                <div
-                                  className="min-h-[80px] p-4 rounded-md text-sm text-gray-700"
-                                  style={{ border: "1px solid #E6E6E6" }}
+                                <span
+                                  className="inline-flex items-center px-6 py-0.5 rounded-md text-sm font-medium"
+                                  style={{
+                                    color: "#FAAB00",
+                                    backgroundColor: "#FEF7E5",
+                                    border: "1px solid #FAAB00",
+                                  }}
                                 >
-                                  {q.applicantAnswer || "N/A"}
-                                </div>
+                                  {q.isFlagged ? "AI Flagged" : "AI Reviewed"}
+                                </span>
                               </div>
 
-                              {showAttachments && (
+                              <div className="space-y-4 pl-12 pr-4">
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray leading-[21.6px] mb-2">
+                                    Applicant Response
+                                  </h5>
+                                  <div
+                                    className="min-h-[80px] p-4 rounded-md text-sm text-gray-700"
+                                    style={{ border: "1px solid #E6E6E6" }}
+                                  >
+                                    {q.applicantAnswer || "N/A"}
+                                  </div>
+                                </div>
+
+                                {showAttachments && (
+                                  <div>
+                                    <h5 className="text-sm font-medium text-gray mb-2">
+                                      Attached Documents
+                                    </h5>
+                                    {Array.isArray(q.attachments) &&
+                                    q.attachments.length > 0 ? (
+                                      <div className="flex gap-3 flex-wrap">
+                                        {q.attachments.map(
+                                          (file: any, fileIndex: number) => (
+                                            <a
+                                              key={`${q.id}-file-${fileIndex}`}
+                                              href={file.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm text-secondary underline"
+                                              style={{ background: "#F6F6F6" }}
+                                            >
+                                              {file.name ||
+                                                `Document ${fileIndex + 1}`}
+                                            </a>
+                                          ),
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-gray-500">
+                                        No attached documents
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
                                 <div>
                                   <h5 className="text-sm font-medium text-gray mb-2">
-                                    Attached Documents
+                                    AI Analysis
                                   </h5>
-                                  {Array.isArray(q.attachments) &&
-                                  q.attachments.length > 0 ? (
-                                    <div className="flex gap-3 flex-wrap">
-                                      {q.attachments.map(
-                                        (file: any, fileIndex: number) => (
-                                          <a
-                                            key={`${q.id}-file-${fileIndex}`}
-                                            href={file.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm text-secondary underline"
-                                            style={{ background: "#F6F6F6" }}
-                                          >
-                                            {file.name || `Document ${fileIndex + 1}`}
-                                          </a>
-                                        ),
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-gray-500">
-                                      No attached documents
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-
-                              <div>
-                                <h5 className="text-sm font-medium text-gray mb-2">
-                                  AI Analysis
-                                </h5>
-                                <div
-                                  className="p-4 rounded-md text-sm text-gray-700 border"
-                                  style={{ borderColor: "#E6E6E6" }}
-                                >
-                                  {q.aiSummary || "No AI analysis available"}
-                                </div>
-                              </div>
-
-                              <div>
-                                <h5 className="text-sm font-medium text-gray mb-2">
-                                  Auditor Notes
-                                </h5>
-                                <textarea
-                                  className={`w-full min-h-30 p-3 rounded-md text-sm border ${
-                                    isCompletedAssessment
-                                      ? "bg-zinc-50 cursor-not-allowed"
-                                      : "focus:outline-none focus:border-black"
-                                  }`}
-                                  style={{ borderColor: "#E6E6E6" }}
-                                  placeholder="Add your notes here....."
-                                  value={noteValue}
-                                  disabled={isCompletedAssessment}
-                                  onChange={(event) =>
-                                    handleAuditorNotesChange(
-                                      questionId,
-                                      event.target.value,
-                                    )
-                                  }
-                                ></textarea>
-                              </div>
-
-                              {!isCompletedAssessment ? (
-                                <div className="mt-6 flex items-center gap-4">
-                                  <Button
-                                    variant="custom"
-                                    className="border border-black rounded-lg px-6 py-2 font-semibold"
-                                    onClick={() => setShowSubmitModal(true)}
+                                  <div
+                                    className="p-4 rounded-md text-sm text-gray-700 border"
+                                    style={{ borderColor: "#E6E6E6" }}
                                   >
-                                    Request Clarification
-                                  </Button>
-                                  <Button
-                                    variant="custom"
-                                    className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                    onClick={() => {
-                                      void handleAuditorNotesSave(questionId);
-                                    }}
-                                    disabled={
-                                      !assessmentId ||
-                                      Boolean(noteSaveFeedback?.isSaving) ||
-                                      !noteValue.trim()
+                                    {q.aiSummary || "No AI analysis available"}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray mb-2">
+                                    Auditor Notes
+                                  </h5>
+                                  <textarea
+                                    className={`w-full min-h-30 p-3 rounded-md text-sm border ${
+                                      isCompletedAssessment
+                                        ? "bg-zinc-50 cursor-not-allowed"
+                                        : "focus:outline-none focus:border-black"
+                                    }`}
+                                    style={{ borderColor: "#E6E6E6" }}
+                                    placeholder="Add your notes here....."
+                                    value={noteValue}
+                                    disabled={isCompletedAssessment}
+                                    onChange={(event) =>
+                                      handleAuditorNotesChange(
+                                        questionId,
+                                        event.target.value,
+                                      )
                                     }
-                                  >
-                                    {noteSaveFeedback?.isSaving
-                                      ? "Saving..."
-                                      : hasSavedNotes
-                                        ? "Update Notes"
-                                        : "Add Notes"}
-                                  </Button>
+                                  ></textarea>
                                 </div>
-                              ) : null}
-                              {noteSaveFeedback?.message ? (
-                                <p
-                                  className={`text-sm ${
-                                    noteSaveFeedback.type === "error"
-                                      ? "text-red-600"
-                                      : "text-green-600"
-                                  }`}
-                                >
-                                  {noteSaveFeedback.message}
-                                </p>
-                              ) : null}
+
+                                {!isCompletedAssessment ? (
+                                  <div className="mt-6 flex items-center gap-4">
+                                    <Button
+                                      variant="custom"
+                                      className="border border-black rounded-lg px-6 py-2 font-semibold"
+                                      onClick={() =>
+                                        handleOpenClarificationModal(questionId)
+                                      }
+                                    >
+                                      Request Clarification
+                                    </Button>
+                                    <Button
+                                      variant="custom"
+                                      className="border border-black rounded-lg px-6 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                      onClick={() => {
+                                        void handleAuditorNotesSave(questionId);
+                                      }}
+                                      disabled={
+                                        !assessmentId ||
+                                        Boolean(noteSaveFeedback?.isSaving) ||
+                                        !noteValue.trim()
+                                      }
+                                    >
+                                      {noteSaveFeedback?.isSaving
+                                        ? "Saving..."
+                                        : hasSavedNotes
+                                          ? "Update Notes"
+                                          : "Add Notes"}
+                                    </Button>
+                                  </div>
+                                ) : null}
+                                {noteSaveFeedback?.message ? (
+                                  <p
+                                    className={`text-sm ${
+                                      noteSaveFeedback.type === "error"
+                                        ? "text-red-600"
+                                        : "text-green-600"
+                                    }`}
+                                  >
+                                    {noteSaveFeedback.message}
+                                  </p>
+                                ) : null}
+                                {clarificationFeedback?.message ? (
+                                  <p
+                                    className={`text-sm ${
+                                      clarificationFeedback.type === "error"
+                                        ? "text-red-600"
+                                        : "text-green-600"
+                                    }`}
+                                  >
+                                    {clarificationFeedback.message}
+                                  </p>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
                           );
                         })
                       ) : (
@@ -1192,12 +1326,12 @@ function AssignAuditsReviewContent() {
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div
                 className="absolute inset-0 bg-black/40"
-                onClick={() => setShowSubmitModal(false)}
+                onClick={closeClarificationModal}
               />
               <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
                 <button
                   className="absolute top-4 right-4"
-                  onClick={() => setShowSubmitModal(false)}
+                  onClick={closeClarificationModal}
                 >
                   <img
                     src="/assets/imgs/admin/commons/cross.svg"
@@ -1218,23 +1352,28 @@ function AssignAuditsReviewContent() {
                   className="w-full min-h-30 p-3 rounded-md text-sm border"
                   style={{ borderColor: "#E6E6E6" }}
                   placeholder="Kindly provide additional documentation for....."
+                  value={clarificationRequest}
+                  onChange={(event) =>
+                    setClarificationRequest(event.target.value)
+                  }
                 />
+                {clarificationModalError ? (
+                  <p className="mt-2 text-sm text-red-600">
+                    {clarificationModalError}
+                  </p>
+                ) : null}
 
                 <div className="mt-6 flex justify-end gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setShowSubmitModal(false)}
-                  >
+                  <Button variant="secondary" onClick={closeClarificationModal}>
                     Close
                   </Button>
                   <Button
                     variant="primary"
                     onClick={() => {
-                      console.log("Request sent");
-                      setShowSubmitModal(false);
+                      void handleClarificationSubmit();
                     }}
                   >
-                    Send Request
+                    {isSubmittingClarification ? "Sending..." : "Send Request"}
                   </Button>
                 </div>
               </div>
@@ -1311,7 +1450,9 @@ function AssignAuditsReviewContent() {
                   }
                 }}
                 className={`flex items-start gap-4 p-4 rounded-md border ${
-                  finalDecision === "approved" ? "border-black" : "border-zinc-200"
+                  finalDecision === "approved"
+                    ? "border-black"
+                    : "border-zinc-200"
                 } ${isCompletedAssessment ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
               >
                 <div className="shrink-0">
@@ -1374,7 +1515,9 @@ function AssignAuditsReviewContent() {
                   }
                 }}
                 className={`flex items-start gap-4 p-4 rounded-md border ${
-                  finalDecision === "conditional" ? "border-black" : "border-zinc-200"
+                  finalDecision === "conditional"
+                    ? "border-black"
+                    : "border-zinc-200"
                 } ${isCompletedAssessment ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
               >
                 <div className="shrink-0">
@@ -1437,7 +1580,9 @@ function AssignAuditsReviewContent() {
                   }
                 }}
                 className={`flex items-start gap-4 p-4 rounded-md border ${
-                  finalDecision === "rejected" ? "border-black" : "border-zinc-200"
+                  finalDecision === "rejected"
+                    ? "border-black"
+                    : "border-zinc-200"
                 } ${isCompletedAssessment ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
               >
                 <div className="shrink-0">
@@ -1576,7 +1721,9 @@ function AssignAuditsReviewContent() {
               <p className="mt-3 text-sm text-red-600">{submitReportError}</p>
             ) : null}
             {submitReportSuccess ? (
-              <p className="mt-3 text-sm text-green-600">{submitReportSuccess}</p>
+              <p className="mt-3 text-sm text-green-600">
+                {submitReportSuccess}
+              </p>
             ) : null}
           </div>
         </div>
