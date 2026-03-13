@@ -308,9 +308,8 @@ function buildConditionPayload(option?: RedirectOption, fallbackRank?: string) {
   return {
     redirect_type: option.redirectType,
     rank: parseInt(option.rank || fallbackRank || "0", 10) || 0,
-    parent_id: option.targetId,
-    parent_name: option.targetName || option.label,
-    parent_type: option.redirectType,
+    target_id: option.targetId,
+    target_name: option.targetName || option.label,
   };
 }
 
@@ -1002,16 +1001,31 @@ function CreateCertificationPageContent() {
                             noRank:
                               q.conditions.no?.rank?.toString?.() || undefined,
                             yesParentId:
-                              q.conditions.yes?.parent_id || undefined,
-                            noParentId: q.conditions.no?.parent_id || undefined,
+                              q.conditions.yes?.target_id ||
+                              q.conditions.yes?.parent_id ||
+                              undefined,
+                            noParentId:
+                              q.conditions.no?.target_id ||
+                              q.conditions.no?.parent_id ||
+                              undefined,
                             yesParentName:
-                              q.conditions.yes?.parent_name || undefined,
+                              q.conditions.yes?.target_name ||
+                              q.conditions.yes?.parent_name ||
+                              undefined,
                             noParentName:
-                              q.conditions.no?.parent_name || undefined,
+                              q.conditions.no?.target_name ||
+                              q.conditions.no?.parent_name ||
+                              undefined,
                             yesParentType:
-                              q.conditions.yes?.parent_type || undefined,
+                              q.conditions.yes?.target_type ||
+                              q.conditions.yes?.parent_type ||
+                              q.conditions.yes?.redirect_type ||
+                              undefined,
                             noParentType:
-                              q.conditions.no?.parent_type || undefined,
+                              q.conditions.no?.target_type ||
+                              q.conditions.no?.parent_type ||
+                              q.conditions.no?.redirect_type ||
+                              undefined,
                           }
                         : undefined,
                     }));
@@ -1051,17 +1065,31 @@ function CreateCertificationPageContent() {
                                 q.conditions.no?.rank?.toString?.() ||
                                 undefined,
                               yesParentId:
-                                q.conditions.yes?.parent_id || undefined,
+                                q.conditions.yes?.target_id ||
+                                q.conditions.yes?.parent_id ||
+                                undefined,
                               noParentId:
-                                q.conditions.no?.parent_id || undefined,
+                                q.conditions.no?.target_id ||
+                                q.conditions.no?.parent_id ||
+                                undefined,
                               yesParentName:
-                                q.conditions.yes?.parent_name || undefined,
+                                q.conditions.yes?.target_name ||
+                                q.conditions.yes?.parent_name ||
+                                undefined,
                               noParentName:
-                                q.conditions.no?.parent_name || undefined,
+                                q.conditions.no?.target_name ||
+                                q.conditions.no?.parent_name ||
+                                undefined,
                               yesParentType:
-                                q.conditions.yes?.parent_type || undefined,
+                                q.conditions.yes?.target_type ||
+                                q.conditions.yes?.parent_type ||
+                                q.conditions.yes?.redirect_type ||
+                                undefined,
                               noParentType:
-                                q.conditions.no?.parent_type || undefined,
+                                q.conditions.no?.target_type ||
+                                q.conditions.no?.parent_type ||
+                                q.conditions.no?.redirect_type ||
+                                undefined,
                             }
                           : undefined,
                       })),
