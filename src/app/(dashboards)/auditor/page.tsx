@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   useReactTable,
   getCoreRowModel,
@@ -191,16 +192,13 @@ const upcomingDeadlinesData = [
 ];
 
 export default function AuditorDashboard() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardStats, setDashboardStats] =
     useState<AuditorDashboardStats | null>(null);
-  const [showAllAudits, setShowAllAudits] = useState(false);
   const [showAllDeadlines, setShowAllDeadlines] = useState(false);
-  const hasMoreAudits = assignedAuditsData.length > 3;
   const hasMoreDeadlines = upcomingDeadlinesData.length > 3;
-  const displayedData = showAllAudits
-    ? assignedAuditsData
-    : assignedAuditsData.slice(0, 4);
+  const displayedData = assignedAuditsData.slice(0, 4);
   const displayedDeadlines = showAllDeadlines
     ? upcomingDeadlinesData
     : upcomingDeadlinesData.slice(0, 3);
@@ -457,6 +455,33 @@ export default function AuditorDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchUpcomingAudits = async () => {
+      try {
+        const response = await axiosInstance.get("/auditors/upcoming-audits", {
+          params: {
+            page: 1,
+            limit: 4,
+          },
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        console.log("auditor upcoming audits:", response.data?.data ?? null);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Failed to fetch auditor upcoming audits:", error);
+      }
+    };
+
+    void fetchUpcomingAudits();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
   return (
     <div className="p-6 bg-light-gray min-h-screen">
       <div className="mb-8">
@@ -490,9 +515,9 @@ export default function AuditorDashboard() {
             <h2 className="text-base font-semibold text-secondary">
               Assigned Audits
             </h2>
-            {hasMoreAudits && !showAllAudits && !isLoading && (
+            {assignedAuditsData.length > 3 && !isLoading && (
               <button
-                onClick={() => setShowAllAudits(true)}
+                onClick={() => router.push("/auditor/assignAudits")}
                 className="px-3 py-1.5 border bg-white border-black rounded-lg text-xs font-medium text-secondary hover:bg-gray-50 transition-colors"
               >
                 View All
