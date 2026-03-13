@@ -10,7 +10,6 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { axiosInstance } from "@/lib/axios";
-import axios from "axios";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
@@ -62,6 +61,7 @@ export default function CompletedReviews() {
   const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
+    const controller = new AbortController();
     let isCancelled = false;
 
     const fetchReviewerAudits = async () => {
@@ -72,9 +72,9 @@ export default function CompletedReviews() {
             page: currentPage,
             limit: DEFAULT_PAGE_SIZE,
           },
+          signal: controller.signal,
         });
-        if (isCancelled) return;
-        console.log("reviewer audits response:", response.data);
+        if (isCancelled || controller.signal.aborted) return;
 
         const payload = response.data?.data;
         const items: ReviewerAuditItem[] = Array.isArray(payload?.items)
@@ -94,8 +94,10 @@ export default function CompletedReviews() {
               `review-audit-${currentPage}-${index + 1}`,
             assessmentId: assessmentId || undefined,
             auditId: auditId || undefined,
-            organization: item.organization_name || item.organizationName || "N/A",
-            certification: item.certificate_name || item.certificateName || "N/A",
+            organization:
+              item.organization_name || item.organizationName || "N/A",
+            certification:
+              item.certificate_name || item.certificateName || "N/A",
             status: formatStatusLabel(
               item.computed_status ||
                 item.computedStatus ||
@@ -125,15 +127,12 @@ export default function CompletedReviews() {
           setCurrentPage(resolvedTotalPages);
         }
       } catch (error) {
-        if (isCancelled) return;
+        if (isCancelled || controller.signal.aborted) return;
         console.error("Failed to fetch reviewer audits:", error);
-        if (axios.isAxiosError(error)) {
-          console.error("API message:", error.response?.data?.message);
-        }
         setCompletedReviews([]);
         setTotalPages(1);
       } finally {
-        if (!isCancelled) {
+        if (!isCancelled && !controller.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -143,6 +142,7 @@ export default function CompletedReviews() {
 
     return () => {
       isCancelled = true;
+      controller.abort();
     };
   }, [currentPage]);
 
@@ -403,7 +403,10 @@ export default function CompletedReviews() {
             {(() => {
               const maxPagesToShow = 8;
               let startPage = Math.max(1, currentPage - 3);
-              let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+              const endPage = Math.min(
+                totalPages,
+                startPage + maxPagesToShow - 1,
+              );
 
               if (endPage - startPage + 1 < maxPagesToShow) {
                 startPage = Math.max(1, endPage - maxPagesToShow + 1);
@@ -433,7 +436,9 @@ export default function CompletedReviews() {
                         : "bg-zinc-50 text-secondary border hover:bg-zinc-100"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                     style={
-                      currentPage !== page ? { borderColor: "#E6E6E6" } : undefined
+                      currentPage !== page
+                        ? { borderColor: "#E6E6E6" }
+                        : undefined
                     }
                   >
                     {page}

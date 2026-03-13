@@ -79,25 +79,35 @@ export default function AssignAudits() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
+    let isMounted = true;
+
     const fetchAssignedAssessments = async () => {
       setIsLoading(true);
       setError("");
       try {
-        const response = await axiosInstance.get<AssignedAssessmentsApiResponse>(
-          "/auditors/assigned-assessments",
-          {
-            params: {
-              page: 1,
-              limit: 10,
-              assignedByRole: activeTab,
+        const response =
+          await axiosInstance.get<AssignedAssessmentsApiResponse>(
+            "/auditors/assigned-assessments",
+            {
+              params: {
+                page: 1,
+                limit: 10,
+                assignedByRole: activeTab,
+              },
+              signal: controller.signal,
             },
-          },
-        );
-        console.log("assigned assessments data:", response.data);
+          );
+        if (!isMounted) return;
 
         const apiRows = Array.isArray(response.data?.data)
           ? response.data.data
           : [];
+
+        console.log("assigned assessments summary:", {
+          activeTab,
+          count: apiRows.length,
+        });
 
         const mappedRows: AssignedAudit[] = apiRows.map((item) => {
           const startAt = item.submitted_at || item.created_at || null;
@@ -116,6 +126,7 @@ export default function AssignAudits() {
 
         setAssignedAudits(mappedRows);
       } catch (error) {
+        if (!isMounted || controller.signal.aborted) return;
         console.error("Failed to fetch assigned assessments:", error);
         let message = "Failed to fetch assigned assessments";
         if (axios.isAxiosError(error)) {
@@ -124,11 +135,17 @@ export default function AssignAudits() {
         setError(message);
         setAssignedAudits([]);
       } finally {
+        if (!isMounted || controller.signal.aborted) return;
         setIsLoading(false);
       }
     };
 
-    fetchAssignedAssessments();
+    void fetchAssignedAssessments();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [activeTab]);
 
   const getStatusStyles = (status: string) => {
@@ -390,7 +407,10 @@ export default function AssignAudits() {
       {activeTab === "reviewer" && (
         <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
           <div className="relative overflow-x-auto">
-            <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
+            <table
+              className="w-full min-w-250"
+              style={{ tableLayout: "fixed" }}
+            >
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-zinc-100">
@@ -484,7 +504,10 @@ export default function AssignAudits() {
       {activeTab === "admin" && (
         <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
           <div className="relative overflow-x-auto">
-            <table className="w-full min-w-250" style={{ tableLayout: "fixed" }}>
+            <table
+              className="w-full min-w-250"
+              style={{ tableLayout: "fixed" }}
+            >
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b border-zinc-100">

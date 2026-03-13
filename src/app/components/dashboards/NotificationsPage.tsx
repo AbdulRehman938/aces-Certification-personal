@@ -42,6 +42,18 @@ function formatTimeAgo(dateString: string): string {
   return `${years} years ago`;
 }
 
+function shouldShowActionButtons(
+  item: DashboardNotification,
+  isAuditorRoute: boolean,
+): boolean {
+  return (
+    isAuditorRoute &&
+    item.type.toLowerCase() === "action_required" &&
+    Boolean(item.invitationId) &&
+    item.actionStatus?.toLowerCase() !== "accepted"
+  );
+}
+
 export default function DashboardNotificationsPage() {
   const pathname = usePathname();
   const isAuditorRoute = pathname.startsWith("/auditor");
@@ -197,13 +209,34 @@ export default function DashboardNotificationsPage() {
     try {
       await respondToAssessmentInvitation(invitationId, endpointAction);
 
-      setNotifications((prev) =>
-        prev.map((notification) =>
-          notification.id === item.id ? { ...notification, read: true } : notification,
-        ),
-      );
+      let markReadError: unknown = null;
+
+      if (!item.read) {
+        setNotifications((prev) =>
+          prev.map((notification) =>
+            notification.id === item.id
+              ? { ...notification, read: true }
+              : notification,
+          ),
+        );
+
+        try {
+          await markNotificationAsRead(item.id);
+        } catch (err) {
+          markReadError = err;
+        }
+      }
 
       await loadNotifications(0, false);
+
+      if (markReadError) {
+        setError(
+          getApiErrorMessage(
+            markReadError,
+            "Invitation updated, but failed to mark notification as read",
+          ),
+        );
+      }
     } catch (err) {
       setError(
         getApiErrorMessage(
@@ -365,42 +398,40 @@ export default function DashboardNotificationsPage() {
                         <p className="text-sm text-zinc-500 mt-1">
                           {item.message || item.description || "-"}
                         </p>
-                        {isAuditorRoute &&
-                          item.type.toLowerCase() === "action_required" &&
-                          item.invitationId && (
-                            <div className="mt-3 flex items-center gap-2">
-                              <button
-                                onClick={(event) =>
-                                  void handlePendingActionClick(
-                                    "accept",
-                                    item,
-                                    event,
-                                  )
-                                }
-                                disabled={Boolean(actionLoadingById[item.id])}
-                                className="px-3 py-1.5 rounded-md bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                              >
-                                {actionLoadingById[item.id]
-                                  ? "Processing..."
-                                  : "Accept"}
-                              </button>
-                              <button
-                                onClick={(event) =>
-                                  void handlePendingActionClick(
-                                    "reject",
-                                    item,
-                                    event,
-                                  )
-                                }
-                                disabled={Boolean(actionLoadingById[item.id])}
-                                className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                              >
-                                {actionLoadingById[item.id]
-                                  ? "Processing..."
-                                  : "Reject"}
-                              </button>
-                            </div>
-                          )}
+                        {shouldShowActionButtons(item, isAuditorRoute) && (
+                          <div className="mt-3 flex items-center gap-2">
+                            <button
+                              onClick={(event) =>
+                                void handlePendingActionClick(
+                                  "accept",
+                                  item,
+                                  event,
+                                )
+                              }
+                              disabled={Boolean(actionLoadingById[item.id])}
+                              className="px-3 py-1.5 rounded-md bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {actionLoadingById[item.id]
+                                ? "Processing..."
+                                : "Accept"}
+                            </button>
+                            <button
+                              onClick={(event) =>
+                                void handlePendingActionClick(
+                                  "reject",
+                                  item,
+                                  event,
+                                )
+                              }
+                              disabled={Boolean(actionLoadingById[item.id])}
+                              className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {actionLoadingById[item.id]
+                                ? "Processing..."
+                                : "Reject"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

@@ -8,7 +8,7 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
-import Button from "../admin/common/button";
+import { axiosInstance } from "@/lib/axios";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
@@ -19,20 +19,44 @@ interface StatCardProps {
   icon: string;
 }
 
+type ReviewerDashboardAnalytics = {
+  assured?: {
+    accepted_by_auditor?: number;
+    clarifications_pending?: number;
+    pending_reviews?: number;
+    sent_to_auditor?: number;
+    total_certificates?: number;
+  };
+  self_disclosure?: {
+    completed?: number;
+    pending_review_ai_flags?: number;
+    total_certificates?: number;
+  };
+};
+
+type ReviewerDashboardAnalyticsResponse = {
+  success?: boolean;
+  message?: string;
+  data?: ReviewerDashboardAnalytics;
+};
+
 function StatCard({ label, value, trend, icon }: StatCardProps) {
   const isPositive = trend.startsWith("+");
+  const hasTrend = Boolean(trend.trim());
 
   return (
     <div className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm min-h-[140px] flex flex-col justify-between">
       <div className="flex items-center justify-between mb-2">
         <img src={icon} alt={label} className="w-12 h-12" />
-        <span
-          className={`text-[14px] font-medium text-center leading-[14px] align-middle ${
-            isPositive ? "text-green-600" : "text-red-600"
-          }`}
-        >
-          {trend}
-        </span>
+        {hasTrend && (
+          <span
+            className={`text-[14px] font-medium text-center leading-[14px] align-middle ${
+              isPositive ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {trend}
+          </span>
+        )}
       </div>
       <div>
         <p
@@ -63,60 +87,6 @@ function StatCardSkeleton() {
     </div>
   );
 }
-
-const selfAssessmentCards = [
-  {
-    label: "Total Certificates",
-    value: "52",
-    trend: "+12%",
-    icon: "/assets/imgs/admin/dashboard/totalSold.svg",
-  },
-  {
-    label: "Pending Review (AI Flags)",
-    value: "11",
-    trend: "+8%",
-    icon: "/assets/imgs/admin/dashboard/inProgress.svg",
-  },
-  {
-    label: "Completed",
-    value: "19",
-    trend: "-5%",
-    icon: "/assets/imgs/admin/dashboard/completed.svg",
-  },
-  {
-    label: "Clarifications Pending",
-    value: "15",
-    trend: "+3%",
-    icon: "/assets/imgs/admin/dashboard/idle.svg",
-  },
-];
-
-const assuredCertificationCards = [
-  {
-    label: "Total Certificates",
-    value: "96",
-    trend: "+12%",
-    icon: "/assets/imgs/admin/dashboard/totalSold.svg",
-  },
-  {
-    label: "Sent to Auditor",
-    value: "34",
-    trend: "+8%",
-    icon: "/assets/imgs/admin/dashboard/inProgress.svg",
-  },
-  {
-    label: "Accepted by Auditor",
-    value: "41",
-    trend: "-5%",
-    icon: "/assets/imgs/admin/dashboard/completed.svg",
-  },
-  {
-    label: "Pending Reviews",
-    value: "21",
-    trend: "+3%",
-    icon: "/assets/imgs/admin/dashboard/idle.svg",
-  },
-];
 
 interface AssignedAudit {
   id: string;
@@ -230,6 +200,9 @@ const upcomingDeadlinesData = [
 
 export default function AuditorDashboard() {
   const [isLoading, setIsLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<ReviewerDashboardAnalytics | null>(
+    null,
+  );
   const [showAllAudits, setShowAllAudits] = useState(false);
   const [showAllDeadlines, setShowAllDeadlines] = useState(false);
   const hasMoreAudits = assignedAuditsData.length > 3;
@@ -240,6 +213,64 @@ export default function AuditorDashboard() {
   const displayedDeadlines = showAllDeadlines
     ? upcomingDeadlinesData
     : upcomingDeadlinesData.slice(0, 3);
+  const selfDisclosureCards = useMemo(
+    () => [
+      {
+        label: "Total Certificates",
+        value: String(analytics?.self_disclosure?.total_certificates ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/totalSold.svg",
+      },
+      {
+        label: "Pending Review (AI Flags)",
+        value: String(analytics?.self_disclosure?.pending_review_ai_flags ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/inProgress.svg",
+      },
+      {
+        label: "Completed",
+        value: String(analytics?.self_disclosure?.completed ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/completed.svg",
+      },
+    ],
+    [analytics],
+  );
+  const assuredCertificationCards = useMemo(
+    () => [
+      {
+        label: "Total Certificates",
+        value: String(analytics?.assured?.total_certificates ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/totalSold.svg",
+      },
+      {
+        label: "Sent to Auditor",
+        value: String(analytics?.assured?.sent_to_auditor ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/inProgress.svg",
+      },
+      {
+        label: "Accepted by Auditor",
+        value: String(analytics?.assured?.accepted_by_auditor ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/completed.svg",
+      },
+      {
+        label: "Pending Reviews",
+        value: String(analytics?.assured?.pending_reviews ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/idle.svg",
+      },
+      {
+        label: "Clarifications Pending",
+        value: String(analytics?.assured?.clarifications_pending ?? 0),
+        trend: "",
+        icon: "/assets/imgs/admin/dashboard/idle.svg",
+      },
+    ],
+    [analytics],
+  );
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -426,12 +457,35 @@ export default function AuditorDashboard() {
   });
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setIsLoading(false);
-    }, 600);
+    const controller = new AbortController();
+    let isMounted = true;
+
+    const fetchDashboardAnalytics = async () => {
+      try {
+        const response =
+          await axiosInstance.get<ReviewerDashboardAnalyticsResponse>(
+            "/reviewers/dashboard-analytics",
+            {
+              signal: controller.signal,
+            },
+          );
+        if (!isMounted) return;
+        setAnalytics(response.data?.data ?? null);
+      } catch (error) {
+        if (!isMounted || controller.signal.aborted) return;
+        console.error("Failed to fetch reviewer dashboard analytics:", error);
+        setAnalytics(null);
+      } finally {
+        if (!isMounted || controller.signal.aborted) return;
+        setIsLoading(false);
+      }
+    };
+
+    void fetchDashboardAnalytics();
 
     return () => {
-      window.clearTimeout(timer);
+      isMounted = false;
+      controller.abort();
     };
   }, []);
 
@@ -447,19 +501,21 @@ export default function AuditorDashboard() {
       </div>
       <div className="mb-10">
         <h2 className="text-[20px] font-semibold text-secondary mb-4 leading-[21.6px] align-middle">
-          Assured Certification
+          Self Disclosure
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
           {isLoading
-            ? selfAssessmentCards.map((_, index) => (
-                <StatCardSkeleton key={`reviewer-self-assessment-skeleton-${index}`} />
+            ? selfDisclosureCards.map((_, index) => (
+                <StatCardSkeleton
+                  key={`reviewer-self-assessment-skeleton-${index}`}
+                />
               ))
-            : selfAssessmentCards.map((card, index) => (
+            : selfDisclosureCards.map((card, index) => (
                 <StatCard
                   key={`self-assessment-${index}`}
                   label={card.label}
                   value={card.value}
-                  trend={(card as any).trend || ""}
+                  trend={card.trend}
                   icon={card.icon}
                 />
               ))}
@@ -468,17 +524,19 @@ export default function AuditorDashboard() {
         <h2 className="text-[20px] font-semibold text-secondary mb-4 leading-[21.6px] align-middle">
           Assured Certification
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-6">
           {isLoading
             ? assuredCertificationCards.map((_, index) => (
-                <StatCardSkeleton key={`reviewer-assured-certification-skeleton-${index}`} />
+                <StatCardSkeleton
+                  key={`reviewer-assured-certification-skeleton-${index}`}
+                />
               ))
             : assuredCertificationCards.map((card, index) => (
                 <StatCard
                   key={`assured-certification-${index}`}
                   label={card.label}
                   value={card.value}
-                  trend={(card as any).trend || ""}
+                  trend={card.trend}
                   icon={card.icon}
                 />
               ))}
@@ -653,7 +711,9 @@ export default function AuditorDashboard() {
                         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
                         style={{
                           backgroundColor:
-                            deadline.status === "overdue" ? "#FF0909" : "#FAAB00",
+                            deadline.status === "overdue"
+                              ? "#FF0909"
+                              : "#FAAB00",
                         }}
                       ></div>
                       <div className="flex items-start gap-4">

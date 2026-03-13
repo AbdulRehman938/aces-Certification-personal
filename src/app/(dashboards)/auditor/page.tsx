@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   useReactTable,
   getCoreRowModel,
@@ -8,7 +9,7 @@ import {
   flexRender,
   type ColumnDef,
 } from "@tanstack/react-table";
-import Button from "../admin/common/button";
+import { axiosInstance } from "@/lib/axios";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
@@ -18,6 +19,22 @@ interface StatCardProps {
   subtitle: string;
   icon: string;
 }
+
+type AuditorDashboardStats = {
+  completed?: number;
+  in_progress?: number;
+  pending_invitations?: number;
+  submitted?: number;
+  total_assigned?: number;
+};
+
+type AuditorDashboardStatsResponse = {
+  success?: boolean;
+  message?: string;
+  statusCode?: number;
+  timestamp?: string;
+  data?: AuditorDashboardStats;
+};
 
 function StatCard({ label, value, subtitle, icon }: StatCardProps) {
   return (
@@ -63,39 +80,6 @@ function StatCardSkeleton() {
     </div>
   );
 }
-
-const selfAssessmentCards = [
-  {
-    label: "Completed",
-    value: "08",
-    subtitle: "Total active assignments",
-    icon: "/assets/imgs/auditor/dashboard/assigned-audits.svg",
-  },
-  {
-    label: "Assigned Audits",
-    value: "12",
-    subtitle: "This month",
-    icon: "/assets/imgs/auditor/dashboard/in-progress.svg",
-  },
-  {
-    label: "In Progress",
-    value: "12",
-    subtitle: "This month",
-    icon: "/assets/imgs/auditor/dashboard/submitted.svg",
-  },
-  {
-    label: "Submitted",
-    value: "06",
-    subtitle: "This month",
-    icon: "/assets/imgs/auditor/dashboard/approved.svg",
-  },
-  {
-    label: "Pending Review",
-    value: "05",
-    subtitle: "Pending Management Reviewer",
-    icon: "/assets/imgs/auditor/dashboard/pending-review.svg",
-  },
-];
 
 interface AssignedAudit {
   id: string;
@@ -208,17 +192,51 @@ const upcomingDeadlinesData = [
 ];
 
 export default function AuditorDashboard() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [showAllAudits, setShowAllAudits] = useState(false);
+  const [dashboardStats, setDashboardStats] =
+    useState<AuditorDashboardStats | null>(null);
   const [showAllDeadlines, setShowAllDeadlines] = useState(false);
-  const hasMoreAudits = assignedAuditsData.length > 3;
   const hasMoreDeadlines = upcomingDeadlinesData.length > 3;
-  const displayedData = showAllAudits
-    ? assignedAuditsData
-    : assignedAuditsData.slice(0, 4);
+  const displayedData = assignedAuditsData.slice(0, 4);
   const displayedDeadlines = showAllDeadlines
     ? upcomingDeadlinesData
     : upcomingDeadlinesData.slice(0, 3);
+  const metricCards = useMemo(
+    () => [
+      {
+        label: "Assigned Audits",
+        value: String(dashboardStats?.total_assigned ?? 0),
+        subtitle: "Total assignments",
+        icon: "/assets/imgs/auditor/dashboard/assigned-audits.svg",
+      },
+      {
+        label: "In Progress",
+        value: String(dashboardStats?.in_progress ?? 0),
+        subtitle: "Currently in progress",
+        icon: "/assets/imgs/auditor/dashboard/in-progress.svg",
+      },
+      {
+        label: "Submitted",
+        value: String(dashboardStats?.submitted ?? 0),
+        subtitle: "Submitted for review",
+        icon: "/assets/imgs/auditor/dashboard/submitted.svg",
+      },
+      {
+        label: "Completed",
+        value: String(dashboardStats?.completed ?? 0),
+        subtitle: "Completed audits",
+        icon: "/assets/imgs/auditor/dashboard/approved.svg",
+      },
+      {
+        label: "Pending Invitations",
+        value: String(dashboardStats?.pending_invitations ?? 0),
+        subtitle: "Awaiting your response",
+        icon: "/assets/imgs/auditor/dashboard/pending-review.svg",
+      },
+    ],
+    [dashboardStats],
+  );
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -405,12 +423,62 @@ export default function AuditorDashboard() {
   });
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setIsLoading(false);
-    }, 600);
+    const controller = new AbortController();
+    let isMounted = true;
+
+    const fetchDashboardStats = async () => {
+      try {
+        const response = await axiosInstance.get<AuditorDashboardStatsResponse>(
+          "/auditors/dashboard-stats",
+          {
+            signal: controller.signal,
+          },
+        );
+        if (!isMounted) return;
+        console.log("auditor dashboard stats:", response.data?.data ?? null);
+        setDashboardStats(response.data?.data ?? null);
+      } catch (error) {
+        if (!isMounted || controller.signal.aborted) return;
+        console.error("Failed to fetch auditor dashboard stats:", error);
+        setDashboardStats(null);
+      } finally {
+        if (!isMounted || controller.signal.aborted) return;
+        setIsLoading(false);
+      }
+    };
+
+    void fetchDashboardStats();
 
     return () => {
-      window.clearTimeout(timer);
+      isMounted = false;
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchUpcomingAudits = async () => {
+      try {
+        const response = await axiosInstance.get("/auditors/upcoming-audits", {
+          params: {
+            page: 1,
+            limit: 4,
+          },
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        console.log("auditor upcoming audits:", response.data?.data ?? null);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Failed to fetch auditor upcoming audits:", error);
+      }
+    };
+
+    void fetchUpcomingAudits();
+
+    return () => {
+      controller.abort();
     };
   }, []);
 
@@ -427,10 +495,12 @@ export default function AuditorDashboard() {
       <div className="mb-10 flex flex-col gap-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {isLoading
-            ? selfAssessmentCards.map((_, index) => (
-                <StatCardSkeleton key={`auditor-dashboard-stat-skeleton-${index}`} />
+            ? metricCards.map((_, index) => (
+                <StatCardSkeleton
+                  key={`auditor-dashboard-stat-skeleton-${index}`}
+                />
               ))
-            : selfAssessmentCards.map((card, index) => (
+            : metricCards.map((card, index) => (
                 <StatCard
                   key={`self-assessment-${index}`}
                   label={card.label}
@@ -445,9 +515,9 @@ export default function AuditorDashboard() {
             <h2 className="text-base font-semibold text-secondary">
               Assigned Audits
             </h2>
-            {hasMoreAudits && !showAllAudits && !isLoading && (
+            {assignedAuditsData.length > 3 && !isLoading && (
               <button
-                onClick={() => setShowAllAudits(true)}
+                onClick={() => router.push("/auditor/assignAudits")}
                 className="px-3 py-1.5 border bg-white border-black rounded-lg text-xs font-medium text-secondary hover:bg-gray-50 transition-colors"
               >
                 View All
@@ -609,7 +679,9 @@ export default function AuditorDashboard() {
                         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
                         style={{
                           backgroundColor:
-                            deadline.status === "overdue" ? "#FF0909" : "#FAAB00",
+                            deadline.status === "overdue"
+                              ? "#FF0909"
+                              : "#FAAB00",
                         }}
                       ></div>
                       <div className="flex items-start gap-4">

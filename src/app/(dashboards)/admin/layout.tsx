@@ -16,6 +16,7 @@ const adminRouteAccess = [
   { prefix: "/admin/auditors", resources: ["auditor"] },
   { prefix: "/admin/payment", resources: ["payment"] },
   { prefix: "/admin/team", resources: ["team", "users"] },
+  { prefix: "/admin/messages", resources: ["messages"] },
   { prefix: "/admin/settings", resources: ["setting"] },
   { prefix: "/admin/support", resources: ["supportCenter"] },
 ];

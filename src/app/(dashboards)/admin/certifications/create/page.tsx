@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   Suspense,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,6 +23,7 @@ type Question = {
   helpText: string;
   criteriaInformation?: string;
   type: string;
+  rank?: number;
   hasConditionalLogic: boolean;
   conditionalRules?: {
     yesAction: string;
@@ -30,12 +32,19 @@ type Question = {
     noExitLevel: string;
     yesRank?: string;
     noRank?: string;
+    yesParentId?: string;
+    noParentId?: string;
+    yesParentName?: string;
+    noParentName?: string;
+    yesParentType?: string;
+    noParentType?: string;
   };
 };
 
 type SubSection = {
   id: string;
   name: string;
+  rank?: number;
   questions: Question[];
   isExpanded: boolean;
 };
@@ -43,6 +52,7 @@ type SubSection = {
 type Section = {
   id: string;
   name: string;
+  rank?: number;
   subSections: SubSection[];
   questions?: Question[];
   isExpanded: boolean;
@@ -51,6 +61,7 @@ type Section = {
 type MainSection = {
   id: string;
   name: string;
+  rank?: number;
   sections: Section[];
   isExpanded: boolean;
 };
@@ -80,6 +91,248 @@ interface IndustriesResponse {
     page: number;
     pageSize: number;
     totalPages: number;
+  };
+}
+
+type RedirectLevel = "main" | "section" | "subsection" | "question" | "end";
+
+type RedirectOption = {
+  value: string;
+  label: string;
+  description?: string;
+  descriptionTone?: "default" | "danger";
+  redirectType?: RedirectLevel;
+  targetId?: string;
+  targetName?: string;
+  rank?: string;
+  indentLevel?: number;
+  parentValue?: string;
+  hasChildren?: boolean;
+  disabled?: boolean;
+  groupLabel?: boolean;
+};
+
+function createRedirectOptionValue(level: RedirectLevel, id: string) {
+  return `${level}:${id}`;
+}
+
+function getQuestionRedirectLabel(question: Question, fallbackIndex: number) {
+  const text = (question.text || "").trim();
+  return text || `Question ${fallbackIndex + 1}`;
+}
+
+function normalizeRedirectLevel(value?: string): RedirectLevel | "" {
+  if (value === "main" || value === "main_section") return "main";
+  if (value === "section") return "section";
+  if (value === "subsection" || value === "sub_section") return "subsection";
+  if (value === "question") return "question";
+  if (value === "end") return "end";
+  return "";
+}
+
+function findRedirectOptionByValue(
+  options: RedirectOption[],
+  value: string,
+): RedirectOption | undefined {
+  return options.find((option) => !option.groupLabel && option.value === value);
+}
+
+function resolveRedirectSelectionValue(
+  options: RedirectOption[],
+  redirectType?: string,
+  rank?: string,
+  parentId?: string,
+): string {
+  if (parentId) {
+    const matchedOption = options.find(
+      (option) => !option.groupLabel && option.targetId === parentId,
+    );
+
+    if (matchedOption) {
+      return matchedOption.value;
+    }
+  }
+
+  const normalizedLevel = normalizeRedirectLevel(redirectType);
+  if (!normalizedLevel || rank === undefined || rank === null || rank === "") {
+    return "";
+  }
+
+  return (
+    options.find(
+      (option) =>
+        !option.groupLabel &&
+        option.redirectType === normalizedLevel &&
+        option.rank === String(rank),
+    )?.value || ""
+  );
+}
+
+function buildRedirectOptions(mainSections: MainSection[]): RedirectOption[] {
+  const orderedOptions: RedirectOption[] = [];
+
+  mainSections.forEach((mainSection, mainIndex) => {
+    const mainRank = String(mainSection.rank ?? mainIndex + 1);
+    const mainName =
+      (mainSection.name || "").trim() || `Main Section ${mainRank}`;
+    const mainValue = createRedirectOptionValue("main", mainSection.id);
+
+    orderedOptions.push({
+      value: mainValue,
+      label: mainName,
+      description: `Main section • rank ${mainRank}`,
+      redirectType: "main",
+      targetId: mainSection.id,
+      targetName: mainName,
+      rank: mainRank,
+      indentLevel: 0,
+      hasChildren: mainSection.sections.length > 0,
+    });
+
+    mainSection.sections.forEach((section, sectionIndex) => {
+      const sectionRank = String(section.rank ?? sectionIndex + 1);
+      const sectionName =
+        (section.name || "").trim() || `Section ${sectionRank}`;
+      const sectionValue = createRedirectOptionValue("section", section.id);
+      const sectionHasChildren =
+        (section.questions || []).length > 0 || section.subSections.length > 0;
+      const sectionHasQuestions = (section.questions || []).length > 0;
+
+      orderedOptions.push({
+        value: sectionValue,
+        label: sectionName,
+        description: sectionHasQuestions
+          ? `Section • rank ${sectionRank}`
+          : "This section has no questions",
+        descriptionTone: sectionHasQuestions ? "default" : "danger",
+        redirectType: "section",
+        targetId: section.id,
+        targetName: sectionName,
+        rank: sectionRank,
+        indentLevel: 1,
+        parentValue: mainValue,
+        hasChildren: sectionHasChildren,
+        disabled: !sectionHasQuestions,
+      });
+
+      (section.questions || []).forEach((question, questionIndex) => {
+        const questionRank = String(question.rank ?? questionIndex + 1);
+
+        orderedOptions.push({
+          value: createRedirectOptionValue("question", question.id),
+          label: getQuestionRedirectLabel(question, questionIndex),
+          description: `Question • rank ${questionRank}`,
+          redirectType: "question",
+          targetId: question.id,
+          targetName: getQuestionRedirectLabel(question, questionIndex),
+          rank: questionRank,
+          indentLevel: 2,
+          parentValue: sectionValue,
+          hasChildren: false,
+        });
+      });
+
+      section.subSections.forEach((subSection, subSectionIndex) => {
+        const subSectionRank = String(subSection.rank ?? subSectionIndex + 1);
+        const subSectionName =
+          (subSection.name || "").trim() || `Sub-section ${subSectionRank}`;
+        const subSectionValue = createRedirectOptionValue(
+          "subsection",
+          subSection.id,
+        );
+
+        orderedOptions.push({
+          value: subSectionValue,
+          label: subSectionName,
+          description:
+            subSection.questions.length > 0
+              ? `Sub-section • rank ${subSectionRank}`
+              : "This sub-section has no questions",
+          descriptionTone:
+            subSection.questions.length > 0 ? "default" : "danger",
+          redirectType: "subsection",
+          targetId: subSection.id,
+          targetName: subSectionName,
+          rank: subSectionRank,
+          indentLevel: 2,
+          parentValue: sectionValue,
+          hasChildren: subSection.questions.length > 0,
+          disabled: subSection.questions.length === 0,
+        });
+
+        subSection.questions.forEach((question, questionIndex) => {
+          const questionRank = String(question.rank ?? questionIndex + 1);
+
+          orderedOptions.push({
+            value: createRedirectOptionValue("question", question.id),
+            label: getQuestionRedirectLabel(question, questionIndex),
+            description: `Question • rank ${questionRank}`,
+            redirectType: "question",
+            targetId: question.id,
+            targetName: getQuestionRedirectLabel(question, questionIndex),
+            rank: questionRank,
+            indentLevel: 3,
+            parentValue: subSectionValue,
+            hasChildren: false,
+          });
+        });
+      });
+    });
+  });
+
+  orderedOptions.push({
+    value: createRedirectOptionValue("end", "end"),
+    label: "End",
+    description: "End assessment flow",
+    redirectType: "end",
+    rank: "0",
+    indentLevel: 0,
+    hasChildren: false,
+  });
+
+  return orderedOptions;
+}
+
+function buildConditionPayload(option?: RedirectOption, fallbackRank?: string) {
+  if (!option?.redirectType) {
+    return undefined;
+  }
+
+  if (option.redirectType === "end") {
+    return {
+      redirect_type: "end",
+      rank: 0,
+    };
+  }
+
+  return {
+    redirect_type: option.redirectType,
+    rank: parseInt(option.rank || fallbackRank || "0", 10) || 0,
+    parent_id: option.targetId,
+    parent_name: option.targetName || option.label,
+    parent_type: option.redirectType,
+  };
+}
+
+function buildLocalConditionalRuleState(
+  yesOption?: RedirectOption,
+  noOption?: RedirectOption,
+  yesFallbackRank?: string,
+  noFallbackRank?: string,
+) {
+  return {
+    yesAction: yesOption?.redirectType || "",
+    noAction: noOption?.redirectType || "",
+    yesExitLevel: yesOption?.redirectType || "",
+    noExitLevel: noOption?.redirectType || "",
+    yesRank: yesOption?.rank || yesFallbackRank,
+    noRank: noOption?.rank || noFallbackRank,
+    yesParentId: yesOption?.targetId,
+    noParentId: noOption?.targetId,
+    yesParentName: yesOption?.targetName || yesOption?.label,
+    noParentName: noOption?.targetName || noOption?.label,
+    yesParentType: yesOption?.redirectType,
+    noParentType: noOption?.redirectType,
   };
 }
 
@@ -146,6 +399,15 @@ function CreateCertificationPageContent() {
   const [editingSubSectionTarget, setEditingSubSectionTarget] =
     useState<EditingSubSectionTarget | null>(null);
   const [mainSections, setMainSections] = useState<MainSection[]>([]);
+  const redirectOptions = useMemo(
+    () => buildRedirectOptions(mainSections),
+    [mainSections],
+  );
+  const redirectDropdownPlaceholder = redirectOptions.some(
+    (option) => !option.groupLabel,
+  )
+    ? "Choose redirect destination"
+    : "Add sections, sub-sections, or questions first";
   const [selectedMainSection, setSelectedMainSection] = useState<string | null>(
     null,
   );
@@ -345,7 +607,6 @@ function CreateCertificationPageContent() {
         setDatabaseQuestionCount(count);
         return count;
       } catch (err) {
-        console.error("Failed to fetch question count from database:", err);
         setDatabaseQuestionCount(0);
         return 0;
       } finally {
@@ -364,6 +625,33 @@ function CreateCertificationPageContent() {
       setNoRank("");
     }
   }, [questionType]);
+
+  useEffect(() => {
+    const yesOption = yesExitLevel
+      ? findRedirectOptionByValue(redirectOptions, yesExitLevel)
+      : undefined;
+    const noOption = noExitLevel
+      ? findRedirectOptionByValue(redirectOptions, noExitLevel)
+      : undefined;
+
+    if (yesExitLevel) {
+      if (!yesOption) {
+        setYesExitLevel("");
+        setYesRank("");
+      } else if (yesRank !== (yesOption.rank || "")) {
+        setYesRank(yesOption.rank || "");
+      }
+    }
+
+    if (noExitLevel) {
+      if (!noOption) {
+        setNoExitLevel("");
+        setNoRank("");
+      } else if (noRank !== (noOption.rank || "")) {
+        setNoRank(noOption.rank || "");
+      }
+    }
+  }, [redirectOptions, yesExitLevel, yesRank, noExitLevel, noRank]);
 
   useEffect(() => {
     setHasConditionalLogic(false);
@@ -396,13 +684,26 @@ function CreateCertificationPageContent() {
       }
 
       if (question) {
+        const resolvedYesRedirectValue = resolveRedirectSelectionValue(
+          redirectOptions,
+          question.conditionalRules?.yesExitLevel,
+          question.conditionalRules?.yesRank,
+          question.conditionalRules?.yesParentId,
+        );
+        const resolvedNoRedirectValue = resolveRedirectSelectionValue(
+          redirectOptions,
+          question.conditionalRules?.noExitLevel,
+          question.conditionalRules?.noRank,
+          question.conditionalRules?.noParentId,
+        );
+
         setQuestionText(question.text || "");
         setHelpText(question.helpText || "");
         setCriteriaInformation(question.criteriaInformation || "");
         setQuestionType(question.type || "");
         setHasConditionalLogic(question.hasConditionalLogic || false);
-        setYesExitLevel(question.conditionalRules?.yesExitLevel || "");
-        setNoExitLevel(question.conditionalRules?.noExitLevel || "");
+        setYesExitLevel(resolvedYesRedirectValue);
+        setNoExitLevel(resolvedNoRedirectValue);
         setYesRank(question.conditionalRules?.yesRank || "");
         setNoRank(question.conditionalRules?.noRank || "");
       }
@@ -413,6 +714,7 @@ function CreateCertificationPageContent() {
     selectedSection,
     selectedSubSection,
     mainSections,
+    redirectOptions,
   ]);
 
   useEffect(() => {
@@ -489,10 +791,20 @@ function CreateCertificationPageContent() {
       : false;
 
     const originalYesExitLevel = originalHasConditionalLogic
-      ? originalQuestion.conditionalRules?.yesExitLevel || ""
+      ? resolveRedirectSelectionValue(
+          redirectOptions,
+          originalQuestion.conditionalRules?.yesExitLevel,
+          originalQuestion.conditionalRules?.yesRank,
+          originalQuestion.conditionalRules?.yesParentId,
+        )
       : "";
     const originalNoExitLevel = originalHasConditionalLogic
-      ? originalQuestion.conditionalRules?.noExitLevel || ""
+      ? resolveRedirectSelectionValue(
+          redirectOptions,
+          originalQuestion.conditionalRules?.noExitLevel,
+          originalQuestion.conditionalRules?.noRank,
+          originalQuestion.conditionalRules?.noParentId,
+        )
       : "";
     const originalYesRank = originalHasConditionalLogic
       ? originalQuestion.conditionalRules?.yesRank || ""
@@ -521,7 +833,7 @@ function CreateCertificationPageContent() {
 
   const canNavigateQuestion = (
     nextMainSectionId: string,
-    nextSectionId: string,
+    nextSectionId: string | null,
     nextSubSectionId: string | null,
     nextQuestionId: string | null,
   ): boolean => {
@@ -574,7 +886,6 @@ function CreateCertificationPageContent() {
           totalPages: meta.totalPages || 1,
         });
       } catch (err) {
-        console.error("Failed to fetch industries:", err);
         if (!append) {
           setIndustries([]);
           setIndustryOptions([]);
@@ -604,7 +915,6 @@ function CreateCertificationPageContent() {
           `/certificates/${certificateIdFromUrl}?include=questions`,
         );
         const certData = response.data?.data;
-        console.log("certData", certData);
 
         if (certData) {
           setDatabaseQuestionCount(countQuestionsFromCertificateData(certData));
@@ -675,6 +985,10 @@ function CreateCertificationPageContent() {
                       helpText: q.hint || "",
                       criteriaInformation: q.criteria || "",
                       type: q.type || "",
+                      rank:
+                        typeof q.rank === "number"
+                          ? q.rank
+                          : Number(q.rank) || undefined,
                       hasConditionalLogic:
                         q.conditions && Object.keys(q.conditions).length > 0,
                       conditionalRules: q.conditions
@@ -687,6 +1001,17 @@ function CreateCertificationPageContent() {
                               q.conditions.yes?.rank?.toString?.() || undefined,
                             noRank:
                               q.conditions.no?.rank?.toString?.() || undefined,
+                            yesParentId:
+                              q.conditions.yes?.parent_id || undefined,
+                            noParentId: q.conditions.no?.parent_id || undefined,
+                            yesParentName:
+                              q.conditions.yes?.parent_name || undefined,
+                            noParentName:
+                              q.conditions.no?.parent_name || undefined,
+                            yesParentType:
+                              q.conditions.yes?.parent_type || undefined,
+                            noParentType:
+                              q.conditions.no?.parent_type || undefined,
                           }
                         : undefined,
                     }));
@@ -696,12 +1021,20 @@ function CreateCertificationPageContent() {
                     ).map((ss: any) => ({
                       id: ss.id,
                       name: ss.name,
+                      rank:
+                        typeof ss.rank === "number"
+                          ? ss.rank
+                          : Number(ss.rank) || undefined,
                       questions: (ss.questions || []).map((q: any) => ({
                         id: q.id,
                         text: q.question || "",
                         helpText: q.hint || "",
                         criteriaInformation: q.criteria || "",
                         type: q.type || "",
+                        rank:
+                          typeof q.rank === "number"
+                            ? q.rank
+                            : Number(q.rank) || undefined,
                         hasConditionalLogic:
                           q.conditions && Object.keys(q.conditions).length > 0,
                         conditionalRules: q.conditions
@@ -717,6 +1050,18 @@ function CreateCertificationPageContent() {
                               noRank:
                                 q.conditions.no?.rank?.toString?.() ||
                                 undefined,
+                              yesParentId:
+                                q.conditions.yes?.parent_id || undefined,
+                              noParentId:
+                                q.conditions.no?.parent_id || undefined,
+                              yesParentName:
+                                q.conditions.yes?.parent_name || undefined,
+                              noParentName:
+                                q.conditions.no?.parent_name || undefined,
+                              yesParentType:
+                                q.conditions.yes?.parent_type || undefined,
+                              noParentType:
+                                q.conditions.no?.parent_type || undefined,
                             }
                           : undefined,
                       })),
@@ -731,6 +1076,10 @@ function CreateCertificationPageContent() {
                     return {
                       id: s.id,
                       name: s.name,
+                      rank:
+                        typeof s.rank === "number"
+                          ? s.rank
+                          : Number(s.rank) || undefined,
                       subSections,
                       questions: sectionQuestions,
                       isExpanded: hasSectionQuestions || hasSubSectionQuestions,
@@ -741,6 +1090,10 @@ function CreateCertificationPageContent() {
                 return {
                   id: ms.id,
                   name: ms.name,
+                  rank:
+                    typeof ms.rank === "number"
+                      ? ms.rank
+                      : Number(ms.rank) || undefined,
                   sections,
                   isExpanded: true,
                 };
@@ -832,7 +1185,6 @@ function CreateCertificationPageContent() {
 
   const createMainSectionAPI = async (name: string) => {
     if (!certificateId) {
-      console.error("Certificate ID is required");
       return null;
     }
     try {
@@ -844,15 +1196,11 @@ function CreateCertificationPageContent() {
       );
       return response.data?.data?.[0] || null;
     } catch (err) {
-      console.error("Failed to create main section:", err);
       throw err;
     }
   };
 
-  const updateMainSectionAPI = async (
-    mainSectionId: string,
-    name: string,
-  ) => {
+  const updateMainSectionAPI = async (mainSectionId: string, name: string) => {
     try {
       const response = await axiosInstance.patch(
         `/main-sections/${mainSectionId}`,
@@ -862,64 +1210,54 @@ function CreateCertificationPageContent() {
       );
       return response.data?.data || null;
     } catch (err) {
-      console.error("Failed to update main section:", err);
       throw err;
     }
   };
 
   const deleteMainSectionAPI = async (mainSectionId: string) => {
     if (!certificateId) {
-      console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
       await axiosInstance.delete(`/main-sections/${mainSectionId}`);
       return true;
     } catch (err) {
-      console.error("Failed to delete main section:", err);
       throw err;
     }
   };
 
   const deleteSectionAPI = async (sectionId: string) => {
     if (!certificateId) {
-      console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
       await axiosInstance.delete(`/sections/${sectionId}`);
       return true;
     } catch (err) {
-      console.error("Failed to delete section:", err);
       throw err;
     }
   };
 
   const deleteSubSectionAPI = async (subSectionId: string) => {
     if (!certificateId) {
-      console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
       await axiosInstance.delete(`/subsections/${subSectionId}`);
       return true;
     } catch (err) {
-      console.error("Failed to delete subsection:", err);
       throw err;
     }
   };
 
   const deleteQuestionAPI = async (questionId: string) => {
-    console.log("questionId", questionId);
     if (!certificateId) {
-      console.error("Certificate ID is required");
       throw new Error("Certificate ID is required");
     }
     try {
       await axiosInstance.delete(`/questions/${questionId}`);
       return true;
     } catch (err) {
-      console.error("Failed to delete question:", err);
       throw err;
     }
   };
@@ -943,7 +1281,6 @@ function CreateCertificationPageContent() {
         resetMainSectionEditor();
       }
     } catch (err) {
-      console.error("Error creating main section:", err);
       showAlert("Failed to create main section. Please try again.");
     } finally {
       setIsCreatingSection(false);
@@ -978,7 +1315,6 @@ function CreateCertificationPageContent() {
       );
       resetMainSectionEditor();
     } catch (err) {
-      console.error("Error updating main section:", err);
       showAlert("Failed to update main section. Please try again.");
     } finally {
       setIsUpdatingStructure(null);
@@ -1043,7 +1379,6 @@ function CreateCertificationPageContent() {
         resetSubSectionEditor();
       }
     } catch (err) {
-      console.error("Error deleting main section:", err);
       showAlert("Failed to delete main section. Please try again.");
     } finally {
       setIsDeletingMainSection(null);
@@ -1065,7 +1400,6 @@ function CreateCertificationPageContent() {
       );
       return response.data?.data?.[0] || null;
     } catch (err) {
-      console.error("Failed to create section:", err);
       throw err;
     }
   };
@@ -1077,7 +1411,6 @@ function CreateCertificationPageContent() {
       });
       return response.data?.data || null;
     } catch (err) {
-      console.error("Failed to update section:", err);
       throw err;
     }
   };
@@ -1092,7 +1425,6 @@ function CreateCertificationPageContent() {
       );
       return response.data?.data || null;
     } catch (err) {
-      console.error("Failed to update subsection:", err);
       throw err;
     }
   };
@@ -1133,7 +1465,6 @@ function CreateCertificationPageContent() {
         resetSectionEditor();
       }
     } catch (err) {
-      console.error("Error creating section:", err);
       showAlert("Failed to create section. Please try again.");
     } finally {
       setIsCreatingSection(false);
@@ -1180,7 +1511,6 @@ function CreateCertificationPageContent() {
       );
       resetSectionEditor();
     } catch (err) {
-      console.error("Error updating section:", err);
       showAlert("Failed to update section. Please try again.");
     } finally {
       setIsUpdatingStructure(null);
@@ -1255,7 +1585,6 @@ function CreateCertificationPageContent() {
         resetSubSectionEditor();
       }
     } catch (err) {
-      console.error("Error deleting section:", err);
       showAlert("Failed to delete section. Please try again.");
     } finally {
       setIsDeletingSection(null);
@@ -1306,7 +1635,6 @@ function CreateCertificationPageContent() {
         resetSubSectionEditor();
       }
     } catch (err) {
-      console.error("Error creating subsection:", err);
       showAlert("Failed to create subsection. Please try again.");
     } finally {
       setIsCreatingSubSection(false);
@@ -1367,7 +1695,6 @@ function CreateCertificationPageContent() {
       );
       resetSubSectionEditor();
     } catch (err) {
-      console.error("Error updating subsection:", err);
       showAlert("Failed to update subsection. Please try again.");
     } finally {
       setIsUpdatingStructure(null);
@@ -1420,7 +1747,6 @@ function CreateCertificationPageContent() {
         resetSubSectionEditor();
       }
     } catch (err) {
-      console.error("Error deleting subsection:", err);
       showAlert("Failed to delete subsection. Please try again.");
     } finally {
       setIsDeletingSubSection(null);
@@ -1585,7 +1911,6 @@ function CreateCertificationPageContent() {
         setSelectedQuestion(null);
       }
     } catch (err) {
-      console.error("Error deleting question:", err);
       showAlert("Failed to delete question. Please try again.");
     } finally {
       setIsDeletingQuestion(null);
@@ -1594,32 +1919,29 @@ function CreateCertificationPageContent() {
 
   const createQuestionAPI = async (sectionId: string, questionData: any) => {
     try {
-      console.log("Creating question with data:", questionData);
       const response = await axiosInstance.post(
         `/sections/${sectionId}/questions`,
         questionData,
       );
-      console.log("API response:", response.data);
       const createdQuestion = response.data?.data?.questions?.[0] || null;
-      console.log("Created question:", createdQuestion);
       return createdQuestion;
     } catch (err) {
-      console.error("Error creating question:", err);
       throw err;
     }
   };
 
   const updateQuestionAPI = async (questionId: string, questionData: any) => {
     try {
-      console.log("Updating question with data:", questionData);
+      console.log("update question payload:", {
+        questionId,
+        payload: questionData,
+      });
       const response = await axiosInstance.patch(
         `/questions/${questionId}`,
         questionData,
       );
-      console.log("Update question API response:", response.data);
       return response.data;
     } catch (err) {
-      console.error("Error updating question:", err);
       throw err;
     }
   };
@@ -1644,35 +1966,36 @@ function CreateCertificationPageContent() {
       return;
     }
 
+    const yesSelectedOption = findRedirectOptionByValue(
+      redirectOptions,
+      yesExitLevel,
+    );
+    const noSelectedOption = findRedirectOptionByValue(
+      redirectOptions,
+      noExitLevel,
+    );
+
     if (questionType === "boolean" && hasConditionalLogic) {
-      if (!yesExitLevel || yesRank === "") {
-        showAlert(
-          "Please provide both Redirect Type and Rank for YES condition",
-        );
+      if (!yesSelectedOption || yesRank === "") {
+        showAlert("Please select a redirect destination for YES condition");
         return;
       }
-      if (!noExitLevel || noRank === "") {
-        showAlert(
-          "Please provide both Redirect Type and Rank for NO condition",
-        );
+      if (!noSelectedOption || noRank === "") {
+        showAlert("Please select a redirect destination for NO condition");
         return;
       }
     }
 
     const conditions: any = {};
     if (questionType === "boolean" && hasConditionalLogic) {
-      if (yesExitLevel && yesRank !== "") {
-        conditions.yes = {
-          redirect_type: yesExitLevel,
-          rank: parseInt(yesRank) || 0,
-        };
+      const yesCondition = buildConditionPayload(yesSelectedOption, yesRank);
+      if (yesCondition && yesRank !== "") {
+        conditions.yes = yesCondition;
       }
 
-      if (noExitLevel && noRank !== "") {
-        conditions.no = {
-          redirect_type: noExitLevel,
-          rank: parseInt(noRank) || 0,
-        };
+      const noCondition = buildConditionPayload(noSelectedOption, noRank);
+      if (noCondition && noRank !== "") {
+        conditions.no = noCondition;
       }
     }
 
@@ -1703,7 +2026,6 @@ function CreateCertificationPageContent() {
       questions: [cleanedQuestion],
     };
 
-    console.log("Setting isCreatingQuestion to true (starting save)");
     setIsCreatingQuestion(true);
     try {
       const isNewQuestion = isLocalQuestionId(selectedQuestion);
@@ -1713,10 +2035,6 @@ function CreateCertificationPageContent() {
         const createdQuestion = await createQuestionAPI(
           targetId,
           finalQuestionData,
-        );
-        console.log(
-          "About to update question with createdQuestion:",
-          createdQuestion,
         );
         if (!createdQuestion?.id) {
           throw new Error("Question creation failed");
@@ -1758,14 +2076,12 @@ function CreateCertificationPageContent() {
                                   conditionalRules:
                                     questionType === "boolean" &&
                                     hasConditionalLogic
-                                      ? {
-                                          yesAction: "continue",
-                                          noAction: "continue",
-                                          yesExitLevel: yesExitLevel,
-                                          noExitLevel: noExitLevel,
-                                          yesRank: yesRank,
-                                          noRank: noRank,
-                                        }
+                                      ? buildLocalConditionalRuleState(
+                                          yesSelectedOption,
+                                          noSelectedOption,
+                                          yesRank,
+                                          noRank,
+                                        )
                                       : undefined,
                                 };
                               }
@@ -1794,14 +2110,12 @@ function CreateCertificationPageContent() {
                                 : false,
                             conditionalRules:
                               questionType === "boolean" && hasConditionalLogic
-                                ? {
-                                    yesAction: "continue",
-                                    noAction: "continue",
-                                    yesExitLevel: yesExitLevel,
-                                    noExitLevel: noExitLevel,
-                                    yesRank: yesRank,
-                                    noRank: noRank,
-                                  }
+                                ? buildLocalConditionalRuleState(
+                                    yesSelectedOption,
+                                    noSelectedOption,
+                                    yesRank,
+                                    noRank,
+                                  )
                                 : undefined,
                           }
                         : question,
@@ -1833,7 +2147,6 @@ function CreateCertificationPageContent() {
     } catch (err) {
       showAlert("Failed to save question. Please try again.");
     } finally {
-      console.log("Setting isCreatingQuestion to false (save completed)");
       setIsCreatingQuestion(false);
     }
   };
@@ -1870,7 +2183,6 @@ function CreateCertificationPageContent() {
       setIsPublished(true);
       setShowSuccessModal(true);
     } catch (err) {
-      console.error("Failed to publish certificate:", err);
       if (axios.isAxiosError(err)) {
         const serverMessage = err.response?.data?.message;
 
@@ -2162,7 +2474,6 @@ function CreateCertificationPageContent() {
   const createCertificate = async (options?: { forcePublished?: boolean }) => {
     const isValid = validateForm();
     if (!isValid) {
-      console.log("isValid->>>>", isValid);
       return null;
     }
 
@@ -3286,9 +3597,31 @@ function CreateCertificationPageContent() {
                 {mainSections.map((mainSection) => (
                   <div key={mainSection.id} className="bg-white">
                     <div className="flex items-start justify-between p-3 hover:bg-gray-50">
-                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                      <div
+                        className="flex items-start gap-2 flex-1 min-w-0 cursor-pointer"
+                        onClick={() => {
+                          if (
+                            !canNavigateQuestion(
+                              mainSection.id,
+                              null,
+                              null,
+                              null,
+                            )
+                          ) {
+                            return;
+                          }
+
+                          setSelectedMainSection(mainSection.id);
+                          setSelectedSection(null);
+                          setSelectedSubSection(null);
+                          setSelectedQuestion(null);
+                        }}
+                      >
                         <button
-                          onClick={() => toggleMainSection(mainSection.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleMainSection(mainSection.id);
+                          }}
                           className="text-gray-500 hover:text-gray-700"
                         >
                           {mainSection.isExpanded ? (
@@ -3319,7 +3652,14 @@ function CreateCertificationPageContent() {
                             </svg>
                           )}
                         </button>
-                        <span className="text-sm font-semibold text-secondary break-words whitespace-normal">
+                        <span
+                          className={`text-sm font-semibold break-words whitespace-normal ${
+                            selectedMainSection === mainSection.id &&
+                            !selectedSection
+                              ? "text-black"
+                              : "text-secondary"
+                          }`}
+                        >
                           {mainSection.name}
                         </span>
                       </div>
@@ -3610,7 +3950,8 @@ function CreateCertificationPageContent() {
                                 </div>
                               </div>
 
-                              {editingSectionTarget?.sectionId === section.id && (
+                              {editingSectionTarget?.sectionId ===
+                                section.id && (
                                 <div className="pl-6 p-3 bg-white">
                                   <div className="flex gap-2 items-center">
                                     <input
@@ -3628,7 +3969,9 @@ function CreateCertificationPageContent() {
                                     />
                                     <button
                                       onClick={updateSection}
-                                      disabled={isUpdatingStructure === section.id}
+                                      disabled={
+                                        isUpdatingStructure === section.id
+                                      }
                                       className="px-3 py-2 bg-black text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {isUpdatingStructure === section.id
@@ -4187,27 +4530,32 @@ function CreateCertificationPageContent() {
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                   <div>
                                     <label className="block text-xs text-gray-600 mb-1">
-                                      Redirect Type{" "}
+                                      Redirect To{" "}
                                       <span className="text-red-500">*</span>
                                     </label>
                                     <Dropdown
-                                      placeholder="Select level"
-                                      options={[
-                                        { value: "main", label: "main" },
-                                        { value: "section", label: "section" },
-                                        {
-                                          value: "subsection",
-                                          label: "subsection",
-                                        },
-                                        {
-                                          value: "question",
-                                          label: "question",
-                                        },
-                                      ]}
+                                      placeholder={redirectDropdownPlaceholder}
+                                      options={redirectOptions}
+                                      treeMode
                                       value={yesExitLevel}
                                       onChange={(
                                         e: React.ChangeEvent<HTMLSelectElement>,
-                                      ) => setYesExitLevel(e.target.value)}
+                                      ) => {
+                                        const selectedValue = e.target.value;
+                                        const selectedOption =
+                                          findRedirectOptionByValue(
+                                            redirectOptions,
+                                            selectedValue,
+                                          );
+
+                                        setYesExitLevel(selectedValue);
+                                        setYesRank(selectedOption?.rank || "");
+                                      }}
+                                      disabled={
+                                        !redirectOptions.some(
+                                          (option) => !option.groupLabel,
+                                        )
+                                      }
                                       className="mb-0 bg-white"
                                     />
                                   </div>
@@ -4218,29 +4566,19 @@ function CreateCertificationPageContent() {
                                     </label>
                                     <input
                                       type="number"
-                                      placeholder="Enter rank"
+                                      placeholder="Auto-filled rank"
                                       value={yesRank}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-
-                                        if (
-                                          value === "" ||
-                                          (!isNaN(Number(value)) &&
-                                            Number(value) >= 0 &&
-                                            Number(value) % 1 === 0)
-                                        ) {
-                                          setYesRank(value);
-                                        }
-                                      }}
+                                      readOnly
                                       min="0"
                                       step="1"
-                                      className="w-full px-3 py-3 bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                                      className="w-full px-3 py-3 bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none text-sm font-normal leading-[19.2px] tracking-normal text-zinc-500 cursor-not-allowed"
                                     />
                                   </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  Select option to redirect with rank as per the
-                                  selected level
+                                  Choose the exact destination from your main
+                                  sections, sections, sub-sections, or
+                                  questions. Rank is filled automatically.
                                 </p>
                               </div>
                             </div>
@@ -4278,27 +4616,32 @@ function CreateCertificationPageContent() {
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                   <div>
                                     <label className="block text-xs text-gray-600 mb-1">
-                                      Redirect Type{" "}
+                                      Redirect To{" "}
                                       <span className="text-red-500">*</span>
                                     </label>
                                     <Dropdown
-                                      placeholder="Select level"
-                                      options={[
-                                        { value: "main", label: "main" },
-                                        { value: "section", label: "section" },
-                                        {
-                                          value: "subsection",
-                                          label: "subsection",
-                                        },
-                                        {
-                                          value: "question",
-                                          label: "question",
-                                        },
-                                      ]}
+                                      placeholder={redirectDropdownPlaceholder}
+                                      options={redirectOptions}
+                                      treeMode
                                       value={noExitLevel}
                                       onChange={(
                                         e: React.ChangeEvent<HTMLSelectElement>,
-                                      ) => setNoExitLevel(e.target.value)}
+                                      ) => {
+                                        const selectedValue = e.target.value;
+                                        const selectedOption =
+                                          findRedirectOptionByValue(
+                                            redirectOptions,
+                                            selectedValue,
+                                          );
+
+                                        setNoExitLevel(selectedValue);
+                                        setNoRank(selectedOption?.rank || "");
+                                      }}
+                                      disabled={
+                                        !redirectOptions.some(
+                                          (option) => !option.groupLabel,
+                                        )
+                                      }
                                       className="mb-0 bg-white"
                                     />
                                   </div>
@@ -4309,29 +4652,19 @@ function CreateCertificationPageContent() {
                                     </label>
                                     <input
                                       type="number"
-                                      placeholder="Enter rank"
+                                      placeholder="Auto-filled rank"
                                       value={noRank}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-
-                                        if (
-                                          value === "" ||
-                                          (!isNaN(Number(value)) &&
-                                            Number(value) >= 0 &&
-                                            Number(value) % 1 === 0)
-                                        ) {
-                                          setNoRank(value);
-                                        }
-                                      }}
+                                      readOnly
                                       min="0"
                                       step="1"
-                                      className="w-full px-3 py-3 bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                                      className="w-full px-3 py-3 bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none text-sm font-normal leading-[19.2px] tracking-normal text-zinc-500 cursor-not-allowed"
                                     />
                                   </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  Select option to redirect with rank as per the
-                                  selected level
+                                  Choose the exact destination from your main
+                                  sections, sections, sub-sections, or
+                                  questions. Rank is filled automatically.
                                 </p>
                               </div>
                             </div>
@@ -4497,9 +4830,7 @@ function CreateCertificationPageContent() {
 
 export default function CreateCertificationPage() {
   return (
-    <Suspense
-      fallback={<FullPageSkeleton />}
-    >
+    <Suspense fallback={<FullPageSkeleton />}>
       <CreateCertificationPageContent />
     </Suspense>
   );
