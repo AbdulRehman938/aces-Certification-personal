@@ -82,7 +82,7 @@ export const dashboardConfig: Record<DashboardRole, DashboardConfig> = {
         label: "Messages",
         icon: "/assets/imgs/admin/dashboard/chat.svg",
         href: "/admin/messages",
-        resources: [],
+        resources: ["messages"],
       },
       {
         label: "Setting",

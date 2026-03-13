@@ -103,6 +103,14 @@ const initialPermissions: PermissionRow[] = [
     edit: false,
     delete: false,
   },
+  {
+    resource: "messages",
+    pageName: "Messages",
+    read: false,
+    write: false,
+    edit: false,
+    delete: false,
+  },
 ];
 
 const PermissionsContent = () => {

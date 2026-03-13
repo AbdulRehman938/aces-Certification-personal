@@ -10,6 +10,7 @@ export interface DashboardNotification {
   read: boolean;
   type: string;
   invitationId?: string;
+  actionStatus?: string;
 }
 
 type NotificationsResult = {
@@ -31,9 +32,7 @@ function asBoolean(value: unknown): boolean {
   return value === true;
 }
 
-function parseMetadata(
-  value: unknown,
-): Record<string, unknown> | null {
+function parseMetadata(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
   if (typeof value === "string") {
     try {
@@ -56,13 +55,17 @@ function normalizeNotification(value: unknown): DashboardNotification | null {
   const title = asString(data.title) || "Notification";
   const message = asString(data.message);
   const description = asString(data.description);
-  const createdAt =
-    asString(data.created_at) || asString(data.createdAt) || "";
+  const createdAt = asString(data.created_at) || asString(data.createdAt) || "";
   const read = asBoolean(data.read);
   const type = asString(data.type) || "notification";
   const metadata = parseMetadata(data.metadata);
   const invitationId =
     asString(metadata?.invitationId) || asString(metadata?.invitation_id);
+  const actionStatus =
+    asString(data.action_status) ||
+    asString(data.actionStatus) ||
+    asString(metadata?.action_status) ||
+    asString(metadata?.actionStatus);
 
   return {
     id,
@@ -73,6 +76,7 @@ function normalizeNotification(value: unknown): DashboardNotification | null {
     read,
     type,
     invitationId: invitationId || undefined,
+    actionStatus: actionStatus || undefined,
   };
 }
 
