@@ -146,6 +146,12 @@ function AssignSelfAssureReviewContent() {
   );
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [clarificationRequest, setClarificationRequest] = useState("");
+  const [clarificationTargetQuestionId, setClarificationTargetQuestionId] =
+    useState<string | null>(null);
+  const [clarificationModalError, setClarificationModalError] = useState("");
+  const [isSubmittingClarification, setIsSubmittingClarification] =
+    useState(false);
   const [organizationName, setOrganizationName] = useState("Acme Corporation");
   const [certificateId, setCertificateId] = useState("");
   const [certificateName, setCertificateName] = useState("ISO 27001:2022");
@@ -163,6 +169,10 @@ function AssignSelfAssureReviewContent() {
       { type: "success" | "error"; message: string; isSaving?: boolean }
     >
   >({});
+  const [clarificationFeedbackByQuestion, setClarificationFeedbackByQuestion] =
+    useState<Record<string, { type: "success" | "error"; message: string }>>(
+      {},
+    );
 
   const handleReviewerNotesChange = (questionId: string, value: string) => {
     setReviewerNotesByQuestion((prev) => ({ ...prev, [questionId]: value }));
@@ -172,6 +182,21 @@ function AssignSelfAssureReviewContent() {
       delete next[questionId];
       return next;
     });
+  };
+
+  const closeClarificationModal = () => {
+    if (isSubmittingClarification) return;
+    setShowSubmitModal(false);
+    setClarificationRequest("");
+    setClarificationTargetQuestionId(null);
+    setClarificationModalError("");
+  };
+
+  const handleOpenClarificationModal = (questionId: string) => {
+    setClarificationTargetQuestionId(questionId);
+    setClarificationRequest("");
+    setClarificationModalError("");
+    setShowSubmitModal(true);
   };
 
   useEffect(() => {
@@ -193,6 +218,7 @@ function AssignSelfAssureReviewContent() {
           },
         );
         if (isCancelled || controller.signal.aborted) return;
+        console.log("reviewer assessment by id response:", response.data);
 
         const payload = response.data?.data;
         if (!payload || typeof payload !== "object") return;
@@ -406,6 +432,58 @@ function AssignSelfAssureReviewContent() {
         ...prev,
         [questionId]: { type: "error", message },
       }));
+    }
+  };
+
+  const handleClarificationSubmit = async () => {
+    if (!assessmentId || !clarificationTargetQuestionId) {
+      setClarificationModalError("Assessment or question id is missing.");
+      return;
+    }
+
+    const message = clarificationRequest.trim();
+    if (!message) {
+      setClarificationModalError("Please add a clarification message.");
+      return;
+    }
+
+    const targetQuestionId = clarificationTargetQuestionId;
+    setClarificationModalError("");
+    setIsSubmittingClarification(true);
+
+    try {
+      const response = await axiosInstance.post(
+        `/audits/assessment/${encodeURIComponent(assessmentId)}/questions/${encodeURIComponent(targetQuestionId)}/compliance-action`,
+        {
+          action: "request_clarification",
+          message,
+        },
+      );
+
+      console.log("reviewer clarification response:", response.data);
+      setClarificationFeedbackByQuestion((prev) => ({
+        ...prev,
+        [targetQuestionId]: {
+          type: "success",
+          message: "Clarification requested successfully.",
+        },
+      }));
+      setShowSubmitModal(false);
+      setClarificationRequest("");
+      setClarificationTargetQuestionId(null);
+      setClarificationModalError("");
+    } catch (error) {
+      let message = "Failed to request clarification";
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.message || message;
+      }
+      setClarificationModalError(message);
+      setClarificationFeedbackByQuestion((prev) => ({
+        ...prev,
+        [targetQuestionId]: { type: "error", message },
+      }));
+    } finally {
+      setIsSubmittingClarification(false);
     }
   };
 
@@ -670,6 +748,8 @@ function AssignSelfAssureReviewContent() {
                           Boolean(String(q.auditorNotes || "").trim());
                         const noteSaveFeedback =
                           noteSaveFeedbackByQuestion[questionId];
+                        const clarificationFeedback =
+                          clarificationFeedbackByQuestion[questionId];
 
                         return (
                           <div
@@ -790,7 +870,9 @@ function AssignSelfAssureReviewContent() {
                                 <Button
                                   variant="custom"
                                   className="border border-black rounded-lg px-6 py-2 font-semibold"
-                                  onClick={() => setShowSubmitModal(true)}
+                                  onClick={() =>
+                                    handleOpenClarificationModal(questionId)
+                                  }
                                 >
                                   Request Clarification
                                 </Button>
@@ -823,6 +905,17 @@ function AssignSelfAssureReviewContent() {
                                   {noteSaveFeedback.message}
                                 </p>
                               ) : null}
+                              {clarificationFeedback?.message ? (
+                                <p
+                                  className={`text-sm ${
+                                    clarificationFeedback.type === "error"
+                                      ? "text-red-600"
+                                      : "text-green-600"
+                                  }`}
+                                >
+                                  {clarificationFeedback.message}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         );
@@ -843,12 +936,12 @@ function AssignSelfAssureReviewContent() {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black/40"
-              onClick={() => setShowSubmitModal(false)}
+              onClick={closeClarificationModal}
             />
             <div className="relative bg-white rounded-lg w-[90%] max-w-xl p-6 shadow-lg">
               <button
                 className="absolute top-4 right-4"
-                onClick={() => setShowSubmitModal(false)}
+                onClick={closeClarificationModal}
               >
                 <img
                   src="/assets/imgs/admin/commons/cross.svg"
@@ -869,23 +962,28 @@ function AssignSelfAssureReviewContent() {
                 className="w-full min-h-30 p-3 rounded-md text-sm border"
                 style={{ borderColor: "#E6E6E6" }}
                 placeholder="Kindly provide additional documentation for....."
+                value={clarificationRequest}
+                onChange={(event) =>
+                  setClarificationRequest(event.target.value)
+                }
               />
+              {clarificationModalError ? (
+                <p className="mt-2 text-sm text-red-600">
+                  {clarificationModalError}
+                </p>
+              ) : null}
 
               <div className="mt-6 flex justify-end gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowSubmitModal(false)}
-                >
+                <Button variant="secondary" onClick={closeClarificationModal}>
                   Close
                 </Button>
                 <Button
                   variant="primary"
                   onClick={() => {
-                    console.log("Request sent");
-                    setShowSubmitModal(false);
+                    void handleClarificationSubmit();
                   }}
                 >
-                  Send Request
+                  {isSubmittingClarification ? "Sending..." : "Send Request"}
                 </Button>
               </div>
             </div>
