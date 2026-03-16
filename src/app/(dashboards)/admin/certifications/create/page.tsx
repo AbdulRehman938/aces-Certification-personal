@@ -22,6 +22,7 @@ type Question = {
   text: string;
   helpText: string;
   criteriaInformation?: string;
+  weightage?: number;
   type: string;
   rank?: number;
   hasConditionalLogic: boolean;
@@ -473,6 +474,7 @@ function CreateCertificationPageContent() {
   const [questionText, setQuestionText] = useState("");
   const [helpText, setHelpText] = useState("");
   const [criteriaInformation, setCriteriaInformation] = useState("");
+  const [questionWeightage, setQuestionWeightage] = useState("");
 
   const [acesRatedBronze, setAcesRatedBronze] = useState("");
   const [acesRatedSilver, setAcesRatedSilver] = useState("");
@@ -662,6 +664,7 @@ function CreateCertificationPageContent() {
     setQuestionText("");
     setHelpText("");
     setCriteriaInformation("");
+    setQuestionWeightage("");
 
     if (selectedQuestion && selectedMainSection && selectedSection) {
       const mainSection = mainSections.find(
@@ -699,6 +702,9 @@ function CreateCertificationPageContent() {
         setQuestionText(question.text || "");
         setHelpText(question.helpText || "");
         setCriteriaInformation(question.criteriaInformation || "");
+        setQuestionWeightage(
+          question.weightage === undefined ? "" : String(question.weightage),
+        );
         setQuestionType(question.type || "");
         setHasConditionalLogic(question.hasConditionalLogic || false);
         setYesExitLevel(resolvedYesRedirectValue);
@@ -821,6 +827,10 @@ function CreateCertificationPageContent() {
       questionText !== (originalQuestion.text || "") ||
       helpText !== (originalQuestion.helpText || "") ||
       criteriaInformation !== (originalQuestion.criteriaInformation || "") ||
+      questionWeightage !==
+        (originalQuestion.weightage === undefined
+          ? ""
+          : String(originalQuestion.weightage)) ||
       currentType !== originalType ||
       currentHasConditionalLogic !== originalHasConditionalLogic ||
       currentYesExitLevel !== originalYesExitLevel ||
@@ -983,6 +993,12 @@ function CreateCertificationPageContent() {
                       text: q.question || "",
                       helpText: q.hint || "",
                       criteriaInformation: q.criteria || "",
+                      weightage:
+                        Number.isInteger(Number(q.weightage)) &&
+                        Number(q.weightage) >= 0 &&
+                        Number(q.weightage) <= 100
+                          ? Number(q.weightage)
+                          : undefined,
                       type: q.type || "",
                       rank:
                         typeof q.rank === "number"
@@ -1044,6 +1060,12 @@ function CreateCertificationPageContent() {
                         text: q.question || "",
                         helpText: q.hint || "",
                         criteriaInformation: q.criteria || "",
+                        weightage:
+                          Number.isInteger(Number(q.weightage)) &&
+                          Number(q.weightage) >= 0 &&
+                          Number(q.weightage) <= 100
+                            ? Number(q.weightage)
+                            : undefined,
                         type: q.type || "",
                         rank:
                           typeof q.rank === "number"
@@ -1854,6 +1876,7 @@ function CreateCertificationPageContent() {
       id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       text: "",
       helpText: "",
+      weightage: undefined,
       type: "",
       hasConditionalLogic: false,
     };
@@ -1994,6 +2017,22 @@ function CreateCertificationPageContent() {
       return;
     }
 
+    if (questionWeightage.trim() === "") {
+      showAlert("Weightage is required");
+      return;
+    }
+
+    if (!/^\d+$/.test(questionWeightage.trim())) {
+      showAlert("Weightage must be a whole number between 0 and 100");
+      return;
+    }
+
+    const parsedWeightage = Number(questionWeightage.trim());
+    if (!Number.isInteger(parsedWeightage) || parsedWeightage < 0 || parsedWeightage > 100) {
+      showAlert("Weightage must be a whole number between 0 and 100");
+      return;
+    }
+
     const yesSelectedOption = findRedirectOptionByValue(
       redirectOptions,
       yesExitLevel,
@@ -2039,6 +2078,7 @@ function CreateCertificationPageContent() {
           type: questionType,
           hint: helpText.trim() || undefined,
           criteria: criteriaInformation.trim() || undefined,
+          weightage: parsedWeightage,
           conditions:
             questionType === "boolean" && hasConditionalLogic ? conditions : {},
         },
@@ -2096,6 +2136,7 @@ function CreateCertificationPageContent() {
                                   helpText: helpText.trim(),
                                   criteriaInformation:
                                     criteriaInformation.trim(),
+                                  weightage: parsedWeightage,
                                   type: questionType,
                                   hasConditionalLogic:
                                     questionType === "boolean"
@@ -2131,6 +2172,7 @@ function CreateCertificationPageContent() {
                             text: questionText.trim(),
                             helpText: helpText.trim(),
                             criteriaInformation: criteriaInformation.trim(),
+                            weightage: parsedWeightage,
                             type: questionType,
                             hasConditionalLogic:
                               questionType === "boolean"
@@ -4491,6 +4533,32 @@ function CreateCertificationPageContent() {
                       value={criteriaInformation}
                       onChange={(e) => setCriteriaInformation(e.target.value)}
                       className="w-full px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-2">
+                      Weightage <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={3}
+                      placeholder="Enter weightage from 0 to 100"
+                      value={questionWeightage}
+                      onChange={(e) => {
+                        const nextValue = e.target.value.replace(/\D/g, "");
+                        if (nextValue === "") {
+                          setQuestionWeightage("");
+                          return;
+                        }
+
+                        const numericValue = Number(nextValue);
+                        if (numericValue <= 100) {
+                          setQuestionWeightage(nextValue);
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
                     />
                   </div>
 
