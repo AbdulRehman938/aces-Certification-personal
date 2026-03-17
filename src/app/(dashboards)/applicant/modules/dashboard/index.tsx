@@ -1041,8 +1041,8 @@ export function DashboardPage() {
     };
 
     return (
-      <div className="p-6 lg:p-10 lg:pt-5 bg-dull-white/10">
-        <div className="max-w-7xl mx-auto">
+      <div className="p-6 lg:p-10 lg:pt-5 bg-dull-white/10 overflow-visible">
+        <div className="max-w-7xl mx-auto overflow-visible">
           <SubmissionDetails
             certificate={selectedSubmission}
             onBack={handleBackFromSubmission}
