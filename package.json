@@ -22,6 +22,7 @@
     "formik": "^2.4.9",
     "framer-motion": "^12.24.11",
     "html2canvas": "^1.4.1",
+    "idb": "^8.0.3",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "libphonenumber-js": "^1.12.34",

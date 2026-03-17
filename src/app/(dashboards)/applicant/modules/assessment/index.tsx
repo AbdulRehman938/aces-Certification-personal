@@ -25,6 +25,11 @@ import { axiosInstance } from "@/lib/axios";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { RxCross2 } from "react-icons/rx";
+import {
+  saveAnswers,
+  getAnswers,
+  clearAnswers,
+} from "@/lib/assessment-db";
 
 interface Question {
   id: string;
@@ -41,6 +46,32 @@ interface Question {
   response_value: any;
   ai_description?: string;
   hint?: string;
+  certificate_question_number?: number;
+  conditions?: Record<string, {
+    rank?: number;
+    redirect_type?: string;
+    target_id?: string;
+    target_name?: string;
+    [key: string]: any;
+  }>;
+  options?: string[];
+  boolean_conditions?: Array<{
+    response_value: string;
+    parent_type: string;
+    parent_id?: string;
+    parent_name?: string;
+    question_id?: string;
+    section_id?: string;
+    sub_section_id?: string;
+    main_section_rank?: number;
+    certificate_question_number?: number;
+    target_id?: string;
+    redirect_type?: string;
+    target_name?: string;
+    section_rank?: number;
+    sub_section_rank?: number;
+    [key: string]: any;
+  }>;
 }
 
 interface AssessmentData {
@@ -176,6 +207,12 @@ export function AssessmentPage() {
     });
   };
 
+  useEffect(() => {
+    if (assessment && questions.length > 0) {
+      saveAnswers(assessment.id, questions);
+    }
+  }, [questions, assessment]);
+
   const initAssessment = async () => {
     try {
       setIsLoading(true);
@@ -229,12 +266,29 @@ export function AssessmentPage() {
       setLoadingProgress(75);
 
       const rawQuestions = questionsRes.data.data || [];
-      const fetchedQuestions = rawQuestions.map((q: any) => ({
-        ...q,
-        response_value:
-          q.response_value || (q.question_type === "boolean" ? null : ""),
-        answer_id: q.answer_id || null,
-      }));
+      const fetchedQuestions = rawQuestions.map((q: any) => {
+        let defaultVal: any = "";
+        if (q.question_type === "boolean") defaultVal = null;
+        else if (q.question_type === "checkbox") defaultVal = [];
+        
+        let responseValue = (q.response_value !== null && q.response_value !== undefined) 
+          ? q.response_value 
+          : defaultVal;
+
+        if (q.question_type === "checkbox" && typeof responseValue === "string" && responseValue.startsWith("[")) {
+          try {
+            responseValue = JSON.parse(responseValue);
+          } catch (e) {
+            responseValue = [];
+          }
+        }
+
+        return {
+          ...q,
+          response_value: responseValue,
+          answer_id: q.answer_id || null,
+        };
+      });
 
       if (fetchedQuestions.length === 0) {
         setLoadingProgress(100);
@@ -251,11 +305,30 @@ export function AssessmentPage() {
         return;
       }
 
-      setQuestions(fetchedQuestions);
+      // Load saved answers from IndexedDB and merge
+      const savedData = await getAnswers(assessmentId);
+      const mergedQuestions = fetchedQuestions.map((fq: any) => {
+        const savedQ = savedData?.answers?.find((sq: any) => sq.id === fq.id);
+        if (savedQ) {
+          return {
+            ...fq,
+            response_value: savedQ.response_value,
+            ai_description: savedQ.ai_description,
+            answer_id: savedQ.answer_id || fq.answer_id,
+          };
+        }
+        return fq;
+      });
 
-      if (fetchedQuestions.length > 0) {
-        setExpandedMainSections([fetchedQuestions[0].main_section_name]);
-        setActiveQuestionIndex(0);
+      setQuestions(mergedQuestions);
+
+      if (mergedQuestions.length > 0) {
+        // Try to find where the user left off
+        const firstUndone = mergedQuestions.findIndex((q: { answer_id: any; }) => !q.answer_id);
+        const startIndex = firstUndone !== -1 ? firstUndone : 0;
+        
+        setActiveQuestionIndex(startIndex);
+        setExpandedMainSections([mergedQuestions[startIndex].main_section_name]);
       }
 
       const storedNames = localStorage.getItem(`file_names_${assessmentId}`);
@@ -404,48 +477,210 @@ export function AssessmentPage() {
     if (!activeQuestion) return false;
 
     const val = activeQuestion.response_value;
+    const type = activeQuestion.question_type;
 
-    const hasMainAnswer =
-      activeQuestion.question_type === "boolean"
-        ? val === "Yes" || val === "No"
-        : activeQuestion.question_type === "text"
-          ? !!val && val.trim() !== ""
-          : !!val;
+    if (type === "boolean") {
+      const v = String(val).toLowerCase();
+      return v === "yes" || v === "no";
+    }
+    
+    if (type === "text") {
+      return !!val && typeof val === "string" && val.trim() !== "";
+    }
 
-    const hasDescription = activeQuestion.question_type === "text" || true;
+    if (type === "checkbox") {
+      return Array.isArray(val) ? val.length > 0 : !!val;
+    }
 
-    return !!hasMainAnswer;
+    if (type === "rating" || type === "number" || type === "multiple_choice") {
+      return val !== null && val !== undefined && val !== "";
+    }
+
+    return !!val;
   }, [activeQuestion]);
 
   const handleResponseChange = (value: any) => {
     setQuestions((prev) => {
       const updated = [...prev];
+      const currentQ = updated[activeQuestionIndex];
+      
+      let newValue = value;
+      if (currentQ.question_type === "checkbox") {
+        const currentArr = Array.isArray(currentQ.response_value) ? currentQ.response_value : [];
+        if (currentArr.includes(value)) {
+          newValue = currentArr.filter((v: any) => v !== value);
+        } else {
+          newValue = [...currentArr, value];
+        }
+      }
+
       updated[activeQuestionIndex] = {
-        ...updated[activeQuestionIndex],
-        response_value: value,
+        ...currentQ,
+        response_value: newValue,
       };
       return updated;
     });
+
+    const valStr = String(value).toLowerCase();
+
+    // 1. Check for immediate Jump-style 'end' condition in local state
+    const currentQConditions = activeQuestion?.conditions || {};
+    const matchedEnd = Object.entries(currentQConditions).find(
+      ([key, cond]) => key.toLowerCase() === valStr && cond?.redirect_type?.toLowerCase() === "end"
+    );
+
+    if (matchedEnd) {
+      console.log("[Assessment] Local 'end' condition matched for:", valStr);
+      setShowSuccessModal(true);
+      return;
+    }
+
+    // 2. Handle legacy boolean_conditions
+    if (activeQuestion?.question_type === "boolean" && activeQuestion.boolean_conditions) {
+      const condition = activeQuestion.boolean_conditions.find(
+        (c) => c.response_value.toLowerCase() === valStr
+      );
+      if (condition) {
+        if (condition.redirect_type?.toLowerCase() === "end") {
+          setShowSuccessModal(true);
+        } else {
+          handleJump(condition);
+        }
+        return;
+      }
+    }
+
+    // 3. For boolean questions, proactively ask the Jump API if there's an immediate redirect (dynamic check)
+    if (activeQuestion?.question_type === "boolean" && !activeQuestion.boolean_conditions && !activeQuestion.conditions) {
+       handleJump({ question_id: activeQuestion.id, response_value: value });
+    }
   };
 
-  const handleDescriptionChange = (value: string) => {
-    setQuestions((prev) => {
-      const updated = [...prev];
-      updated[activeQuestionIndex] = {
-        ...updated[activeQuestionIndex],
-        ai_description: value,
-      };
-      return updated;
-    });
+  const handleJump = async (params: Record<string, any>) => {
+    if (!assessment?.certificate_id || !questions.length) return false;
+
+    // If the condition explicitly says to end, open the submit modal
+    if (params.redirect_type === "end") {
+      setShowSuccessModal(true);
+      return true;
+    }
+
+    try {
+      const queryParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && key !== "response_value") {
+          queryParams.append(key, value.toString());
+        }
+      });
+
+      const jumpUrl = `/certificates/${assessment.certificate_id}/jump?${queryParams.toString()}`;
+      console.log("[Assessment] Performing jump request:", jumpUrl);
+      
+      const res = await axiosInstance.get(jumpUrl);
+
+      if (res.data?.success) {
+        const jumpData = res.data.data;
+
+        // Check if the landing question/state leads to an immediate end
+        if (params.response_value && jumpData.question?.conditions) {
+          const selectedOption = String(params.response_value).toLowerCase();
+          const condition = jumpData.question.conditions[selectedOption];
+          if (condition?.redirect_type === "end") {
+            setShowSuccessModal(true);
+            return true;
+          }
+        }
+
+        let targetQuestionId = null;
+
+        if (jumpData.target_type === "question" && jumpData.question) {
+          targetQuestionId = jumpData.question.id;
+        } else if (jumpData.target_type === "section" && (jumpData.section?.questions?.length > 0 || jumpData.questions?.length > 0)) {
+          const sectionQuestions = jumpData.section?.questions || jumpData.questions;
+          targetQuestionId = sectionQuestions[0].id;
+        } else if (jumpData.target_type === "sub_section" && (jumpData.sub_section?.questions?.length > 0 || jumpData.questions?.length > 0)) {
+          const subSectionQuestions = jumpData.sub_section?.questions || jumpData.questions;
+          targetQuestionId = subSectionQuestions[0].id;
+        } else if (jumpData.target_type === "main_section") {
+           if (jumpData.main_section?.sections?.length > 0) {
+              const firstSec = jumpData.main_section.sections[0];
+              if (firstSec.sub_sections?.length > 0) {
+                 targetQuestionId = firstSec.sub_sections[0].questions?.[0]?.id;
+              } else if (firstSec.questions?.length > 0) {
+                 targetQuestionId = firstSec.questions[0].id;
+              }
+           }
+        }
+
+        if (targetQuestionId) {
+          const index = questions.findIndex((q) => q.id === targetQuestionId);
+          if (index !== -1) {
+            setActiveQuestionIndex(index);
+            const targetQ = questions[index];
+            setExpandedMainSections((prev) =>
+              prev.includes(targetQ.main_section_name)
+                ? prev
+                : [...prev, targetQ.main_section_name],
+            );
+            return true;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Assessment] Jump API failed:", err);
+    }
+    return false;
   };
 
-  const moveToNext = (
+  const moveToNext = async (
     currentQuestions: Question[],
     currentDrafts: string[],
     currentSkips: string[],
   ) => {
-    let nextIdx = -1;
+    const currentQ = currentQuestions[activeQuestionIndex];
+    if (!currentQ || !assessment) return;
 
+    const valStr = String(currentQ.response_value || "").toLowerCase();
+
+    try {
+      // Always consult the Jump API for current question metadata to get latest conditions/navigation
+      console.log("[Assessment] Consulting Jump API for next destination from question:", currentQ.id);
+      const currentJumpRes = await axiosInstance.get(
+        `/certificates/${assessment.certificate_id}/jump?question_id=${currentQ.id}`
+      );
+
+      if (currentJumpRes.data?.success) {
+        const jumpData = currentJumpRes.data.data;
+        const qData = jumpData.question;
+        const nav = jumpData.navigation;
+
+        console.log("[Assessment] Jump API Response Data:", jumpData);
+
+        // Robust check for 'end' redirect in jump response conditions
+        const qConditions = qData?.conditions || {};
+        const matchedCondition = Object.entries(qConditions).find(
+          ([key]) => key.toLowerCase() === valStr
+        )?.[1] as any;
+
+        if (matchedCondition?.redirect_type?.toLowerCase() === "end") {
+          console.log("[Assessment] Jump API confirmed 'end' redirect for value:", valStr);
+          setShowSuccessModal(true);
+          return;
+        }
+
+        // Check if current Jump API navigation suggests a specific next question
+        if (nav?.next) {
+          console.log("[Assessment] Jump API suggested next question number:", nav.next);
+          const jumped = await handleJump({ certificate_question_number: nav.next });
+          if (jumped) return;
+        }
+      }
+    } catch (err) {
+      console.error("[Assessment] Jump-based navigation error:", err);
+    }
+
+    // Fallback to local logic if Jump API doesn't resolve a path
+    let nextIdx = -1;
     for (let i = activeQuestionIndex + 1; i < currentQuestions.length; i++) {
       if (
         !currentQuestions[i].answer_id &&
@@ -489,6 +724,17 @@ export function AssessmentPage() {
     }
   };
 
+  const handleDescriptionChange = (value: string) => {
+    setQuestions((prev) => {
+      const updated = [...prev];
+      updated[activeQuestionIndex] = {
+        ...updated[activeQuestionIndex],
+        ai_description: value,
+      };
+      return updated;
+    });
+  };
+
   const handleSaveNext = async () => {
     if (!activeQuestion || !assessment) return;
 
@@ -500,72 +746,25 @@ export function AssessmentPage() {
 
     setSaveStatus("saving");
     try {
-      let updatedAnswerId = activeQuestion.answer_id;
-      const valToSave =
-        activeQuestion.question_type === "text"
-          ? activeQuestion.ai_description || activeQuestion.response_value
-          : activeQuestion.response_value;
-
-      const apiResponseType =
-        activeQuestion.question_type === "file"
-          ? "pdf"
-          : activeQuestion.question_type;
-
-      if (
-        activeQuestion.answer_id &&
-        !activeQuestion.answer_id.startsWith("local_")
-      ) {
-        const patchUrl = `/assessments/${assessment.id}/answers/${activeQuestion.answer_id}`;
-        console.log("Updating answer:", patchUrl);
-        const res = await axiosInstance.patch(patchUrl, {
-          response_type: apiResponseType,
-          response_value: valToSave,
-        });
-        if (res.data?.success) {
-          console.log("Answer updated successfully");
-        }
-      } else {
-        console.log("Creating new answer for question:", activeQuestion.id);
-        const res = await axiosInstance.post(
-          `/assessments/${assessment.id}/answers`,
-          {
-            answers: [
-              {
-                question_id: activeQuestion.id,
-                response_type: apiResponseType,
-                response_value: valToSave,
-              },
-            ],
-          },
-        );
-
-        if (res.data?.success && res.data.data?.length > 0) {
-          updatedAnswerId = res.data.data[0].id;
-          console.log("Answer created successfully, ID:", updatedAnswerId);
-        }
-      }
-
+      // Create a local completion marker
+      const updatedAnswerId = activeQuestion.answer_id || "local_done_" + Date.now();
+      
       const newQuestions = [...questions];
       newQuestions[activeQuestionIndex] = {
         ...newQuestions[activeQuestionIndex],
-        answer_id: updatedAnswerId || "local_done_" + Date.now(),
+        answer_id: updatedAnswerId,
       };
 
       setQuestions(newQuestions);
       setSaveStatus("success");
       setTimeout(() => setSaveStatus("idle"), 1000);
 
-      setTimeout(() => {
-        moveToNext(newQuestions, draftedQuestionIds, skippedQuestionIds);
+      setTimeout(async () => {
+        await moveToNext(newQuestions, draftedQuestionIds, skippedQuestionIds);
       }, 500);
     } catch (e: any) {
-      console.error("Failed to save answer:", e);
+      console.error("Failed to update status locally:", e);
       setSaveStatus("error");
-      showMessage(
-        "Save Error",
-        e?.response?.data?.message ||
-          "Failed to save answer. Please try again.",
-      );
     }
   };
 
@@ -577,39 +776,6 @@ export function AssessmentPage() {
     setIsExiting(true);
     setSaveStatus("saving");
     try {
-      const valToSave =
-        activeQuestion.question_type === "text"
-          ? activeQuestion.ai_description || activeQuestion.response_value
-          : activeQuestion.response_value;
-
-      const apiResponseType =
-        activeQuestion.question_type === "file"
-          ? "pdf"
-          : activeQuestion.question_type;
-
-      if (
-        activeQuestion.answer_id &&
-        !activeQuestion.answer_id.startsWith("local_")
-      ) {
-        await axiosInstance.patch(
-          `/assessments/${assessment.id}/answers/${activeQuestion.answer_id}`,
-          {
-            response_type: apiResponseType,
-            response_value: valToSave,
-          },
-        );
-      } else {
-        await axiosInstance.post(`/assessments/${assessment.id}/answers`, {
-          answers: [
-            {
-              question_id: activeQuestion.id,
-              response_type: apiResponseType,
-              response_value: valToSave,
-            },
-          ],
-        });
-      }
-
       setQuestions((prev) => {
         const updated = [...prev];
         updated[activeQuestionIndex] = {
@@ -625,30 +791,33 @@ export function AssessmentPage() {
         router.push(`${base}`);
       }, 1000);
     } catch (e: any) {
-      console.error("Save & Exit Error:", e);
+      console.error("Save & Exit error:", e);
       setSaveStatus("error");
-      showMessage(
-        "Save Error",
-        e?.response?.data?.message ||
-          "Failed to save and exit. Please try again.",
-      );
       setIsExiting(false);
     }
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    if (activeQuestion?.is_compulsory) {
+      showMessage(
+        "Required Question",
+        "This question is compulsory and cannot be skipped. Please provide a response.",
+        "error",
+      );
+      return;
+    }
     const newSkips = [...skippedQuestionIds, activeQuestion.id];
     setSkippedQuestionIds(newSkips);
-    moveToNext(questions, draftedQuestionIds, newSkips);
+    await moveToNext(questions, draftedQuestionIds, newSkips);
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (!draftedQuestionIds.includes(activeQuestion.id)) {
       const newDrafts = [...draftedQuestionIds, activeQuestion.id];
       setDraftedQuestionIds(newDrafts);
-      moveToNext(questions, newDrafts, skippedQuestionIds);
+      await moveToNext(questions, newDrafts, skippedQuestionIds);
     } else {
-      moveToNext(questions, draftedQuestionIds, skippedQuestionIds);
+      await moveToNext(questions, draftedQuestionIds, skippedQuestionIds);
     }
   };
 
@@ -837,11 +1006,65 @@ export function AssessmentPage() {
     if (!assessment) return;
     setShowSuccessModal(false);
     setIsLoading(true);
-    setLoadingProgress(50);
+    setLoadingProgress(30);
     try {
+      // 1. Collect all answers from local state
+      const answersPayload = questions
+        .filter((q) => {
+          const val = q.response_value;
+          return val !== null && val !== "" && (Array.isArray(val) ? val.length > 0 : true);
+        })
+        .map((q) => {
+          const type = q.question_type === "file" ? "pdf" : q.question_type;
+          
+          if (type === "pdf") {
+            const files = typeof q.response_value === "string" 
+              ? q.response_value.split(",").filter(Boolean)
+              : Array.isArray(q.response_value) ? q.response_value : [];
+            
+            return {
+              question_id: q.id,
+              response_type: "pdf",
+              response_files: files,
+              response_value: files[0] || "" // Optional primary URL
+            };
+          }
+
+          let val = q.response_value;
+          if (type === "boolean" && typeof val === "string") {
+            val = val.toLowerCase() === "yes" ? "yes" : "no";
+          } else if (type === "checkbox") {
+            val = JSON.stringify(Array.isArray(val) ? val : [val]);
+          } else if (["number", "rating", "multiple_choice"].includes(type)) {
+            val = String(val);
+          }
+
+          return {
+            question_id: q.id,
+            response_type: type,
+            response_value: val
+          };
+        });
+
+      console.log("Bulk saving answers:", answersPayload);
+      setLoadingProgress(50);
+      
+      // 2. Bulk save answers
+      if (answersPayload.length > 0) {
+        await axiosInstance.post(`/assessments/${assessment.id}/answers`, {
+          answers: answersPayload
+        });
+      }
+
       console.log("Submitting assessment to AI:");
-      setLoadingProgress(70);
-      await axiosInstance.post(`/assessments/${assessment.id}/submit`, {});
+      setLoadingProgress(80);
+      
+      // 3. Final submission
+      await axiosInstance.post(`/assessments/${assessment.id}/submit`);
+      
+      // 4. Clear local cache
+      await clearAnswers(assessment.id);
+
       setLoadingProgress(100);
       try {
         if (typeof window !== "undefined") {
@@ -861,12 +1084,12 @@ export function AssessmentPage() {
         router.push(`${base}`);
       }
     } catch (err: any) {
-      console.error("Submit Error:", err);
+      console.error("Submission Process Error:", err);
       setIsLoading(false);
       showMessage(
         "Submission Error",
         err?.response?.data?.message ||
-          "Error submitting assessment. Please try again.",
+          "Error during submission. Please try again.",
       );
     }
   };
@@ -1228,14 +1451,15 @@ export function AssessmentPage() {
                 </div>
 
                 <div className="space-y-10 pl-14 relative">
-                  {activeQuestion?.question_type === "boolean" && (
+                  {(activeQuestion?.question_type === "boolean" || 
+                    activeQuestion?.question_type === "multiple_choice") && (
                     <div className="relative max-w-3xl">
                       <div className="grid grid-cols-1 gap-6">
-                        {["Yes", "No"].map((opt) => {
-                          const isSelected =
-                            activeQuestion.response_value === opt;
-                          const helpText = opt === "Yes" ? "" : "";
-
+                        {(activeQuestion?.question_type === "boolean" 
+                          ? ["Yes", "No"] 
+                          : (activeQuestion?.options || [])
+                        ).map((opt) => {
+                          const isSelected = activeQuestion?.response_value === opt;
                           return (
                             <div key={opt} className="space-y-2">
                               <button
@@ -1261,13 +1485,79 @@ export function AssessmentPage() {
                                   {opt}
                                 </span>
                               </button>
-                              <p className="text-[13px] font-medium text-[#667085] pl-1">
-                                {helpText}
-                              </p>
                             </div>
                           );
                         })}
                       </div>
+                    </div>
+                  )}
+
+                  {activeQuestion?.question_type === "checkbox" && (
+                    <div className="relative max-w-3xl">
+                      <div className="grid grid-cols-1 gap-6">
+                        {(activeQuestion?.options || []).map((opt: string) => {
+                          const isSelected = Array.isArray(activeQuestion?.response_value) 
+                            ? activeQuestion?.response_value.includes(opt)
+                            : activeQuestion?.response_value === opt;
+                          return (
+                            <div key={opt} className="space-y-2">
+                              <button
+                                onClick={() => handleResponseChange(opt)}
+                                className={`w-full flex items-center gap-4 p-5 rounded-xl border transition-all text-left ${
+                                  isSelected
+                                    ? "border-zinc-900 bg-white ring-1 ring-zinc-900"
+                                    : "border-[#EAECF0] bg-[#F9FAFB] hover:border-[#D0D5DD]"
+                                }`}
+                              >
+                                <div
+                                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                                    isSelected
+                                      ? "border-zinc-900 bg-zinc-900"
+                                      : "border-[#D0D5DD] bg-white"
+                                  }`}
+                                >
+                                  {isSelected && (
+                                    <Check className="w-3.5 h-3.5 text-white" />
+                                  )}
+                                </div>
+                                <span className="text-[17px] font-bold text-zinc-900">
+                                  {opt}
+                                </span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeQuestion?.question_type === "rating" && (
+                    <div className="flex items-center gap-4">
+                      {[1, 2, 3, 4, 5].map((num) => (
+                        <button
+                          key={num}
+                          onClick={() => handleResponseChange(String(num))}
+                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-lg font-bold transition-all ${
+                            String(activeQuestion.response_value) === String(num)
+                              ? "border-zinc-900 bg-zinc-900 text-white"
+                              : "border-gray-200 hover:border-zinc-400"
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeQuestion?.question_type === "number" && (
+                    <div className="max-w-xs">
+                      <input
+                        type="number"
+                        className="w-full p-4 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl text-lg font-bold focus:ring-1 focus:ring-zinc-900 outline-none"
+                        value={activeQuestion.response_value || ""}
+                        onChange={(e) => handleResponseChange(e.target.value)}
+                        placeholder="0"
+                      />
                     </div>
                   )}
 
@@ -1410,7 +1700,12 @@ export function AssessmentPage() {
                 <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
                   <Button
                     onClick={handleSkip}
-                    className="w-full md:w-auto px-10 h-14 bg-[#F2F4F7] hover:bg-[#EAECF0] text-[#344054] rounded-2xl border-none whitespace-nowrap font-bold text-[15px]"
+                    disabled={activeQuestion?.is_compulsory}
+                    className={`w-full md:w-auto px-10 h-14 rounded-2xl border-none whitespace-nowrap font-bold text-[15px] transition-all ${
+                      activeQuestion?.is_compulsory
+                        ? "bg-zinc-100 text-zinc-300 cursor-not-allowed opacity-50"
+                        : "bg-[#F2F4F7] hover:bg-[#EAECF0] text-[#344054]"
+                    }`}
                   >
                     Skip
                   </Button>

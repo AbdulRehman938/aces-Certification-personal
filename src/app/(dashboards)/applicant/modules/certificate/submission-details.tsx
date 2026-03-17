@@ -74,6 +74,7 @@ export function SubmissionDetails({
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [view, setView] = useState<"DETAILS" | "SUBMITTED_DATA">("DETAILS");
+  const [stagesData, setStagesData] = useState<any>(null);
 
   // Modal form state
   const [responseText, setResponseText] = useState("");
@@ -104,11 +105,20 @@ export function SubmissionDetails({
     const fetchDetails = async () => {
       try {
         setLoading(true);
-        const res = await axiosInstance.get(
-          `/assessments/${certificate.id}/review-overview`,
-        );
+        const [res, stagesRes] = await Promise.all([
+          axiosInstance.get(`/assessments/${certificate.id}/review-overview`),
+          axiosInstance.get(`/assessments/${certificate.id}/stages`).catch(e => {
+            console.error("Failed to fetch stages", e);
+            return { data: { data: null } };
+          })
+        ]);
+        
         const assessment = res.data?.data || res.data;
         setData(assessment);
+        
+        if (stagesRes.data?.data) {
+          setStagesData(stagesRes.data.data);
+        }
       } catch (err) {
         console.error("Failed to fetch submission details", err);
       } finally {
@@ -225,156 +235,25 @@ export function SubmissionDetails({
     });
   };
 
-  const status = data?.status?.toLowerCase() || "pending";
-
-  const getProgressState = () => {
-    const s = `${status} ${data?.auditor?.notes?.status || ""}`
-      .toLowerCase()
-      .replace(/_/g, " ");
-
-    const hasAuditorInput = !!(
-      data?.auditorRemarks ||
-      data?.auditor?.notes?.audit_summary ||
-      (data?.score !== undefined && data?.score !== null)
-    );
-    const isActuallyCompleted =
-      s.includes("passed") ||
-      s.includes("completed") ||
-      s.includes("certified") ||
-      s.includes("active");
-
-    // Disclosure is always completed in this view
-    let disclosureLevel = 3;
-
-    // Assurance Mapping (8 steps)
-    let assuranceLevel = 0;
-
-    if (s.includes("passed") || s.includes("disclosure completed")) {
-      assuranceLevel = 0; // Just started assurance
-    } else if (s.includes("audit requested")) {
-      assuranceLevel = 0;
-    }
-
-    if (s.includes("reviewer assigned")) assuranceLevel = 1;
-    if (s.includes("reviewing") || s.includes("management review"))
-      assuranceLevel = 2;
-    if (s.includes("auditor assigned")) assuranceLevel = 3;
-    if (
-      s.includes("visit") ||
-      s.includes("audit performing") ||
-      s.includes("performing audit")
-    )
-      assuranceLevel = 4;
-    if (s.includes("audit done") || hasAuditorInput) assuranceLevel = 5;
-    if (
-      s.includes("review done") ||
-      (isActuallyCompleted && !s.includes("certified"))
-    )
-      assuranceLevel = 6;
-    if (
-      isActuallyCompleted ||
-      s.includes("published") ||
-      s.includes("certified")
-    )
-      assuranceLevel = 8;
-
-    return { disclosureLevel, assuranceLevel };
-  };
-
-  const { disclosureLevel, assuranceLevel } = getProgressState();
-
-  const getSubStepStatus = (stepIndex: number, currentLevel: number) => {
-    if (currentLevel > stepIndex) return "completed";
-    if (currentLevel === stepIndex) return "active";
-    return "pending";
-  };
-
-  const disclosureSteps = [
-    {
-      label: "Self-Disclosure In Progress",
-      status: getSubStepStatus(0, disclosureLevel),
-    },
-    {
-      label: "Self-Disclosure In Review",
-      status: getSubStepStatus(1, disclosureLevel),
-    },
-    {
-      label: "Self-Disclosure Completed",
-      status: getSubStepStatus(2, disclosureLevel),
-    },
-  ];
-
-  const assuranceSteps = [
-    {
-      label: "Start",
-      status: getSubStepStatus(0, assuranceLevel),
-    },
-    {
-      label: "Reviewer Assigned",
-      status: getSubStepStatus(1, assuranceLevel),
-    },
-    {
-      label: "Under Review",
-      status: getSubStepStatus(2, assuranceLevel),
-    },
-    {
-      label: "Auditor Assigned",
-      status: getSubStepStatus(3, assuranceLevel),
-    },
-    {
-      label: "Site Visit",
-      status: getSubStepStatus(4, assuranceLevel),
-    },
-    {
-      label: "Audit Done",
-      status: getSubStepStatus(5, assuranceLevel),
-    },
-    {
-      label: "Review Done",
-      status: getSubStepStatus(6, assuranceLevel),
-    },
-    {
-      label: "Certified",
-      status: getSubStepStatus(7, assuranceLevel),
-    },
-  ];
-
-  const getStepCircleColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-zinc-900 border-zinc-900 text-white";
-      case "active":
-        return "bg-white border-zinc-500 text-zinc-900";
-      default:
-        return "bg-white border-zinc-300 text-zinc-600";
-    }
-  };
-
-  const getStepTextColor = (status: string) => {
-    switch (status) {
-      case "completed":
-      case "active":
-        return "text-zinc-900";
-      default:
-        return "text-zinc-600";
-    }
-  };
-
   const auditorName =
-    data?.auditor?.name ||
-    data?.auditor_name ||
-    data?.assignedAuditor?.name ||
-    (data?.assignedAuditor?.firstName
-      ? `${data.assignedAuditor.firstName} ${data.assignedAuditor.lastName || ""}`
-      : null);
+    data?.auditor?.name && data.auditor.name.trim() !== ""
+      ? data.auditor.name
+      : data?.auditor_name ||
+        data?.reviewer?.name ||
+        data?.assignedAuditor?.name ||
+        (data?.assignedAuditor?.firstName
+          ? `${data.assignedAuditor.firstName} ${data.assignedAuditor.lastName || ""}`
+          : "Not Assigned");
+
+  const activeStage = stagesData?.stages?.find((s: any) => s.status === "current") || stagesData?.stages?.[0];
 
   const currentStage = {
-    stage:
-      data?.auditor?.notes?.status || data?.status
+    stage: activeStage?.label ||
+      (data?.auditor?.notes?.status || data?.status
         ? (data?.auditor?.notes?.status || data.status)
             .replace(/_/g, " ")
             .replace(/\b\w/g, (l: string) => l.toUpperCase())
-        : null,
+        : null),
     leadAuditor: auditorName,
     startDate: data?.submitted_at
       ? formatDate(data.submitted_at)
@@ -392,6 +271,7 @@ export function SubmissionDetails({
     ...action,
     title: action.question_text || action.title || "Action Item",
     description: action.message || action.description || action.desc,
+    action_name: action.question_text || action.title || "Action Item",
   }));
 
   // Required documents — check multiple possible API field names
@@ -417,34 +297,28 @@ export function SubmissionDetails({
     "Certificate Details";
 
   const auditorRemarks =
-    data?.auditor?.notes?.audit_summary ||
-    data?.auditor?.notes?.audit_description ||
-    data?.auditor_notes ||
-    data?.auditorRemarks
+    data?.auditor?.notes && (data.auditor.notes.audit_summary || data.auditor.notes.audit_description)
       ? {
-          name: data?.auditor?.name || auditorName,
+          name: data.auditor.name || auditorName,
           role: "Lead Auditor",
           text:
-            data?.auditor?.notes?.audit_description ||
-            data?.auditor?.notes?.audit_summary ||
-            data.auditor_notes ||
-            data.auditorRemarks,
-          date: formatDate(data.updated_at || data.updatedAt),
-          status: data?.auditor?.notes?.status || data.status,
-          score: data?.auditor?.notes?.score,
+            data.auditor.notes.audit_description ||
+            data.auditor.notes.audit_summary,
+          date: formatDate(data.submitted_at || data.updated_at || data.updatedAt),
+          status: data.auditor.notes.status,
+          score: data.auditor.notes.score,
         }
       : null;
 
   const reviewerRemarks =
-    data?.reviewer?.notes?.review_summary ||
-    data?.reviewer?.notes?.review_description
+    data?.reviewer?.notes && (data.reviewer.notes.review_summary || data.reviewer.notes.review_description)
       ? {
           name: data.reviewer.name,
           role: "Management Reviewer",
           text:
             data.reviewer.notes.review_description ||
             data.reviewer.notes.review_summary,
-          date: formatDate(data.updated_at || data.updatedAt),
+          date: formatDate(data.submitted_at || data.updated_at || data.updatedAt),
           status: data.reviewer.notes.review_status,
           score: data.reviewer.notes.review_score,
         }
@@ -529,6 +403,9 @@ export function SubmissionDetails({
       />
     );
   }
+
+  console.log("review-overview data:", data);
+  console.log("stages data:", stagesData);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans">
@@ -721,113 +598,84 @@ export function SubmissionDetails({
 
           {/* Progress Tracker Section */}
           <div className="space-y-12 pb-4">
-            {/* Row 1: Self-Disclosure */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 px-2">
-                <div className="h-4 w-1 bg-dull-gray rounded-full" />
-                <h3 className="text-[12px] font-bold text-dull-gray uppercase tracking-wider">
-                  Self-Disclosure
-                </h3>
-              </div>
-              <div className="relative overflow-hidden">
-                <div className="relative flex justify-between items-start scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-x-auto min-w-full">
-                  <div className="absolute top-[14px] left-[5%] right-[5%] h-px bg-[#E5E5E5]" />
-                  {disclosureSteps.map((step: any, i: number) => (
-                    <div
-                      key={i}
-                      className="relative z-10 flex flex-col items-center text-center flex-1 min-w-[110px]"
-                    >
-                      {i < disclosureSteps.length - 1 &&
-                        step.status === "completed" && (
-                          <div className="absolute top-[14px] left-[50%] right-[-50%] h-[1.5px] bg-dull-gray z-10" />
-                        )}
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-20 ${
-                          step.status === "completed"
-                            ? "bg-dull-gray border-dull-gray text-white"
-                            : step.status === "active"
-                              ? "bg-white border-dull-gray text-dull-gray shadow-sm"
-                              : "bg-white border-[#E5E5E5] text-[#A3A3A3]"
-                        }`}
-                      >
-                        {step.status === "completed" ? (
-                          <Check className="w-3 h-3 stroke-[3.5]" />
-                        ) : (
-                          <span className="text-[10px] font-bold">{i + 1}</span>
-                        )}
-                      </div>
-                      <div className="mt-4 px-2">
-                        <h4
-                          className={`text-[9px] font-bold uppercase tracking-tight leading-tight transition-colors ${
-                            step.status === "completed" ||
-                            step.status === "active"
-                              ? "text-dull-gray"
-                              : "text-[#A3A3A3]"
-                          }`}
-                        >
-                          {step.label}
-                        </h4>
-                      </div>
-                    </div>
-                  ))}
+            {stagesData && stagesData.stages ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 px-2">
+                  <div className="h-4 w-1 bg-dull-gray rounded-full" />
+                  <h3 className="text-[12px] font-bold text-dull-gray uppercase tracking-wider">
+                    {stagesData.assessmentType === "self_disclosure" ? "Self-Disclosure" : "Assured"} Assessment Stages
+                  </h3>
                 </div>
-              </div>
-            </div>
+                <div className="relative overflow-hidden">
+                  <div className="relative flex justify-between items-start scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-x-auto min-w-full">
+                    <div className="absolute top-[14px] left-[5%] right-[5%] h-px bg-[#E5E5E5]" />
+                    {(() => {
+                      const totalStages = stagesData.assessmentType === "self_disclosure" ? 3 : 4;
+                      const stagesToRender = [...(stagesData.stages || [])];
+                      const currentMaxStep = stagesToRender.length > 0 ? Math.max(...stagesToRender.map((s: any) => s.step)) : 0;
+                      
+                      for (let i = currentMaxStep + 1; i <= totalStages; i++) {
+                        stagesToRender.push({
+                          step: i,
+                          label: stagesData.assessmentType === "self_disclosure" 
+                            ? (i === 1 ? "Self-Disclosure In Progress" : i === 2 ? "Self-Disclosure In Review" : "Self-Disclosure Completed")
+                            : `Stage ${i}`,
+                          status: "upcoming"
+                        });
+                      }
 
-            {/* Row 2: Self-Assured Progress */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 px-2">
-                <div className="h-4 w-1 bg-dull-gray rounded-full opacity-40" />
-                <h3 className="text-[12px] font-bold text-[#A3A3A3] uppercase tracking-wider">
-                  Self-Assured
-                </h3>
-              </div>
-              <div className="relative overflow-hidden">
-                <div className="relative flex justify-between items-start scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-x-auto min-w-full">
-                  <div className="absolute top-[14px] left-[5%] right-[5%] h-px bg-[#E5E5E5]" />
-                  {assuranceSteps.map((step: any, i: number) => (
-                    <div
-                      key={i}
-                      className="relative z-10 flex flex-col items-center text-center flex-1 min-w-[95px]"
-                    >
-                      {i < assuranceSteps.length - 1 &&
-                        step.status === "completed" && (
-                          <div className="absolute top-[14px] left-[50%] right-[-50%] h-[1.5px] bg-dull-gray z-10" />
-                        )}
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-20 ${
-                          step.status === "completed"
-                            ? "bg-dull-gray border-dull-gray text-white"
-                            : step.status === "active"
-                              ? "bg-white border-dull-gray text-dull-gray shadow-sm"
-                              : "bg-white border-[#E5E5E5] text-[#A3A3A3]"
-                        }`}
-                      >
-                        {step.status === "completed" ? (
-                          <Check className="w-3 h-3 stroke-[3.5]" />
-                        ) : (
-                          <span className="text-[10px] font-bold">
-                            {disclosureSteps.length + i + 1}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-4 px-2">
-                        <h4
-                          className={`text-[9px] font-bold uppercase tracking-tight leading-tight transition-colors ${
-                            step.status === "completed" ||
-                            step.status === "active"
-                              ? "text-dull-gray"
-                              : "text-[#A3A3A3]"
-                          }`}
-                        >
-                          {step.label}
-                        </h4>
-                      </div>
-                    </div>
-                  ))}
+                      return stagesToRender.map((step: any, i: number) => {
+                        const uiStatus = step.status === "current" ? "active" : step.status === "upcoming" ? "pending" : step.status;
+                        return (
+                          <div
+                            key={i}
+                            className="relative z-10 flex flex-col items-center text-center flex-1 min-w-[110px]"
+                          >
+                            {i < totalStages - 1 &&
+                              uiStatus === "completed" && (
+                                <div className="absolute top-[14px] left-[50%] right-[-50%] h-[1.5px] bg-dull-gray z-10" />
+                              )}
+                            {i < totalStages - 1 &&
+                              uiStatus !== "completed" && (
+                                <div className="absolute top-[14px] left-[50%] right-[-50%] h-[1.5px] bg-[#E5E5E5] z-0" />
+                              )}
+                            <div
+                              className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-20 ${
+                                uiStatus === "completed"
+                                  ? "bg-dull-gray border-dull-gray text-white"
+                                  : uiStatus === "active"
+                                    ? "bg-white border-dull-gray text-dull-gray shadow-sm"
+                                    : "bg-white border-[#E5E5E5] text-[#A3A3A3]"
+                              }`}
+                            >
+                              {uiStatus === "completed" ? (
+                                <Check className="w-3 h-3 stroke-[3.5]" />
+                              ) : (
+                                <span className={uiStatus === "active" ? "text-dull-gray text-[10px] font-bold" : "text-[#A3A3A3] text-[10px] font-bold"}>
+                                  {step.step}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-4 px-2">
+                              <h4
+                                className={`text-[9px] font-bold uppercase tracking-tight leading-tight transition-colors ${
+                                  uiStatus === "completed" ||
+                                  uiStatus === "active"
+                                    ? "text-dull-gray"
+                                    : "text-[#A3A3A3]"
+                                }`}
+                              >
+                                {step.label}
+                              </h4>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
           {/* Details Card Grid */}
@@ -857,13 +705,13 @@ export function SubmissionDetails({
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-[#FAFBFB] border border-[#F0F0F0] flex items-center justify-center shrink-0 shadow-sm">
                     <span className="text-[12px] font-bold text-[#737373]">
-                      {currentStage.leadAuditor
+                      {(currentStage.leadAuditor !== "Not Assigned"
                         ? currentStage.leadAuditor
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .join("")
-                            .toUpperCase()
-                        : "SM"}
+                        : "NA")
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .join("")
+                        .toUpperCase()}
                     </span>
                   </div>
                   <div className="space-y-0.5">
@@ -871,7 +719,7 @@ export function SubmissionDetails({
                       Lead Auditor
                     </p>
                     <h5 className="text-[15px] font-bold text-dull-gray whitespace-nowrap">
-                      {currentStage.leadAuditor || "Sarah Mitchell"}
+                      {currentStage.leadAuditor}
                     </h5>
                   </div>
                 </div>
@@ -886,7 +734,7 @@ export function SubmissionDetails({
                       Start Date
                     </p>
                     <h5 className="text-[15px] font-bold text-dull-gray whitespace-nowrap">
-                      {currentStage.startDate || "Jan 15, 2024"}
+                      {currentStage.startDate}
                     </h5>
                   </div>
                 </div>
