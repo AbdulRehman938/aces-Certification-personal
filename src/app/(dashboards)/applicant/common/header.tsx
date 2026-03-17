@@ -309,7 +309,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="h-12 border-b border-zinc-200 bg-white flex items-center justify-between px-4 lg:px-6 lg:pl-3 sticky top-0 z-30">
+      <header className="h-12 border-b border-zinc-200 bg-white flex items-center justify-between px-4 lg:px-6 lg:pl-3 sticky top-0 z-50">
         <div className="flex lg:hidden items-center">
           <span className="text-sm font-semibold text-secondary">
             {greeting}, {profileData?.name || "User"}

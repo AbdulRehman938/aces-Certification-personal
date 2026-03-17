@@ -167,12 +167,7 @@ export function SubmittedData({ onBack, assessmentId }: SubmittedDataProps) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="space-y-6 font-sans pb-20 max-w-7xl mx-auto text-archivo"
-    >
+    <div className="space-y-6 font-sans pb-20 text-archivo relative overflow-visible">
       {/* Header */}
       <div className="flex items-center justify-between">
         <button
@@ -184,15 +179,16 @@ export function SubmittedData({ onBack, assessmentId }: SubmittedDataProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-        {/* Sidebar */}
-        <div className="lg:col-span-1 bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden sticky top-24">
-          <div className="p-6 border-b border-zinc-50">
-            <h3 className="text-[13px] font-bold text-zinc-900 uppercase tracking-wider">
-              Sections
-            </h3>
-          </div>
-          <div className="py-2">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-10 relative items-start">
+        {/* Sidebar Column */}
+        <aside className="lg:col-span-1 sticky top-20 z-40 self-start">
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-140px)]">
+            <div className="p-6 border-b border-zinc-50 shrink-0">
+              <h3 className="text-[13px] font-bold text-zinc-900 uppercase tracking-wider">
+                Sections
+              </h3>
+            </div>
+            <div className="py-2 overflow-y-auto scrollbar-hide">
             {data.map((mainSection) => (
               <div
                 key={mainSection.main_section_id}
@@ -263,8 +259,9 @@ export function SubmittedData({ onBack, assessmentId }: SubmittedDataProps) {
             ))}
           </div>
         </div>
+      </aside>
 
-        {/* Content Area */}
+      {/* Content Area */}
         <div className="lg:col-span-3 space-y-8">
           <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm p-8 md:p-12">
             <div className="mb-12 space-y-2">
@@ -400,6 +397,6 @@ export function SubmittedData({ onBack, assessmentId }: SubmittedDataProps) {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

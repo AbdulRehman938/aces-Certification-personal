@@ -35,7 +35,7 @@ export default function ApplicantLayout({
             {!isAssessmentPage && <HeaderWithSuspense />}
 
             <main
-              className={`flex-1 bg-zinc-50 ${isAssessmentPage ? "h-screen overflow-hidden" : "overflow-y-auto"}`}
+              className={`flex-1 bg-zinc-50 ${isAssessmentPage ? "h-screen overflow-hidden" : "overflow-visible"}`}
             >
               {children}
             </main>
