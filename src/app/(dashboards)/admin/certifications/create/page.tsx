@@ -22,6 +22,8 @@ type Question = {
   text: string;
   helpText: string;
   criteriaInformation?: string;
+  weightage?: number;
+  options?: string[];
   type: string;
   rank?: number;
   hasConditionalLogic: boolean;
@@ -119,6 +121,16 @@ function createRedirectOptionValue(level: RedirectLevel, id: string) {
 function getQuestionRedirectLabel(question: Question, fallbackIndex: number) {
   const text = (question.text || "").trim();
   return text || `Question ${fallbackIndex + 1}`;
+}
+
+function normalizeQuestionOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((option) => String(option || "").trim())
+    .filter(Boolean);
 }
 
 function normalizeRedirectLevel(value?: string): RedirectLevel | "" {
@@ -473,6 +485,9 @@ function CreateCertificationPageContent() {
   const [questionText, setQuestionText] = useState("");
   const [helpText, setHelpText] = useState("");
   const [criteriaInformation, setCriteriaInformation] = useState("");
+  const [questionWeightage, setQuestionWeightage] = useState("");
+  const [questionOptions, setQuestionOptions] = useState<string[]>([]);
+  const [checkboxOptionInput, setCheckboxOptionInput] = useState("");
 
   const [acesRatedBronze, setAcesRatedBronze] = useState("");
   const [acesRatedSilver, setAcesRatedSilver] = useState("");
@@ -514,6 +529,24 @@ function CreateCertificationPageContent() {
   >(null);
   const [isCheckingPublishEligibility, setIsCheckingPublishEligibility] =
     useState(false);
+
+  const handleAddCheckboxOption = () => {
+    const nextOption = checkboxOptionInput.trim();
+    if (!nextOption) {
+      return;
+    }
+
+    setQuestionOptions((prev) =>
+      prev.includes(nextOption) ? prev : [...prev, nextOption],
+    );
+    setCheckboxOptionInput("");
+  };
+
+  const handleRemoveCheckboxOption = (optionToRemove: string) => {
+    setQuestionOptions((prev) =>
+      prev.filter((option) => option !== optionToRemove),
+    );
+  };
 
   const [errors, setErrors] = useState<{
     certificationName?: string;
@@ -662,6 +695,9 @@ function CreateCertificationPageContent() {
     setQuestionText("");
     setHelpText("");
     setCriteriaInformation("");
+    setQuestionWeightage("");
+    setQuestionOptions([]);
+    setCheckboxOptionInput("");
 
     if (selectedQuestion && selectedMainSection && selectedSection) {
       const mainSection = mainSections.find(
@@ -699,6 +735,11 @@ function CreateCertificationPageContent() {
         setQuestionText(question.text || "");
         setHelpText(question.helpText || "");
         setCriteriaInformation(question.criteriaInformation || "");
+        setQuestionWeightage(
+          question.weightage === undefined ? "" : String(question.weightage),
+        );
+        setQuestionOptions(normalizeQuestionOptions(question.options));
+        setCheckboxOptionInput("");
         setQuestionType(question.type || "");
         setHasConditionalLogic(question.hasConditionalLogic || false);
         setYesExitLevel(resolvedYesRedirectValue);
@@ -816,17 +857,28 @@ function CreateCertificationPageContent() {
     const currentNoExitLevel = currentHasConditionalLogic ? noExitLevel : "";
     const currentYesRank = currentHasConditionalLogic ? yesRank : "";
     const currentNoRank = currentHasConditionalLogic ? noRank : "";
+    const originalOptions =
+      originalType === "checkbox"
+        ? normalizeQuestionOptions(originalQuestion.options)
+        : [];
+    const currentOptions =
+      currentType === "checkbox" ? normalizeQuestionOptions(questionOptions) : [];
 
     return (
       questionText !== (originalQuestion.text || "") ||
       helpText !== (originalQuestion.helpText || "") ||
       criteriaInformation !== (originalQuestion.criteriaInformation || "") ||
+      questionWeightage !==
+        (originalQuestion.weightage === undefined
+          ? ""
+          : String(originalQuestion.weightage)) ||
       currentType !== originalType ||
       currentHasConditionalLogic !== originalHasConditionalLogic ||
       currentYesExitLevel !== originalYesExitLevel ||
       currentNoExitLevel !== originalNoExitLevel ||
       currentYesRank !== originalYesRank ||
-      currentNoRank !== originalNoRank
+      currentNoRank !== originalNoRank ||
+      JSON.stringify(currentOptions) !== JSON.stringify(originalOptions)
     );
   };
 
@@ -983,6 +1035,13 @@ function CreateCertificationPageContent() {
                       text: q.question || "",
                       helpText: q.hint || "",
                       criteriaInformation: q.criteria || "",
+                      weightage:
+                        Number.isInteger(Number(q.weightage)) &&
+                        Number(q.weightage) >= 0 &&
+                        Number(q.weightage) <= 100
+                          ? Number(q.weightage)
+                          : undefined,
+                      options: normalizeQuestionOptions(q.options),
                       type: q.type || "",
                       rank:
                         typeof q.rank === "number"
@@ -1044,6 +1103,13 @@ function CreateCertificationPageContent() {
                         text: q.question || "",
                         helpText: q.hint || "",
                         criteriaInformation: q.criteria || "",
+                        weightage:
+                          Number.isInteger(Number(q.weightage)) &&
+                          Number(q.weightage) >= 0 &&
+                          Number(q.weightage) <= 100
+                            ? Number(q.weightage)
+                            : undefined,
+                        options: normalizeQuestionOptions(q.options),
                         type: q.type || "",
                         rank:
                           typeof q.rank === "number"
@@ -1854,6 +1920,8 @@ function CreateCertificationPageContent() {
       id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       text: "",
       helpText: "",
+      weightage: undefined,
+      options: [],
       type: "",
       hasConditionalLogic: false,
     };
@@ -1989,8 +2057,25 @@ function CreateCertificationPageContent() {
       return;
     }
 
-    if (!criteriaInformation.trim()) {
-      showAlert("Criteria information is required");
+    if (questionWeightage.trim() === "") {
+      showAlert("Weightage is required");
+      return;
+    }
+
+    if (!/^\d+$/.test(questionWeightage.trim())) {
+      showAlert("Weightage must be a whole number between 0 and 100");
+      return;
+    }
+
+    const parsedWeightage = Number(questionWeightage.trim());
+    if (!Number.isInteger(parsedWeightage) || parsedWeightage < 0 || parsedWeightage > 100) {
+      showAlert("Weightage must be a whole number between 0 and 100");
+      return;
+    }
+
+    const cleanedQuestionOptions = normalizeQuestionOptions(questionOptions);
+    if (questionType === "checkbox" && cleanedQuestionOptions.length === 0) {
+      showAlert("Please add at least one checkbox option");
       return;
     }
 
@@ -2039,6 +2124,9 @@ function CreateCertificationPageContent() {
           type: questionType,
           hint: helpText.trim() || undefined,
           criteria: criteriaInformation.trim() || undefined,
+          weightage: parsedWeightage,
+          options:
+            questionType === "checkbox" ? cleanedQuestionOptions : undefined,
           conditions:
             questionType === "boolean" && hasConditionalLogic ? conditions : {},
         },
@@ -2048,6 +2136,12 @@ function CreateCertificationPageContent() {
     const cleanedQuestion = { ...questionData.questions[0] };
     if (!cleanedQuestion.hint) delete cleanedQuestion.hint;
     if (!cleanedQuestion.criteria) delete cleanedQuestion.criteria;
+    if (!cleanedQuestion.options || cleanedQuestion.options.length === 0) {
+      delete cleanedQuestion.options;
+    }
+    if (!cleanedQuestion.conditions || Object.keys(cleanedQuestion.conditions).length === 0) {
+      delete cleanedQuestion.conditions;
+    }
 
     const finalQuestionData = {
       section_type: sectionType,
@@ -2096,6 +2190,11 @@ function CreateCertificationPageContent() {
                                   helpText: helpText.trim(),
                                   criteriaInformation:
                                     criteriaInformation.trim(),
+                                  weightage: parsedWeightage,
+                                  options:
+                                    questionType === "checkbox"
+                                      ? cleanedQuestionOptions
+                                      : undefined,
                                   type: questionType,
                                   hasConditionalLogic:
                                     questionType === "boolean"
@@ -2131,6 +2230,11 @@ function CreateCertificationPageContent() {
                             text: questionText.trim(),
                             helpText: helpText.trim(),
                             criteriaInformation: criteriaInformation.trim(),
+                            weightage: parsedWeightage,
+                            options:
+                              questionType === "checkbox"
+                                ? cleanedQuestionOptions
+                                : undefined,
                             type: questionType,
                             hasConditionalLogic:
                               questionType === "boolean"
@@ -2166,6 +2270,9 @@ function CreateCertificationPageContent() {
       setQuestionText("");
       setHelpText("");
       setCriteriaInformation("");
+      setQuestionWeightage("");
+      setQuestionOptions([]);
+      setCheckboxOptionInput("");
       setQuestionType("");
       setHasConditionalLogic(false);
       setYesExitLevel("");
@@ -4459,6 +4566,8 @@ function CreateCertificationPageContent() {
                         { value: "boolean", label: "Yes/No" },
                         { value: "text", label: "Text" },
                         { value: "file", label: "File" },
+                        { value: "number", label: "Number" },
+                        { value: "checkbox", label: "Checkbox" },
                       ]}
                       value={questionType}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
@@ -4482,8 +4591,7 @@ function CreateCertificationPageContent() {
 
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
-                      Criteria Information{" "}
-                      <span className="text-red-500">*</span>
+                      Criteria Information
                     </label>
                     <textarea
                       rows={4}
@@ -4493,6 +4601,78 @@ function CreateCertificationPageContent() {
                       className="w-full px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal resize-none"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-2">
+                      Weightage <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={3}
+                      placeholder="Enter weightage from 0 to 100"
+                      value={questionWeightage}
+                      onChange={(e) => {
+                        const nextValue = e.target.value.replace(/\D/g, "");
+                        if (nextValue === "") {
+                          setQuestionWeightage("");
+                          return;
+                        }
+
+                        const numericValue = Number(nextValue);
+                        if (numericValue <= 100) {
+                          setQuestionWeightage(nextValue);
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                    />
+                  </div>
+
+                  {questionType === "checkbox" && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-secondary mb-2">
+                          Checkbox Options <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Type an option and press Enter"
+                          value={checkboxOptionInput}
+                          onChange={(e) => setCheckboxOptionInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddCheckboxOption();
+                            }
+                          }}
+                          className="w-full px-4 py-3 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-200 text-sm font-normal leading-[19.2px] tracking-normal"
+                        />
+                        <p className="mt-2 text-xs text-gray-500">
+                          Press Enter to save each option.
+                        </p>
+                      </div>
+
+                      {questionOptions.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {questionOptions.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => handleRemoveCheckboxOption(option)}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-zinc-200 bg-zinc-50 text-sm text-secondary hover:bg-zinc-100"
+                            >
+                              <span>{option}</span>
+                              <span className="text-xs text-gray-500">Remove</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="border border-dashed border-zinc-200 rounded-md p-4 text-sm text-gray-500">
+                          No checkbox options added yet.
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {questionType === "boolean" && (
                     <div>
